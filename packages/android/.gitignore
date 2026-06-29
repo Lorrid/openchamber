@@ -1,0 +1,12 @@
+node_modules/
+www/
+
+android/.gradle/
+android/.gradle-user/
+android/app/src/main/assets/www/
+android/**/build/
+android/manual-build/
+android/debug.keystore
+android/local.properties
+android/*.iml
+android/.idea/

@@ -1,0 +1,13 @@
+{
+  "name": "@openchamber/android",
+  "version": "1.13.6",
+  "private": true,
+  "description": "OpenChamber Android WebView shell with packaged mobile UI and remote server proxy",
+  "scripts": {
+    "prepare-assets": "bun run --cwd ../.. build:web && node scripts/prepare-web-assets.mjs",
+    "build": "bun run prepare-assets && cd android && JAVA_HOME=/Users/jindongtian/.sdkman/candidates/java/21.0.7-oracle ANDROID_HOME=/Users/jindongtian/Workspace/utils/android-sdk PATH=/Users/jindongtian/.sdkman/candidates/java/21.0.7-oracle/bin:$PATH gradle :app:assembleDebug --offline --no-daemon",
+    "install": "bun run build && /Users/jindongtian/Workspace/utils/android-sdk/platform-tools/adb install -r android/app/build/outputs/apk/debug/app-debug.apk",
+    "lint": "cd android && JAVA_HOME=/Users/jindongtian/.sdkman/candidates/java/21.0.7-oracle ANDROID_HOME=/Users/jindongtian/Workspace/utils/android-sdk PATH=/Users/jindongtian/.sdkman/candidates/java/21.0.7-oracle/bin:$PATH gradle :app:lintDebug --offline --no-daemon",
+    "verify": "node scripts/verify-apk.mjs"
+  }
+}

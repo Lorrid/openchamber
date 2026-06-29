@@ -1,0 +1,4 @@
+<resources>
+    <string name="app_name">OpenChamber</string>
+    <string name="server_switcher">Servers</string>
+</resources>

@@ -14,7 +14,7 @@ import { initializeLocale, I18nProvider } from '@/lib/i18n';
 import { initializeAppearancePreferences, syncDesktopSettings } from '@/lib/persistence';
 import { startModelPrefsAutoSave } from '@/lib/modelPrefsAutoSave';
 import { startTypographyWatcher } from '@/lib/typographyWatcher';
-import { MobileApp } from './MobileApp';
+import { AndroidMobileRuntimeGate, MobileApp } from './MobileApp';
 
 const initializeSharedPreferences = () => {
   initializeLocale();
@@ -49,9 +49,11 @@ export function renderMobileApp(apis: RuntimeAPIs) {
         <ThemeSystemProvider>
           <ThemeProvider>
             <DiffWorkerProvider>
-              <SessionAuthGate>
-                <MobileApp apis={apis} />
-              </SessionAuthGate>
+              <AndroidMobileRuntimeGate>
+                <SessionAuthGate>
+                  <MobileApp apis={apis} />
+                </SessionAuthGate>
+              </AndroidMobileRuntimeGate>
             </DiffWorkerProvider>
           </ThemeProvider>
         </ThemeSystemProvider>

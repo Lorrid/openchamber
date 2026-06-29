@@ -76,8 +76,50 @@ type MobileAppProps = {
   apis: RuntimeAPIs;
 };
 
+type AndroidServer = {
+  id: string;
+  label: string;
+  url: string;
+  password?: string;
+};
+
+type AndroidState = {
+  android: boolean;
+  configured: boolean;
+  currentServerId: string | null;
+  servers: AndroidServer[];
+};
+
 const normalizePath = (value?: string | null): string =>
   (value || '').replace(/\\/g, '/').replace(/\/+$/g, '');
+
+const isAndroidState = (value: unknown): value is AndroidState => (
+  typeof value === 'object'
+  && value !== null
+  && (value as { android?: unknown }).android === true
+  && Array.isArray((value as { servers?: unknown }).servers)
+);
+
+const fetchAndroidState = async (): Promise<AndroidState | null> => {
+  const response = await fetch('/__android/state', { method: 'GET', headers: { Accept: 'application/json' } }).catch(() => null);
+  if (!response?.ok) return null;
+  const payload = await response.json().catch(() => null);
+  return isAndroidState(payload) ? payload : null;
+};
+
+const postAndroidJson = async (path: string, body: Record<string, unknown>): Promise<{ ok: true; state: AndroidState } | { ok: false; message: string }> => {
+  const response = await fetch(path, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+    body: JSON.stringify(body),
+  }).catch(() => null);
+  if (!response) return { ok: false, message: 'Connection failed' };
+  const payload = await response.json().catch(() => null) as { error?: unknown; state?: unknown } | null;
+  if (!response.ok) {
+    return { ok: false, message: typeof payload?.error === 'string' ? payload.error : 'Connection failed' };
+  }
+  return isAndroidState(payload?.state) ? { ok: true, state: payload.state } : { ok: false, message: 'Invalid response' };
+};
 
 const getNumericLimit = (limit: unknown, key: 'context' | 'output'): number | undefined => {
   if (!limit || typeof limit !== 'object') return undefined;
@@ -103,7 +145,7 @@ const getProjectLabel = (path: string): string => {
 };
 
 type OverflowItem = {
-  key: 'files' | 'changes' | 'mcp' | 'update' | 'settings';
+  key: 'files' | 'changes' | 'mcp' | 'update' | 'settings' | 'android-server';
   icon?: IconName;
   iconNode?: React.ReactNode;
   label: string;
@@ -459,6 +501,323 @@ const MobileOverflowMenu: React.FC<{
   );
 };
 
+type AndroidServerLoginProps = {
+  title: string;
+  description: string;
+  servers: AndroidServer[];
+  onConnected: (state: AndroidState) => void;
+  onStateChanged?: (state: AndroidState) => void;
+  onCancel?: () => void;
+  embedded?: boolean;
+};
+
+const AndroidServerLogin: React.FC<AndroidServerLoginProps> = ({ title, description, servers, onConnected, onStateChanged, onCancel, embedded = false }) => {
+  const { t } = useI18n();
+  const [url, setUrl] = React.useState('');
+  const [label, setLabel] = React.useState('');
+  const [password, setPassword] = React.useState('');
+  const [status, setStatus] = React.useState<string | null>(null);
+  const [busy, setBusy] = React.useState(false);
+
+  const connect = React.useCallback(async () => {
+    if (!url.trim()) return;
+    setBusy(true);
+    setStatus(t('mobile.android.status.connecting'));
+    const result = await postAndroidJson('/__android/connect', { url, label, password });
+    setBusy(false);
+    if (!result.ok) {
+      setStatus(result.message);
+      return;
+    }
+    onConnected(result.state);
+  }, [label, onConnected, password, t, url]);
+
+  const connectSavedServer = React.useCallback(async (server: AndroidServer) => {
+    setBusy(true);
+    setStatus(t('mobile.android.status.connecting'));
+    const result = await postAndroidJson('/__android/connect', { id: server.id });
+    setBusy(false);
+    if (!result.ok) {
+      setStatus(result.message);
+      return;
+    }
+    onConnected(result.state);
+  }, [onConnected, t]);
+
+  const deleteServer = React.useCallback(async (server: AndroidServer) => {
+    setBusy(true);
+    const result = await postAndroidJson('/__android/delete-server', { id: server.id });
+    setBusy(false);
+    if (!result.ok) {
+      setStatus(result.message);
+      return;
+    }
+    onStateChanged?.(result.state);
+  }, [onStateChanged]);
+
+  return (
+    <div
+      className={cn('flex flex-col bg-background text-foreground', embedded ? 'min-h-0' : 'min-h-[100dvh]')}
+      style={embedded ? undefined : { paddingTop: 'var(--oc-safe-area-top, 0px)' }}
+    >
+      <main className={cn('mx-auto flex w-full max-w-md flex-1 flex-col gap-5', embedded ? 'px-2 py-2' : 'justify-center px-5 py-8')}>
+        <div className="space-y-2 text-center">
+          <div className="mx-auto flex size-14 items-center justify-center rounded-2xl border border-border/50 bg-[var(--surface-elevated)] text-foreground">
+            <Icon name="server" className="size-7" />
+          </div>
+          <h1 className="typography-ui-header text-xl font-semibold text-foreground">{title}</h1>
+          <p className="typography-meta text-muted-foreground">{description}</p>
+        </div>
+
+        <section className="space-y-4 rounded-2xl border border-border/50 bg-[var(--surface-elevated)] p-4">
+          <div className="space-y-2">
+            <label htmlFor="android-server-url" className="typography-ui-label text-muted-foreground">
+              {t('mobile.android.field.server')}
+            </label>
+            <input
+              id="android-server-url"
+              type="url"
+              inputMode="url"
+              autoCapitalize="off"
+              autoCorrect="off"
+              spellCheck={false}
+              value={url}
+              onChange={(event) => setUrl(event.target.value)}
+              placeholder={t('mobile.android.field.serverPlaceholder')}
+              className="h-11 w-full rounded-xl border border-border/60 bg-background px-3 typography-ui-label text-foreground outline-none transition-colors placeholder:text-muted-foreground/70 focus:border-primary"
+            />
+          </div>
+          <div className="space-y-2">
+            <label htmlFor="android-server-label" className="typography-ui-label text-muted-foreground">
+              {t('mobile.android.field.name')}
+            </label>
+            <input
+              id="android-server-label"
+              value={label}
+              onChange={(event) => setLabel(event.target.value)}
+              placeholder={t('mobile.android.field.namePlaceholder')}
+              className="h-11 w-full rounded-xl border border-border/60 bg-background px-3 typography-ui-label text-foreground outline-none transition-colors placeholder:text-muted-foreground/70 focus:border-primary"
+            />
+          </div>
+          <div className="space-y-2">
+            <label htmlFor="android-server-password" className="typography-ui-label text-muted-foreground">
+              {t('mobile.android.field.password')}
+            </label>
+            <input
+              id="android-server-password"
+              type="password"
+              value={password}
+              onChange={(event) => setPassword(event.target.value)}
+              placeholder={t('mobile.android.field.passwordPlaceholder')}
+              className="h-11 w-full rounded-xl border border-border/60 bg-background px-3 typography-ui-label text-foreground outline-none transition-colors placeholder:text-muted-foreground/70 focus:border-primary"
+            />
+          </div>
+          {status ? <div className="typography-meta text-muted-foreground">{status}</div> : null}
+          <div className="flex gap-2">
+            <button
+              type="button"
+              className="flex h-11 flex-1 items-center justify-center rounded-xl bg-primary px-4 typography-ui-label font-medium text-primary-foreground disabled:opacity-60"
+              disabled={busy || !url.trim()}
+              onClick={() => void connect()}
+            >
+              {busy ? t('mobile.android.action.connecting') : t('mobile.android.action.connect')}
+            </button>
+            {onCancel ? (
+              <button
+                type="button"
+                className="h-11 rounded-xl border border-border/60 px-4 typography-ui-label text-foreground"
+                disabled={busy}
+                onClick={onCancel}
+              >
+                {t('mobile.android.action.cancel')}
+              </button>
+            ) : null}
+          </div>
+        </section>
+
+        {servers.length > 0 ? (
+          <section className="space-y-2">
+            <h2 className="typography-meta font-medium uppercase tracking-wide text-muted-foreground">{t('mobile.android.saved.title')}</h2>
+            <div className="space-y-2">
+              {servers.map((server) => (
+                <div
+                  key={server.id}
+                  className="flex w-full items-center gap-3 rounded-xl border border-border/40 bg-[var(--surface-elevated)] p-3 text-left"
+                >
+                  <Icon name="server" className="size-5 shrink-0 text-muted-foreground" />
+                  <button
+                    type="button"
+                    className="min-w-0 flex-1 text-left disabled:opacity-60"
+                    disabled={busy}
+                    onClick={() => void connectSavedServer(server)}
+                  >
+                    <span className="block truncate typography-ui-label text-foreground">{server.label || server.url}</span>
+                    <span className="block truncate typography-micro text-muted-foreground">{server.url}</span>
+                  </button>
+                  <button
+                    type="button"
+                    className="flex size-9 shrink-0 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-interactive-hover hover:text-foreground disabled:opacity-60"
+                    aria-label={`${t('mobile.android.action.delete')} ${server.label || server.url}`}
+                    disabled={busy}
+                    onClick={() => void deleteServer(server)}
+                  >
+                    <Icon name="delete-bin" className="size-4" />
+                  </button>
+                </div>
+              ))}
+            </div>
+          </section>
+        ) : null}
+      </main>
+    </div>
+  );
+};
+
+const AndroidServerPanel: React.FC<{
+  open: boolean;
+  onClose: () => void;
+}> = ({ open, onClose }) => {
+  const { t } = useI18n();
+  const [state, setState] = React.useState<AndroidState | null>(null);
+  const [showNew, setShowNew] = React.useState(false);
+  const [busyId, setBusyId] = React.useState<string | null>(null);
+  const [status, setStatus] = React.useState<string | null>(null);
+
+  React.useEffect(() => {
+    if (!open) return;
+    void fetchAndroidState().then(setState);
+    setShowNew(false);
+    setStatus(null);
+  }, [open]);
+
+  const switchServer = React.useCallback(async (server: AndroidServer) => {
+    setBusyId(server.id);
+    setStatus(t('mobile.android.status.connecting'));
+    const result = await postAndroidJson('/__android/connect', { id: server.id });
+    setBusyId(null);
+    if (!result.ok) {
+      setStatus(result.message);
+      return;
+    }
+    window.location.reload();
+  }, [t]);
+
+  const deleteServer = React.useCallback(async (server: AndroidServer) => {
+    setBusyId(server.id);
+    const result = await postAndroidJson('/__android/delete-server', { id: server.id });
+    setBusyId(null);
+    if (!result.ok) {
+      setStatus(result.message);
+      return;
+    }
+    setState(result.state);
+    if (!result.state.configured) {
+      window.location.reload();
+    }
+  }, []);
+
+  const disconnectServer = React.useCallback(async () => {
+    setBusyId('__logout__');
+    const result = await postAndroidJson('/__android/logout', {});
+    setBusyId(null);
+    if (!result.ok) {
+      setStatus(result.message);
+      return;
+    }
+    window.location.reload();
+  }, []);
+
+  const onConnected = React.useCallback(() => {
+    window.location.reload();
+  }, []);
+
+  if (!open) return null;
+
+  return (
+    <MobileOverlayPanel open={open} onClose={onClose} title={t('mobile.android.switch.title')}>
+      {showNew ? (
+        <AndroidServerLogin
+          title={t('mobile.android.login.title')}
+          description={t('mobile.android.login.description')}
+          servers={[]}
+          onConnected={onConnected}
+          onStateChanged={setState}
+          onCancel={() => setShowNew(false)}
+          embedded
+        />
+      ) : (
+        <div className="space-y-4 p-4">
+          {status ? <div className="rounded-xl border border-border/40 bg-[var(--surface-elevated)] p-3 typography-meta text-muted-foreground">{status}</div> : null}
+          {state?.configured ? (
+            <section className="space-y-2 rounded-xl border border-border/40 bg-[var(--surface-elevated)] p-3">
+              <div className="flex items-center gap-3">
+                <Icon name="server" className="size-5 shrink-0 text-muted-foreground" />
+                <div className="min-w-0 flex-1">
+                  <div className="typography-micro uppercase text-muted-foreground">{t('mobile.android.current.title')}</div>
+                  <div className="truncate typography-ui-label text-foreground">
+                    {(state.servers.find((server) => server.id === state.currentServerId)?.label)
+                      || (state.servers.find((server) => server.id === state.currentServerId)?.url)
+                      || t('mobile.android.current.unknown')}
+                  </div>
+                </div>
+              </div>
+              <button
+                type="button"
+                className="flex h-10 w-full items-center justify-center gap-2 rounded-xl border border-border/60 typography-ui-label text-foreground transition-colors hover:bg-interactive-hover disabled:opacity-60"
+                disabled={busyId !== null}
+                onClick={() => void disconnectServer()}
+              >
+                {busyId === '__logout__' ? <Icon name="loader-4" className="size-4 animate-spin" /> : <Icon name="arrow-go-back" className="size-4" />}
+                {t('mobile.android.action.disconnect')}
+              </button>
+            </section>
+          ) : null}
+          <div className="space-y-2">
+            {(state?.servers ?? []).map((server) => {
+              const active = state?.currentServerId === server.id;
+              return (
+                <div
+                  key={server.id}
+                  className="flex w-full items-center gap-3 rounded-xl border border-border/40 bg-[var(--surface-elevated)] p-3 text-left transition-colors hover:bg-interactive-hover"
+                >
+                  <Icon name={active ? 'checkbox-circle' : 'server'} className="size-5 shrink-0 text-muted-foreground" />
+                  <button
+                    type="button"
+                    className="min-w-0 flex-1 text-left disabled:opacity-60"
+                    onClick={() => void switchServer(server)}
+                    disabled={busyId !== null}
+                  >
+                    <span className="block truncate typography-ui-label text-foreground">{server.label || server.url}</span>
+                    <span className="block truncate typography-micro text-muted-foreground">{server.url}</span>
+                  </button>
+                  {busyId === server.id ? <Icon name="loader-4" className="size-4 animate-spin text-muted-foreground" /> : null}
+                  <button
+                    type="button"
+                    className="flex size-9 shrink-0 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-interactive-hover hover:text-foreground disabled:opacity-60"
+                    aria-label={`${t('mobile.android.action.delete')} ${server.label || server.url}`}
+                    disabled={busyId !== null}
+                    onClick={() => void deleteServer(server)}
+                  >
+                    <Icon name="delete-bin" className="size-4" />
+                  </button>
+                </div>
+              );
+            })}
+          </div>
+          <button
+            type="button"
+            className="flex h-11 w-full items-center justify-center gap-2 rounded-xl bg-primary px-4 typography-ui-label font-medium text-primary-foreground"
+            onClick={() => setShowNew(true)}
+          >
+            <Icon name="add" className="size-5" />
+            {t('mobile.android.switch.connectNew')}
+          </button>
+        </div>
+      )}
+    </MobileOverlayPanel>
+  );
+};
+
 const MobileSessionMetadataButton = React.memo(function MobileSessionMetadataButton({
   open,
   onOpenChange,
@@ -798,6 +1157,8 @@ const MobileShell: React.FC = () => {
   const [updateOpen, setUpdateOpen] = React.useState(false);
   const [settingsInitialMobileStage, setSettingsInitialMobileStage] = React.useState<'nav' | 'page-content'>('nav');
   const [overflowOpen, setOverflowOpen] = React.useState(false);
+  const [androidServerPanelOpen, setAndroidServerPanelOpen] = React.useState(false);
+  const [androidState, setAndroidState] = React.useState<AndroidState | null>(null);
   // When set, the Changes surface opens directly into the per-file diff for this path.
   const [pendingChangesDiff, setPendingChangesDiff] = React.useState<{ path: string; staged: boolean } | null>(null);
   const currentDirectory = useDirectoryStore((state) => state.currentDirectory);
@@ -811,6 +1172,10 @@ const MobileShell: React.FC = () => {
   const loadMcpConfigs = useMcpConfigStore((state) => state.loadMcpConfigs);
   const gitStatus = useGitStatus(normalizePath(currentDirectory) || null);
   const dirtyChangeCount = gitStatus?.files?.length ?? 0;
+
+  React.useEffect(() => {
+    void fetchAndroidState().then(setAndroidState);
+  }, []);
 
   const mobileActions = React.useMemo<MobileAppActions>(
     () => ({
@@ -907,6 +1272,12 @@ const MobileShell: React.FC = () => {
         label: t('mobile.menu.update'),
         onSelect: () => setUpdateOpen(true),
       }] : []),
+      ...(androidState?.android ? [{
+        key: 'android-server' as const,
+        icon: 'server' as const,
+        label: t('mobile.android.switch.menuItem'),
+        onSelect: () => setAndroidServerPanelOpen(true),
+      }] : []),
       {
         key: 'settings',
         icon: 'settings-3',
@@ -917,7 +1288,7 @@ const MobileShell: React.FC = () => {
         },
       },
     ],
-    [dirtyChangeCount, showUpdateItem, t],
+    [androidState?.android, dirtyChangeCount, showUpdateItem, t],
   );
 
   return (
@@ -941,6 +1312,8 @@ const MobileShell: React.FC = () => {
           onClose={() => setOverflowOpen(false)}
           items={overflowItems}
         />
+
+        <AndroidServerPanel open={androidServerPanelOpen} onClose={() => setAndroidServerPanelOpen(false)} />
 
         {sessionsSheetOpen ? (
           <MobileSessionsSheet open={sessionsSheetOpen} onOpenChange={setSessionsSheetOpen} />
@@ -1211,3 +1584,44 @@ export function MobileApp({ apis }: MobileAppProps) {
     </ErrorBoundary>
   );
 }
+
+export const AndroidMobileRuntimeGate: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+  const { t } = useI18n();
+  const [state, setState] = React.useState<AndroidState | null | undefined>(undefined);
+
+  React.useEffect(() => {
+    void fetchAndroidState().then((next) => {
+      setState(next);
+    });
+  }, []);
+
+  const handleConnected = React.useCallback(() => {
+    window.location.reload();
+  }, []);
+
+  if (state === undefined) {
+    return (
+      <div className="flex min-h-[100dvh] items-center justify-center bg-background text-foreground">
+        <Icon name="loader-4" className="size-6 animate-spin text-muted-foreground" />
+      </div>
+    );
+  }
+
+  if (!state?.android) {
+    return <>{children}</>;
+  }
+
+  if (!state.configured) {
+    return (
+      <AndroidServerLogin
+        title={t('mobile.android.login.title')}
+        description={t('mobile.android.login.description')}
+        servers={state.servers}
+        onConnected={handleConnected}
+        onStateChanged={setState}
+      />
+    );
+  }
+
+  return <>{children}</>;
+};
