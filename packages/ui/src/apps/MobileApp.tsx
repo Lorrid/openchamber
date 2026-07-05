@@ -101,6 +101,13 @@ type AndroidState = {
 
 type AndroidReachability = 'checking' | 'online' | 'offline';
 
+type AndroidHealthSnapshot = {
+  status: AndroidReachability;
+  latencyMs: number | null;
+  checkedAt: number | null;
+  error: string | null;
+};
+
 const ANDROID_BACK_EVENT = 'openchamber:android-back';
 
 const isCapacitorMobileApp = (): boolean => {
@@ -551,43 +558,88 @@ const postAndroidJson = async (path: string, body: Record<string, unknown>): Pro
   return isAndroidState(payload?.state) ? { ok: true, state: payload.state } : { ok: false, message: 'Invalid response' };
 };
 
-const probeAndroidServerHealth = async (signal?: AbortSignal): Promise<boolean> => {
-  const response = await fetch('/health', {
-    method: 'GET',
-    headers: { Accept: 'application/json' },
-    cache: 'no-store',
-    signal,
-  }).catch(() => null);
-  return response?.ok === true;
+const probeAndroidServerHealth = async (signal?: AbortSignal): Promise<AndroidHealthSnapshot> => {
+  const startedAt = performance.now();
+  const checkedAt = Date.now();
+  try {
+    const response = await runtimeFetch('/health', {
+      method: 'GET',
+      headers: { Accept: 'application/json' },
+      cache: 'no-store',
+      signal,
+    });
+    const latencyMs = Math.max(0, Math.round(performance.now() - startedAt));
+    return {
+      status: response.ok ? 'online' : 'offline',
+      latencyMs,
+      checkedAt,
+      error: response.ok ? null : `${response.status} ${response.statusText}`.trim(),
+    };
+  } catch (error) {
+    return {
+      status: 'offline',
+      latencyMs: null,
+      checkedAt,
+      error: error instanceof Error ? error.message : null,
+    };
+  }
 };
 
-const useAndroidReachability = (enabled: boolean): AndroidReachability => {
-  const [status, setStatus] = React.useState<AndroidReachability>('checking');
+const useAndroidHealth = (enabled: boolean) => {
+  const [snapshot, setSnapshot] = React.useState<AndroidHealthSnapshot>({
+    status: 'checking',
+    latencyMs: null,
+    checkedAt: null,
+    error: null,
+  });
+
+  const refresh = React.useCallback(async (signal?: AbortSignal) => {
+    if (!enabled) return;
+    setSnapshot((current) => ({ ...current, status: 'checking', error: null }));
+    const next = await probeAndroidServerHealth(signal);
+    if (signal?.aborted) return;
+    setSnapshot(next);
+  }, [enabled]);
 
   React.useEffect(() => {
     if (!enabled) return;
-    let cancelled = false;
     const controller = new AbortController();
 
-    const check = async () => {
-      setStatus('checking');
-      const online = await probeAndroidServerHealth(controller.signal);
-      if (!cancelled) setStatus(online ? 'online' : 'offline');
-    };
-
-    void check();
+    void refresh(controller.signal);
     const interval = window.setInterval(() => {
-      void check();
+      void refresh(controller.signal);
     }, 15000);
 
     return () => {
-      cancelled = true;
       controller.abort();
       window.clearInterval(interval);
     };
-  }, [enabled]);
+  }, [enabled, refresh]);
 
-  return status;
+  return {
+    snapshot,
+    refresh: () => refresh(),
+    isRefreshing: snapshot.status === 'checking',
+  };
+};
+
+const getAndroidHealthLabel = (status: AndroidReachability, t: ReturnType<typeof useI18n>['t']): string => {
+  if (status === 'online') return t('mobile.android.status.online');
+  if (status === 'offline') return t('mobile.android.status.offline');
+  return t('mobile.android.status.checking');
+};
+
+const formatAndroidHealthLatency = (latencyMs: number, t: ReturnType<typeof useI18n>['t']): string => (
+  t('mobile.android.health.latencyValue', { latency: latencyMs })
+);
+
+const formatAndroidHealthCheckedAt = (checkedAt: number | null): string | null => {
+  if (!checkedAt) return null;
+  return new Intl.DateTimeFormat(undefined, {
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit',
+  }).format(new Date(checkedAt));
 };
 
 const getNumericLimit = (limit: unknown, key: 'context' | 'output'): number | undefined => {
@@ -815,69 +867,134 @@ const AndroidServerLogin: React.FC<AndroidServerLoginProps> = ({ title, descript
 
 const AndroidServerReachabilityBadge: React.FC<{ enabled: boolean }> = ({ enabled }) => {
   const { t } = useI18n();
-  const status = useAndroidReachability(enabled);
+  const { snapshot } = useAndroidHealth(enabled);
 
   if (!enabled) return null;
 
-  const label = status === 'online'
-    ? t('mobile.android.status.online')
-    : status === 'offline'
-      ? t('mobile.android.status.offline')
-      : t('mobile.android.status.checking');
+  const label = getAndroidHealthLabel(snapshot.status, t);
+  const displayLabel = snapshot.status === 'online' && snapshot.latencyMs !== null
+    ? `${label} · ${formatAndroidHealthLatency(snapshot.latencyMs, t)}`
+    : label;
 
   return (
     <span className="inline-flex min-w-0 items-center gap-1.5 rounded-full border border-border/40 bg-background px-2 py-0.5 typography-micro text-muted-foreground">
       <span
         className={cn(
           'size-2 shrink-0 rounded-full',
-          status === 'online' && 'bg-[var(--status-success)]',
-          status === 'offline' && 'bg-[var(--status-error)]',
-          status === 'checking' && 'bg-[var(--status-warning)]',
+          snapshot.status === 'online' && 'bg-[var(--status-success)]',
+          snapshot.status === 'offline' && 'bg-[var(--status-error)]',
+          snapshot.status === 'checking' && 'bg-[var(--status-warning)]',
         )}
         aria-hidden
       />
-      <span className="truncate">{label}</span>
+      <span className="truncate">{displayLabel}</span>
     </span>
   );
 };
 
-const AndroidHeaderReachabilityDot: React.FC = () => {
+const AndroidServerHealthButton: React.FC<{
+  enabled: boolean;
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  currentServer: AndroidServer | null;
+}> = ({ currentServer, enabled, onOpenChange, open }) => {
   const { t } = useI18n();
-  const [enabled, setEnabled] = React.useState(false);
-  const status = useAndroidReachability(enabled);
-
-  React.useEffect(() => {
-    let cancelled = false;
-    void fetchAndroidState().then((state) => {
-      if (!cancelled) setEnabled(Boolean(state?.android && state.configured));
-    });
-    return () => {
-      cancelled = true;
-    };
-  }, []);
+  const { snapshot, refresh, isRefreshing } = useAndroidHealth(enabled);
 
   if (!enabled) return null;
 
-  const label = status === 'online'
-    ? t('mobile.android.status.online')
-    : status === 'offline'
-      ? t('mobile.android.status.offline')
-      : t('mobile.android.status.checking');
+  const label = getAndroidHealthLabel(snapshot.status, t);
+  const checkedAt = formatAndroidHealthCheckedAt(snapshot.checkedAt);
 
   return (
-    <span className="absolute right-1.5 top-1.5 flex size-3 shrink-0 items-center justify-center" aria-label={label} title={label}>
-      <span
-        className={cn(
-          'size-2 rounded-full',
-          status === 'online' && 'bg-[var(--status-success)]',
-          status === 'offline' && 'bg-[var(--status-error)]',
-          status === 'checking' && 'bg-[var(--status-warning)]',
-        )}
-      />
-      {status === 'online' ? (
-        <span className="absolute size-2 rounded-full bg-[var(--status-success)] opacity-30" aria-hidden />
-      ) : null}
-    </span>
+    <>
+      <button
+        type="button"
+        className="relative flex size-10 shrink-0 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-interactive-hover hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+        aria-label={t('mobile.android.health.openAria')}
+        aria-expanded={open}
+        onClick={() => onOpenChange(!open)}
+        style={{ touchAction: 'manipulation' }}
+      >
+        <Icon name="server" className="size-5" />
+        <span
+          className={cn(
+            'absolute right-1.5 top-1.5 flex size-3 items-center justify-center rounded-full bg-background',
+          )}
+          aria-hidden
+        >
+          <span
+            className={cn(
+              'size-2 rounded-full',
+              snapshot.status === 'online' && 'bg-[var(--status-success)]',
+              snapshot.status === 'offline' && 'bg-[var(--status-error)]',
+              snapshot.status === 'checking' && 'bg-[var(--status-warning)]',
+            )}
+          />
+          {snapshot.status === 'online' ? (
+            <span className="absolute size-2 rounded-full bg-[var(--status-success)] opacity-30" />
+          ) : null}
+        </span>
+      </button>
+
+      <MobileOverlayPanel open={open} onClose={() => onOpenChange(false)} title={t('mobile.android.health.title')}>
+        <div className="space-y-4 p-4">
+          <section className="space-y-3 rounded-xl border border-border/40 bg-[var(--surface-elevated)] p-3">
+            <div className="flex items-center gap-3">
+              <span
+                className={cn(
+                  'flex size-10 shrink-0 items-center justify-center rounded-full',
+                  snapshot.status === 'online' && 'bg-[var(--status-success-background)] text-[var(--status-success)]',
+                  snapshot.status === 'offline' && 'bg-[var(--status-error-background)] text-[var(--status-error)]',
+                  snapshot.status === 'checking' && 'bg-[var(--status-warning-background)] text-[var(--status-warning)]',
+                )}
+              >
+                <Icon name={snapshot.status === 'checking' ? 'loader-4' : 'server'} className={cn('size-5', snapshot.status === 'checking' && 'animate-spin')} />
+              </span>
+              <div className="min-w-0 flex-1">
+                <div className="truncate typography-ui-label text-foreground">{label}</div>
+                <div className="truncate typography-micro text-muted-foreground">
+                  {currentServer?.label || currentServer?.url || t('mobile.android.current.unknown')}
+                </div>
+              </div>
+            </div>
+
+            <div className="space-y-2 rounded-lg bg-[var(--surface-muted)] p-3">
+              <div className="flex items-center justify-between gap-3">
+                <span className="typography-meta text-muted-foreground">{t('mobile.android.health.latency')}</span>
+                <span className="typography-ui-label text-foreground">
+                  {snapshot.latencyMs !== null ? formatAndroidHealthLatency(snapshot.latencyMs, t) : t('mobile.android.health.latencyUnknown')}
+                </span>
+              </div>
+              <div className="flex items-center justify-between gap-3">
+                <span className="typography-meta text-muted-foreground">{t('mobile.android.health.lastChecked')}</span>
+                <span className="typography-ui-label text-foreground">
+                  {checkedAt ?? t('mobile.android.health.notChecked')}
+                </span>
+              </div>
+              {snapshot.error ? (
+                <div className="flex items-start justify-between gap-3">
+                  <span className="typography-meta text-muted-foreground">{t('mobile.android.health.error')}</span>
+                  <span className="min-w-0 flex-1 break-words text-right typography-meta text-[var(--status-error)]">{snapshot.error}</span>
+                </div>
+              ) : null}
+            </div>
+
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              className="w-full"
+              disabled={isRefreshing}
+              onClick={() => void refresh()}
+            >
+              <Icon name="refresh" className={cn('size-4', isRefreshing && 'animate-spin')} />
+              {isRefreshing ? t('mobile.android.health.refreshing') : t('mobile.android.health.refresh')}
+            </Button>
+          </section>
+        </div>
+      </MobileOverlayPanel>
+    </>
   );
 };
 
@@ -2171,7 +2288,6 @@ const MobileSessionMetadataButton = React.memo(function MobileSessionMetadataBut
         onClick={() => onOpenChange((currentOpen) => !currentOpen)}
         style={{ touchAction: 'manipulation' }}
       >
-        <AndroidHeaderReachabilityDot />
         <Icon name="apps-2-ai" className="size-5" />
       </button>
       <SessionMetadataOverlay
@@ -2194,7 +2310,20 @@ const MobileHeader: React.FC<{
   onOpenMenu: () => void;
   metadataOpen: boolean;
   onMetadataOpenChange: (open: boolean | ((open: boolean) => boolean)) => void;
-}> = ({ onOpenSessions, onOpenMenu, metadataOpen, onMetadataOpenChange }) => {
+  androidHealthEnabled: boolean;
+  androidHealthOpen: boolean;
+  onAndroidHealthOpenChange: (open: boolean) => void;
+  currentAndroidServer: AndroidServer | null;
+}> = ({
+  androidHealthEnabled,
+  androidHealthOpen,
+  currentAndroidServer,
+  onAndroidHealthOpenChange,
+  onOpenSessions,
+  onOpenMenu,
+  metadataOpen,
+  onMetadataOpenChange,
+}) => {
   const { t } = useI18n();
   const currentDirectory = useDirectoryStore((state) => state.currentDirectory);
   const currentSessionId = useSessionUIStore((state) => state.currentSessionId);
@@ -2227,17 +2356,31 @@ const MobileHeader: React.FC<{
 
   React.useEffect(() => {
     onMetadataOpenChange(false);
-  }, [currentSessionId, effectiveDirectory, onMetadataOpenChange]);
+    onAndroidHealthOpenChange(false);
+  }, [currentSessionId, effectiveDirectory, onAndroidHealthOpenChange, onMetadataOpenChange]);
 
   const handleOpenSessions = React.useCallback(() => {
     onMetadataOpenChange(false);
+    onAndroidHealthOpenChange(false);
     onOpenSessions();
-  }, [onMetadataOpenChange, onOpenSessions]);
+  }, [onAndroidHealthOpenChange, onMetadataOpenChange, onOpenSessions]);
 
   const handleOpenMenu = React.useCallback(() => {
     onMetadataOpenChange(false);
+    onAndroidHealthOpenChange(false);
     onOpenMenu();
-  }, [onMetadataOpenChange, onOpenMenu]);
+  }, [onAndroidHealthOpenChange, onMetadataOpenChange, onOpenMenu]);
+
+  const handleAndroidHealthOpenChange = React.useCallback((open: boolean) => {
+    if (open) onMetadataOpenChange(false);
+    onAndroidHealthOpenChange(open);
+  }, [onAndroidHealthOpenChange, onMetadataOpenChange]);
+
+  const handleMetadataOpenChange = React.useCallback((nextOpen: boolean | ((open: boolean) => boolean)) => {
+    const resolvedOpen = typeof nextOpen === 'function' ? nextOpen(metadataOpen) : nextOpen;
+    if (resolvedOpen) onAndroidHealthOpenChange(false);
+    onMetadataOpenChange(resolvedOpen);
+  }, [metadataOpen, onAndroidHealthOpenChange, onMetadataOpenChange]);
 
   return (
     <>
@@ -2258,13 +2401,20 @@ const MobileHeader: React.FC<{
 
           <MobileSessionMetadataButton
             open={metadataOpen}
-            onOpenChange={onMetadataOpenChange}
+            onOpenChange={handleMetadataOpenChange}
             currentSessionId={currentSessionId}
             effectiveDirectory={effectiveDirectory}
             gitDirectory={gitDirectory}
             isNewSessionDraftOpen={isNewSessionDraftOpen}
             primaryLabel={primaryLabel}
             secondaryLabel={secondaryLabel}
+          />
+
+          <AndroidServerHealthButton
+            enabled={androidHealthEnabled}
+            open={androidHealthOpen}
+            onOpenChange={handleAndroidHealthOpenChange}
+            currentServer={currentAndroidServer}
           />
 
           <button
@@ -2296,6 +2446,7 @@ const MobileShell: React.FC<{ onActiveConnectionDeleted: () => void }> = ({ onAc
   const [settingsInitialMobileStage, setSettingsInitialMobileStage] = React.useState<'nav' | 'page-content'>('nav');
   const [overflowOpen, setOverflowOpen] = React.useState(false);
   const [androidServerPanelOpen, setAndroidServerPanelOpen] = React.useState(false);
+  const [androidHealthOpen, setAndroidHealthOpen] = React.useState(false);
   const [androidState, setAndroidState] = React.useState<AndroidState | null>(null);
   // When set, the Changes surface opens directly into the per-file diff for this path.
   const [pendingChangesDiff, setPendingChangesDiff] = React.useState<{ path: string; staged: boolean } | null>(null);
@@ -2315,6 +2466,10 @@ const MobileShell: React.FC<{ onActiveConnectionDeleted: () => void }> = ({ onAc
   React.useEffect(() => {
     void fetchAndroidState().then(setAndroidState);
   }, []);
+
+  const currentAndroidServer = React.useMemo(() => (
+    androidState?.servers.find((server) => server.id === androidState.currentServerId) ?? null
+  ), [androidState]);
 
   const mobileActions = React.useMemo<MobileAppActions>(
     () => ({
@@ -2398,6 +2553,10 @@ const MobileShell: React.FC<{ onActiveConnectionDeleted: () => void }> = ({ onAc
       setAndroidServerPanelOpen(false);
       return true;
     }
+    if (androidHealthOpen) {
+      setAndroidHealthOpen(false);
+      return true;
+    }
     if (metadataOpen) {
       setMetadataOpen(false);
       return true;
@@ -2435,11 +2594,11 @@ const MobileShell: React.FC<{ onActiveConnectionDeleted: () => void }> = ({ onAc
       return true;
     }
     return false;
-  }, [androidServerPanelOpen, changesOpen, closeChanges, filesOpen, instancesOpen, mcpOpen, metadataOpen, overflowOpen, sessionsSheetOpen, settingsOpen, updateOpen]);
+  }, [androidHealthOpen, androidServerPanelOpen, changesOpen, closeChanges, filesOpen, instancesOpen, mcpOpen, metadataOpen, overflowOpen, sessionsSheetOpen, settingsOpen, updateOpen]);
 
   useNativeAndroidBackButton(handleNativeBack);
   useAndroidBackHandler(
-    androidServerPanelOpen || metadataOpen || overflowOpen || sessionsSheetOpen || filesOpen || changesOpen || mcpOpen || instancesOpen || settingsOpen || updateOpen,
+    androidServerPanelOpen || androidHealthOpen || metadataOpen || overflowOpen || sessionsSheetOpen || filesOpen || changesOpen || mcpOpen || instancesOpen || settingsOpen || updateOpen,
     () => {
       handleNativeBack();
     },
@@ -2565,6 +2724,10 @@ const MobileShell: React.FC<{ onActiveConnectionDeleted: () => void }> = ({ onAc
           onOpenMenu={() => setOverflowOpen(true)}
           metadataOpen={metadataOpen}
           onMetadataOpenChange={setMetadataOpen}
+          androidHealthEnabled={Boolean(androidState?.android && androidState.configured)}
+          androidHealthOpen={androidHealthOpen}
+          onAndroidHealthOpenChange={setAndroidHealthOpen}
+          currentAndroidServer={currentAndroidServer}
         />
         <main ref={chatMainRef} className="relative min-h-0 flex-1 overflow-hidden" data-page-scroll-lock="true">
           <div ref={chatAnimRef} className="h-full w-full">
