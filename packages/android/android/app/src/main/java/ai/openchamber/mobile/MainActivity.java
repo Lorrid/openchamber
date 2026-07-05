@@ -17,6 +17,8 @@ import android.webkit.WebResourceRequest;
 import android.webkit.WebSettings;
 import android.webkit.WebView;
 import android.webkit.WebViewClient;
+import android.window.OnBackInvokedCallback;
+import android.window.OnBackInvokedDispatcher;
 import android.widget.FrameLayout;
 import android.widget.Toast;
 
@@ -50,12 +52,15 @@ public class MainActivity extends Activity {
     private static final String PREFS_NAME = "openchamber_mobile";
     private static final String PREF_SERVERS = "servers";
     private static final String PREF_CURRENT_ID = "current_server_id";
+    private static final String PREF_WEB_PREFIX = "web:";
+    private static final String LOCALE_STORAGE_KEY = "openchamber.i18n.v1";
     private static final int REQUEST_TIMEOUT_MS = 10000;
 
     private WebView webView;
     private SharedPreferences prefs;
     private ExecutorService workers;
     private LocalServer localServer;
+    private OnBackInvokedCallback backInvokedCallback;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -66,6 +71,7 @@ public class MainActivity extends Activity {
         createWebView();
         configureCookies();
         configureWebView();
+        configureSystemBackHandler();
         try {
             localServer = new LocalServer();
             localServer.start();
@@ -77,6 +83,10 @@ public class MainActivity extends Activity {
 
     @Override
     protected void onDestroy() {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU && backInvokedCallback != null) {
+            getOnBackInvokedDispatcher().unregisterOnBackInvokedCallback(backInvokedCallback);
+            backInvokedCallback = null;
+        }
         if (localServer != null) localServer.stop();
         if (workers != null) workers.shutdownNow();
         super.onDestroy();
@@ -84,7 +94,38 @@ public class MainActivity extends Activity {
 
     @Override
     public void onBackPressed() {
-        moveTaskToBack(true);
+        handleSystemBack();
+    }
+
+    private void configureSystemBackHandler() {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU) return;
+        backInvokedCallback = this::handleSystemBack;
+        getOnBackInvokedDispatcher().registerOnBackInvokedCallback(
+                OnBackInvokedDispatcher.PRIORITY_DEFAULT,
+                backInvokedCallback
+        );
+    }
+
+    private void handleSystemBack() {
+        if (webView == null) {
+            moveTaskToBack(true);
+            return;
+        }
+
+        String script = "(function(){try{"
+                + "var event;"
+                + "if(typeof CustomEvent==='function'){"
+                + "event=new CustomEvent('openchamber:android-back',{cancelable:true});"
+                + "}else{"
+                + "event=document.createEvent('Event');"
+                + "event.initEvent('openchamber:android-back',false,true);"
+                + "}"
+                + "return window.dispatchEvent(event)===false||event.defaultPrevented===true;"
+                + "}catch(e){return false;}})();";
+        webView.evaluateJavascript(script, handled -> {
+            if (handled != null && "true".equals(handled.trim())) return;
+            moveTaskToBack(true);
+        });
     }
 
     private void configureSystemBars() {
@@ -247,6 +288,22 @@ public class MainActivity extends Activity {
             final boolean darkIcons = shouldUseDarkSystemBarIcons(color);
             runOnUiThread(() -> applySystemBars(color, darkIcons));
         }
+
+        @JavascriptInterface
+        public String getPreference(String key) {
+            if (!isAllowedWebPreferenceKey(key)) return "";
+            return prefs.getString(PREF_WEB_PREFIX + key, "");
+        }
+
+        @JavascriptInterface
+        public void setPreference(String key, String value) {
+            if (!isAllowedWebPreferenceKey(key)) return;
+            prefs.edit().putString(PREF_WEB_PREFIX + key, value == null ? "" : value).apply();
+        }
+    }
+
+    private boolean isAllowedWebPreferenceKey(String key) {
+        return LOCALE_STORAGE_KEY.equals(key);
     }
 
     private JSONObject stateJson() throws JSONException {

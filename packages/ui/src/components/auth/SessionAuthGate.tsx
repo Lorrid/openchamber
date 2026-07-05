@@ -255,6 +255,7 @@ const ErrorScreen: React.FC<ErrorScreenProps> = ({ onRetry, errorType = 'network
 
 interface SessionAuthGateProps {
   children: React.ReactNode;
+  networkErrorActions?: React.ReactNode;
 }
 
 type GateState = 'pending' | 'authenticated' | 'locked' | 'error' | 'rate-limited';
@@ -266,7 +267,7 @@ interface ErrorScreenProps {
   children?: React.ReactNode;
 }
 
-export const SessionAuthGate: React.FC<SessionAuthGateProps> = ({ children }) => {
+export const SessionAuthGate: React.FC<SessionAuthGateProps> = ({ children, networkErrorActions }) => {
   const { t } = useI18n();
   const vscodeRuntime = React.useMemo(() => isVSCodeRuntime(), []);
   const skipAuth = vscodeRuntime;
@@ -644,6 +645,7 @@ export const SessionAuthGate: React.FC<SessionAuthGateProps> = ({ children }) =>
   if (state === 'error') {
     return (
       <ErrorScreen onRetry={() => void checkStatus()} errorType="network">
+        {networkErrorActions}
         {showHostSwitcher && (
           <div className="w-full max-w-xs">
             <DesktopHostSwitcherInline />

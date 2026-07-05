@@ -12,6 +12,7 @@ import { ChatView } from '@/components/views/ChatView';
 import { SettingsView } from '@/components/views/SettingsView';
 import { ErrorBoundary } from '@/components/ui/ErrorBoundary';
 import { MobileOverlayPanel } from '@/components/ui/MobileOverlayPanel';
+import { Button } from '@/components/ui/button';
 import { RuntimeAPIProvider } from '@/contexts/RuntimeAPIProvider';
 import { registerRuntimeAPIs } from '@/contexts/runtimeAPIRegistry';
 import { TooltipProvider } from '@/components/ui/tooltip';
@@ -90,8 +91,25 @@ type AndroidState = {
   servers: AndroidServer[];
 };
 
+type AndroidReachability = 'checking' | 'online' | 'offline';
+
+const ANDROID_BACK_EVENT = 'openchamber:android-back';
+
 const normalizePath = (value?: string | null): string =>
   (value || '').replace(/\\/g, '/').replace(/\/+$/g, '');
+
+const useAndroidBackHandler = (enabled: boolean, onBack: () => void) => {
+  React.useEffect(() => {
+    if (!enabled || typeof window === 'undefined') return;
+    const handleBack = (event: Event) => {
+      if (event.defaultPrevented) return;
+      event.preventDefault();
+      onBack();
+    };
+    window.addEventListener(ANDROID_BACK_EVENT, handleBack);
+    return () => window.removeEventListener(ANDROID_BACK_EVENT, handleBack);
+  }, [enabled, onBack]);
+};
 
 const isAndroidState = (value: unknown): value is AndroidState => (
   typeof value === 'object'
@@ -119,6 +137,45 @@ const postAndroidJson = async (path: string, body: Record<string, unknown>): Pro
     return { ok: false, message: typeof payload?.error === 'string' ? payload.error : 'Connection failed' };
   }
   return isAndroidState(payload?.state) ? { ok: true, state: payload.state } : { ok: false, message: 'Invalid response' };
+};
+
+const probeAndroidServerHealth = async (signal?: AbortSignal): Promise<boolean> => {
+  const response = await fetch('/health', {
+    method: 'GET',
+    headers: { Accept: 'application/json' },
+    cache: 'no-store',
+    signal,
+  }).catch(() => null);
+  return response?.ok === true;
+};
+
+const useAndroidReachability = (enabled: boolean): AndroidReachability => {
+  const [status, setStatus] = React.useState<AndroidReachability>('checking');
+
+  React.useEffect(() => {
+    if (!enabled) return;
+    let cancelled = false;
+    const controller = new AbortController();
+
+    const check = async () => {
+      setStatus('checking');
+      const online = await probeAndroidServerHealth(controller.signal);
+      if (!cancelled) setStatus(online ? 'online' : 'offline');
+    };
+
+    void check();
+    const interval = window.setInterval(() => {
+      void check();
+    }, 15000);
+
+    return () => {
+      cancelled = true;
+      controller.abort();
+      window.clearInterval(interval);
+    };
+  }, [enabled]);
+
+  return status;
 };
 
 const getNumericLimit = (limit: unknown, key: 'context' | 'output'): number | undefined => {
@@ -395,7 +452,10 @@ const MobileUsageLimits: React.FC<{
         {groups.map((group) => (
           <div key={group.providerId} className="min-w-0 rounded-xl bg-[var(--surface-muted)] p-2.5">
             <div className="flex min-w-0 items-center gap-2">
-              <ProviderLogo providerId={group.providerId} className="size-4 shrink-0" />
+              <span className="relative flex size-4 shrink-0 items-center justify-center text-muted-foreground">
+                <Icon name="server" className="size-3.5" />
+                <ProviderLogo providerId={group.providerId} className="absolute inset-0 size-4 bg-[var(--surface-muted)]" />
+              </span>
               <span className="min-w-0 flex-1 truncate typography-ui-label font-medium text-foreground">
                 {group.providerName}
               </span>
@@ -673,6 +733,122 @@ const AndroidServerLogin: React.FC<AndroidServerLoginProps> = ({ title, descript
   );
 };
 
+const AndroidServerReachabilityBadge: React.FC<{ enabled: boolean }> = ({ enabled }) => {
+  const { t } = useI18n();
+  const status = useAndroidReachability(enabled);
+
+  if (!enabled) return null;
+
+  const label = status === 'online'
+    ? t('mobile.android.status.online')
+    : status === 'offline'
+      ? t('mobile.android.status.offline')
+      : t('mobile.android.status.checking');
+
+  return (
+    <span className="inline-flex min-w-0 items-center gap-1.5 rounded-full border border-border/40 bg-background px-2 py-0.5 typography-micro text-muted-foreground">
+      <span
+        className={cn(
+          'size-2 shrink-0 rounded-full',
+          status === 'online' && 'bg-[var(--status-success)]',
+          status === 'offline' && 'bg-[var(--status-error)]',
+          status === 'checking' && 'bg-[var(--status-warning)]',
+        )}
+        aria-hidden
+      />
+      <span className="truncate">{label}</span>
+    </span>
+  );
+};
+
+const AndroidHeaderReachabilityDot: React.FC = () => {
+  const { t } = useI18n();
+  const [enabled, setEnabled] = React.useState(false);
+  const status = useAndroidReachability(enabled);
+
+  React.useEffect(() => {
+    let cancelled = false;
+    void fetchAndroidState().then((state) => {
+      if (!cancelled) setEnabled(Boolean(state?.android && state.configured));
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  if (!enabled) return null;
+
+  const label = status === 'online'
+    ? t('mobile.android.status.online')
+    : status === 'offline'
+      ? t('mobile.android.status.offline')
+      : t('mobile.android.status.checking');
+
+  return (
+    <span className="relative flex size-4 shrink-0 items-center justify-center" aria-label={label} title={label}>
+      <span
+        className={cn(
+          'size-2.5 rounded-full',
+          status === 'online' && 'bg-[var(--status-success)]',
+          status === 'offline' && 'bg-[var(--status-error)]',
+          status === 'checking' && 'bg-[var(--status-warning)]',
+        )}
+      />
+      {status === 'online' ? (
+        <span className="absolute size-2.5 rounded-full bg-[var(--status-success)] opacity-30" aria-hidden />
+      ) : null}
+    </span>
+  );
+};
+
+export const AndroidNetworkErrorActions: React.FC = () => {
+  const { t } = useI18n();
+  const [state, setState] = React.useState<AndroidState | null | undefined>(undefined);
+  const [busy, setBusy] = React.useState(false);
+  const [status, setStatus] = React.useState<string | null>(null);
+
+  React.useEffect(() => {
+    void fetchAndroidState().then(setState);
+  }, []);
+
+  const chooseServer = React.useCallback(async () => {
+    setBusy(true);
+    setStatus(null);
+    const result = await postAndroidJson('/__android/logout', {});
+    if (!result.ok) {
+      setStatus(result.message);
+      setBusy(false);
+      return;
+    }
+    window.location.reload();
+  }, []);
+
+  if (!state?.android) return null;
+
+  const currentServer = state.servers.find((server) => server.id === state.currentServerId) ?? null;
+
+  return (
+    <div className="flex w-full max-w-xs flex-col items-center gap-2">
+      {currentServer ? (
+        <div className="max-w-full truncate typography-micro text-muted-foreground">
+          {currentServer.label || currentServer.url}
+        </div>
+      ) : null}
+      <Button
+        type="button"
+        variant="outline"
+        className="w-full"
+        disabled={busy}
+        onClick={() => void chooseServer()}
+      >
+        {busy ? <Icon name="loader-4" className="size-4 animate-spin" /> : <Icon name="server" className="size-4" />}
+        {t('mobile.android.action.chooseServer')}
+      </Button>
+      {status ? <div className="typography-micro text-muted-foreground">{status}</div> : null}
+    </div>
+  );
+};
+
 const AndroidServerPanel: React.FC<{
   open: boolean;
   onClose: () => void;
@@ -760,6 +936,7 @@ const AndroidServerPanel: React.FC<{
                       || t('mobile.android.current.unknown')}
                   </div>
                 </div>
+                <AndroidServerReachabilityBadge enabled={open && state.configured} />
               </div>
               <button
                 type="button"
@@ -1021,12 +1198,18 @@ const MobileSessionMetadataButton = React.memo(function MobileSessionMetadataBut
     preloadProviderLogos(usageGroups.map((group) => group.providerId));
   }, [open, usageGroups]);
 
+  const handleAndroidMetadataBack = React.useCallback(() => {
+    onOpenChange(false);
+  }, [onOpenChange]);
+
+  useAndroidBackHandler(open, handleAndroidMetadataBack);
+
   return (
     <>
       <button
         ref={metadataTriggerRef}
         type="button"
-        className="flex min-w-0 flex-1 items-center rounded-full px-2 py-1.5 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+        className="flex min-w-0 flex-1 items-center gap-2 rounded-full px-2 py-1.5 text-left transition-colors hover:bg-interactive-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
         aria-label={t('mobile.header.openMetadataAria')}
         aria-expanded={open}
         onClick={() => onOpenChange((currentOpen) => !currentOpen)}
@@ -1037,6 +1220,16 @@ const MobileSessionMetadataButton = React.memo(function MobileSessionMetadataBut
           {secondaryLabel ? (
             <span className="block truncate typography-micro text-muted-foreground">{secondaryLabel}</span>
           ) : null}
+        </span>
+        <span className="flex shrink-0 items-center gap-1.5 text-muted-foreground">
+          <AndroidHeaderReachabilityDot />
+          <span className="flex size-8 items-center justify-center rounded-full border border-border/40 bg-[var(--surface-elevated)]">
+            {contextDisplay ? (
+              <ContextProgressIcon percentage={contextDisplay.percentage} />
+            ) : (
+              <Icon name="bar-chart-2" className="size-4" />
+            )}
+          </span>
         </span>
       </button>
       <SessionMetadataOverlay
@@ -1198,6 +1391,51 @@ const MobileShell: React.FC = () => {
   }, []);
 
   const showUpdateItem = updateAvailable && (updateRuntimeType === 'desktop' || updateRuntimeType === 'web');
+
+  const anyOverlayOpen = overflowOpen
+    || androidServerPanelOpen
+    || sessionsSheetOpen
+    || filesOpen
+    || changesOpen
+    || mcpOpen
+    || settingsOpen
+    || updateOpen;
+
+  const handleAndroidOverlayBack = React.useCallback(() => {
+    if (androidServerPanelOpen) {
+      setAndroidServerPanelOpen(false);
+      return;
+    }
+    if (mcpOpen) {
+      setMcpOpen(false);
+      return;
+    }
+    if (overflowOpen) {
+      setOverflowOpen(false);
+      return;
+    }
+    if (sessionsSheetOpen) {
+      setSessionsSheetOpen(false);
+      return;
+    }
+    if (filesOpen) {
+      setFilesOpen(false);
+      return;
+    }
+    if (changesOpen) {
+      closeChanges();
+      return;
+    }
+    if (settingsOpen) {
+      setSettingsOpen(false);
+      return;
+    }
+    if (updateOpen) {
+      setUpdateOpen(false);
+    }
+  }, [androidServerPanelOpen, changesOpen, closeChanges, filesOpen, mcpOpen, overflowOpen, sessionsSheetOpen, settingsOpen, updateOpen]);
+
+  useAndroidBackHandler(anyOverlayOpen, handleAndroidOverlayBack);
 
   const openMcpCreateSettings = React.useCallback(() => {
     const baseName = 'new-mcp-server';

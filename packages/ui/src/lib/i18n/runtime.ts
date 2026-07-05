@@ -23,6 +23,19 @@ type StoredLocale = {
   locale?: unknown;
 };
 
+type AndroidPreferenceBridge = {
+  getPreference?: (key: string) => string;
+  setPreference?: (key: string, value: string) => void;
+};
+
+function getAndroidPreferenceBridge(): AndroidPreferenceBridge | null {
+  if (typeof window === 'undefined') {
+    return null;
+  }
+  const bridge = (window as Window & { OpenChamberAndroid?: AndroidPreferenceBridge }).OpenChamberAndroid;
+  return bridge && typeof bridge === 'object' ? bridge : null;
+}
+
 export function normalizeLocale(value: string | undefined | null): Locale {
   if (!value) {
     return DEFAULT_LOCALE;
@@ -70,8 +83,16 @@ function readStoredLocale(): Locale | undefined {
     return undefined;
   }
 
+  let raw: string | null | undefined;
   try {
-    const raw = window.localStorage.getItem(LOCALE_STORAGE_KEY);
+    raw = window.localStorage.getItem(LOCALE_STORAGE_KEY);
+  } catch {
+    raw = null;
+  }
+
+  raw = raw || getAndroidPreferenceBridge()?.getPreference?.(LOCALE_STORAGE_KEY);
+
+  try {
     if (!raw) {
       return undefined;
     }
@@ -87,8 +108,15 @@ export function writeStoredLocale(locale: Locale): void {
     return;
   }
 
+  const raw = JSON.stringify({ locale });
   try {
-    window.localStorage.setItem(LOCALE_STORAGE_KEY, JSON.stringify({ locale }));
+    window.localStorage.setItem(LOCALE_STORAGE_KEY, raw);
+  } catch {
+    // Keep Android WebView persistence below even if localStorage is unavailable.
+  }
+
+  try {
+    getAndroidPreferenceBridge()?.setPreference?.(LOCALE_STORAGE_KEY, raw);
   } catch {
     return;
   }
