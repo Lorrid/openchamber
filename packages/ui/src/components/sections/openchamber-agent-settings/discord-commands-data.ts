@@ -63,6 +63,7 @@ export const DISCORD_COMMANDS: DiscordCommandEntry[] = [
     descriptionKey: 'settings.integrations.discord.commands.desc.critique',
     category: 'git',
     suggested: true,
+    nativeSlash: true,
     example: '/critique on',
   },
   { name: 'usage', descriptionKey: 'settings.integrations.discord.commands.desc.usage', category: 'chat', suggested: true, nativeSlash: true },

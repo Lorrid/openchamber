@@ -30,10 +30,17 @@ describe('buildSlashCommandDefinitions', () => {
       'status',
       'fork',
       'queue',
+      'critique',
       'reload-opencode',
     ]) {
       expect(names).toContain(name);
     }
+  });
+
+  it('registers /critique with an optional mode option', () => {
+    const critique = defs.find((d) => d.name === 'critique');
+    expect(critique?.description).toMatch(/critique\.work/i);
+    expect(critique?.options?.[0]).toMatchObject({ name: 'mode', required: false });
   });
 
   it('keeps /help description aligned with the slash-only help surface', () => {
