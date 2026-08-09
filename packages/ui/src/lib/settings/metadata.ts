@@ -288,6 +288,9 @@ export function getSettingsNavIcon(slug: SettingsPageSlug): IconName | null {
     case 'git':
       return 'git-branch';
 
+    case 'integrations':
+      return 'plug';
+
     case 'usage':
       return 'bar-chart-2';
     case 'voice':
