@@ -98,6 +98,7 @@ describe('buildSlashCommandDefinitions', () => {
     expect(withOptions.map((d) => d.name).sort()).toEqual(
       [
         'clear-queue',
+        'critique',
         'new-worktree',
         'queue',
         'resume',
