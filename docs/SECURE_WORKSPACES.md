@@ -14,7 +14,7 @@ it. Egress leaves through a gateway that enforces an allowlist, and the runtime 
 route to the host API at all.
 
 Three providers: **Docker** (the ordinary choice), **Kubernetes** (when the work must run
-on somebody else's cluster), **Apple Container** (macOS). The container work lives in a
+on somebody else's cluster), **Apple Container** (macOS, see below). The container work lives in a
 separate repository, `openchamber/opencode-container-workspace`, pinned here by immutable
 commit SHA; OpenChamber owns policy, authorization, lifecycle orchestration, export/apply,
 and the UI.
@@ -63,8 +63,19 @@ own suite (159 tests, green on Windows). In `packages/web` on Windows, 14 test f
 on `origin/main` pass here. Compare against a baseline worktree before treating any
 failure as this branch's.
 
-**Not proven yet:** Linux, macOS/Apple Container at the current pin and images, physical
-iOS/Android, and exact image-digest recertification.
+**Not proven yet:** Linux, physical iOS/Android, and exact image-digest recertification.
+
+**Apple Container is implemented, offered, and deliberately not certified.** Managed
+egress needs a network primitive the current CLI does not provide, so creation fails
+closed unless an external proxy is configured — meaning it delivers *less* isolation than
+Docker on the same machine, and the product's central promise cannot be kept there. Its
+audience is one intersection: macOS where Docker Desktop is not permitted and a corporate
+proxy already exists. It stays visible in settings, described requirement-first, because
+hiding it would leave that person with no path at all; it carries no release gate and no
+live-evidence obligation until Apple ships the primitive. Everything on it that does not
+need the internet — create, files, terminal, snapshot, export/review/apply, ownership,
+`container system stop/start` recovery, cleanup — is worth testing and does work; the model
+simply will not answer without a real proxy.
 
 ## Testing a platform that has not been tested
 
@@ -180,8 +191,8 @@ steps with their status.
    `packaged-smoke.test.mjs`, `packaged-workspace-smoke.test.mjs`, and
    `scripts/verify-workspace-plugin.test.mjs` appear in no script and no workflow. Wire them
    into `test:architecture` or delete them; an unrun test reads as coverage it does not give.
-5. **Live recertification** at the current pin and images for Apple Container, plus Linux
-   and physical mobile.
+5. **Live recertification** at the current pin and images for Linux and physical mobile.
+   Apple Container is out of this list on purpose — see the note above.
 
 ### Filed upstream (anomalyco/opencode)
 

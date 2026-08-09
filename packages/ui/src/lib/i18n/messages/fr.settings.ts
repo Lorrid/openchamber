@@ -2184,7 +2184,7 @@ export const settingsDict = {
   'settings.workspaces.provider.kubernetes': 'Kubernetes',
   'settings.workspaces.provider.kubernetesHint': 'Namespace de cluster existant avec PVC, Service, Secret et contrôles de politique.',
   'settings.workspaces.provider.appleContainer': 'Apple Container',
-  'settings.workspaces.provider.appleContainerHint': 'Runtime de conteneurs natif macOS avec isolation vmnet limitée à l’hôte et sortie explicite via proxy hôte.',
+  'settings.workspaces.provider.appleContainerHint': 'Pour les hôtes macOS sans Docker Desktop. Nécessite un proxy externe : la sortie gérée n\'est pas disponible sur cette plateforme.',
   'settings.workspaces.default': 'Par défaut',
   'settings.workspaces.actions.use': 'Utiliser',
   'settings.workspaces.actions.validate': 'Valider',

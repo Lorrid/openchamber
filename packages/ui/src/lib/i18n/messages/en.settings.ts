@@ -309,7 +309,7 @@ export const settingsDict = {
   'settings.workspaces.provider.kubernetes': 'Kubernetes',
   'settings.workspaces.provider.kubernetesHint': 'Existing cluster namespace with PVC, Service, Secret, and policy controls.',
   'settings.workspaces.provider.appleContainer': 'Apple Container',
-  'settings.workspaces.provider.appleContainerHint': 'Native macOS container runtime with host-only vmnet isolation and explicit host-proxy egress.',
+  'settings.workspaces.provider.appleContainerHint': 'For macOS hosts without Docker Desktop. Requires an external proxy: managed egress is unavailable on this platform.',
   'settings.workspaces.default': 'Default',
   'settings.workspaces.actions.use': 'Use',
   'settings.workspaces.actions.validate': 'Validate',

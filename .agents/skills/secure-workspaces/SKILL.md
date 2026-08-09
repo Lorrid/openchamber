@@ -119,6 +119,18 @@ one needs a reason at least as concrete.
   start, no connect timeout, and no replacement of a wedged sync fiber. Never build a
   flow that depends on reconnecting to an old workspace; offer a new workspace plus the
   immutable handoff instead.
+- **Apple Container is offered, honestly labelled, and not certified.** It delivers less
+  than Docker on the same machine: managed egress needs a network primitive the current
+  CLI does not have, so the product's central promise — outbound only through an
+  allowlisted gateway, with no direct route — is unreachable there and creation fails
+  closed without an external proxy. Its real audience is one intersection: a macOS host
+  where Docker Desktop is not permitted and a corporate proxy already exists. That is
+  narrow but not nobody, so the option stays visible rather than hidden — a person whose
+  Docker is forbidden would otherwise never learn a path exists — and its description
+  leads with the requirement, not the runtime: someone who reads only the first clause
+  must already know whether it can work for them. It carries no release gate and no live
+  evidence obligation until Apple ships the primitive; deleting the code would only mean
+  writing it again.
 - **Docker is the ordinary choice; Kubernetes means a cluster somebody else runs.** A
   cluster on the same computer is strictly worse here — same machine, more layers, a
   1.3 GB pull into the cluster, an extra port-forward hop — for isolation Docker enforces

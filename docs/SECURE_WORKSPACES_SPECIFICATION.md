@@ -54,7 +54,9 @@ All providers MUST implement the same common guarantees:
 - changed-file export including binary and untracked content;
 - explicit unavailable, degraded, inconsistent, and cleanup-failed diagnostics.
 
-Apple Container is a production provider on supported macOS hosts. It MUST be reported as intentionally unsupported on other platforms. The product MUST NOT silently fall back to Docker when Apple Container is selected.
+Apple Container is an implemented provider on supported macOS hosts, and MUST be reported as intentionally unsupported on other platforms. The product MUST NOT silently fall back to Docker when Apple Container is selected.
+
+It is deliberately **not** a certified production provider. Managed egress requires a network primitive the current Apple Container CLI does not expose, so it fails closed and an external proxy is mandatory — which means it delivers weaker isolation than Docker on the same host and cannot keep this product's central egress promise. It therefore MUST remain offered rather than hidden, described requirement-first so a reader learns the constraint before choosing it; it MUST NOT gate a release, and MUST NOT be presented anywhere as carrying current live certification. Certifying it is contingent on Apple, not on this product.
 
 ### 3.2 OpenChamber Surfaces
 
@@ -186,7 +188,7 @@ This section records the audited state of the current candidate. Evidence is ide
 - The `v0.1.1` images published on 2026-08-07 are the first carrying OpenCode `1.18.12`, closing the earlier gap where a workspace ran a `1.18.4` CLI against a `1.18.12` host SDK. The version was confirmed by running the published runtime digest rather than trusting the build that produced it.
 - Electron stages and verifies the exact installed plugin payload and bundles an OpenCode CLI matching the OpenChamber SDK version.
 - The runtime and gateway defaults in `packages/web/server/lib/workspaces/policy.js` are the signed `v0.1.1` multi-architecture manifest digests. Startup reconciliation converges an already-written plugin registration to these defaults, so a repin reaches existing installations without a settings re-save.
-- The full recertified image/provider milestone for the current matrix remains open: live Kubernetes and Apple Container evidence at the exact current pin has not been recollected since the repin.
+- Live Windows Docker and Kubernetes evidence at the current pin was collected on 2026-08-08. Linux evidence remains open. Apple Container is out of the milestone by decision, not by omission (section 3.1).
 
 ### 5.2 Implemented Security And Correctness Invariants
 
