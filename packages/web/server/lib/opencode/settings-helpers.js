@@ -1025,6 +1025,48 @@ export const createSettingsHelpers = (dependencies) => {
     if (Array.isArray(value.allowedChatIds)) {
       result.allowedChatIds = normalizeTelegramChatIds(value.allowedChatIds);
     }
+    // Per-chat policies (Discord guildPolicies analogue): enabled mute, reply
+    // mode override, and whether Sync Now mirrors projects into that chat.
+    if (value.chatPolicies && typeof value.chatPolicies === 'object' && !Array.isArray(value.chatPolicies)) {
+      const chatPolicies = {};
+      for (const [chatId, entry] of Object.entries(value.chatPolicies)) {
+        if (typeof chatId !== 'string' || chatId.length === 0) {
+          continue;
+        }
+        if (!entry || typeof entry !== 'object' || Array.isArray(entry)) {
+          continue;
+        }
+        const policy = {};
+        if (typeof entry.enabled === 'boolean') {
+          policy.enabled = entry.enabled;
+        }
+        if (entry.replyMode === 'always' || entry.replyMode === 'mention' || entry.replyMode === 'inherit') {
+          policy.replyMode = entry.replyMode;
+        }
+        if (typeof entry.syncProjects === 'boolean') {
+          policy.syncProjects = entry.syncProjects;
+        }
+        if (Object.keys(policy).length > 0) {
+          chatPolicies[chatId] = policy;
+        }
+      }
+      if (Object.keys(chatPolicies).length > 0) {
+        result.chatPolicies = chatPolicies;
+      }
+    }
+    // chatId → project path bindings (optional message_thread_id for forum topics).
+    if (Array.isArray(value.projectBindings)) {
+      result.projectBindings = value.projectBindings
+        .filter((binding) => binding && typeof binding === 'object' && binding.chatId && binding.projectPath)
+        .map((binding) => ({
+          chatId: String(binding.chatId),
+          projectPath: String(binding.projectPath),
+          ...(binding.projectLabel ? { projectLabel: String(binding.projectLabel) } : {}),
+          ...(binding.messageThreadId != null && String(binding.messageThreadId).length > 0
+            ? { messageThreadId: String(binding.messageThreadId) }
+            : {}),
+        }));
+    }
     // Global bridge mute is not a Telegram setting either — responding is
     // governed by access control (owner / allowed chats). Coerce legacy false
     // to true so stale settings cannot silently mute replies.

@@ -89,6 +89,43 @@ export function normalizeTelegramAccessSettings(settings = {}) {
 }
 
 /**
+ * Per-chat policy map (Discord guildPolicies analogue).
+ * @typedef {{ enabled?: boolean, replyMode?: 'always'|'mention'|'inherit', syncProjects?: boolean }} TelegramChatPolicy
+ */
+
+/**
+ * Whether a chat is muted via chatPolicies[chatId].enabled === false.
+ * Absent/true means respond (matches Discord muted-guild semantics).
+ */
+export function isTelegramChatDisabled(chatPolicies, chatId) {
+  const chat = normalizeId(chatId);
+  if (!chat || !chatPolicies || typeof chatPolicies !== 'object' || Array.isArray(chatPolicies)) {
+    return false;
+  }
+  const policy = chatPolicies[chat];
+  return Boolean(policy && typeof policy === 'object' && policy.enabled === false);
+}
+
+/**
+ * Resolve effective reply mode for a chat: per-chat always/mention wins;
+ * inherit/absent falls back to the default.
+ * @param {'always'|'mention'|undefined} defaultReplyMode
+ * @param {Record<string, TelegramChatPolicy>|null|undefined} chatPolicies
+ * @param {string|number|null|undefined} chatId
+ * @returns {'always'|'mention'}
+ */
+export function effectiveTelegramChatReplyMode(defaultReplyMode, chatPolicies, chatId) {
+  const chat = normalizeId(chatId);
+  const policy =
+    chat && chatPolicies && typeof chatPolicies === 'object' && !Array.isArray(chatPolicies)
+      ? chatPolicies[chat]
+      : null;
+  const mode = policy && typeof policy === 'object' ? policy.replyMode : null;
+  if (mode === 'always' || mode === 'mention') return mode;
+  return defaultReplyMode === 'mention' ? 'mention' : 'always';
+}
+
+/**
  * @param {object} args
  * @param {string|number|null} args.userId   Telegram sender id (from.id)
  * @param {string|number|null} args.chatId   Telegram chat id (negative for groups)
@@ -97,6 +134,7 @@ export function normalizeTelegramAccessSettings(settings = {}) {
  * @param {string}           [args.ownerUserId]  singular owner (merged into ownerUserIds)
  * @param {string[]}         [args.ownerUserIds] owner allow-list (at least one required)
  * @param {string[]}         args.allowedChatIds
+ * @param {Record<string, TelegramChatPolicy>} [args.chatPolicies] per-chat mute / reply policy
  * @returns {{ allowed: boolean, reason: string }}
  */
 export function evaluateTelegramAccess({
@@ -107,6 +145,7 @@ export function evaluateTelegramAccess({
   ownerUserId = '',
   ownerUserIds = [],
   allowedChatIds = [],
+  chatPolicies = null,
 } = {}) {
   if (isBot) {
     return { allowed: false, reason: 'bot-sender' };
@@ -114,6 +153,13 @@ export function evaluateTelegramAccess({
 
   const user = normalizeId(userId);
   const chat = normalizeId(chatId);
+
+  // Per-chat mute — same role as Discord guildPolicies[*].enabled === false.
+  // Checked before owner bypass so an explicit mute always wins.
+  if (isTelegramChatDisabled(chatPolicies, chat)) {
+    return { allowed: false, reason: 'chat-disabled' };
+  }
+
   const owners = normalizeTelegramUserIds([
     ...(Array.isArray(ownerUserIds) ? ownerUserIds : ownerUserIds != null ? [ownerUserIds] : []),
     ...(ownerUserId != null && ownerUserId !== '' ? [ownerUserId] : []),

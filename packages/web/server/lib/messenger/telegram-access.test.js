@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import {
   evaluateTelegramAccess,
+  effectiveTelegramChatReplyMode,
+  isTelegramChatDisabled,
   normalizeTelegramAccessSettings,
   normalizeTelegramChatIds,
   normalizeTelegramUserIds,
@@ -183,5 +185,50 @@ describe('telegram access control', () => {
     expect(
       normalizeTelegramAccessSettings({ defaultUserId: '0', ownerUserIds: ['0'] }),
     ).toEqual({ ownerUserIds: [], ownerUserId: '', allowedChatIds: [] });
+  });
+
+  it('denies muted chats via chatPolicies[*].enabled === false (Discord mute parity)', () => {
+    expect(
+      evaluateTelegramAccess({
+        userId: '42',
+        chatId: '-100999',
+        chatType: 'supergroup',
+        ownerUserIds: ['42'],
+        chatPolicies: { '-100999': { enabled: false } },
+      }),
+    ).toMatchObject({ allowed: false, reason: 'chat-disabled' });
+    // Mute wins even when the sender is an owner.
+    expect(
+      evaluateTelegramAccess({
+        userId: '42',
+        chatId: '-100999',
+        chatType: 'supergroup',
+        ownerUserIds: ['42'],
+        allowedChatIds: ['-100999'],
+        chatPolicies: { '-100999': { enabled: false } },
+      }),
+    ).toMatchObject({ allowed: false, reason: 'chat-disabled' });
+    // Absent / true policies still allow owners.
+    expect(
+      evaluateTelegramAccess({
+        userId: '42',
+        chatId: '-100999',
+        chatType: 'supergroup',
+        ownerUserIds: ['42'],
+        chatPolicies: { '-100999': { enabled: true, replyMode: 'mention' } },
+      }),
+    ).toMatchObject({ allowed: true, reason: 'owner' });
+  });
+
+  it('resolves per-chat reply mode with inherit → default', () => {
+    expect(effectiveTelegramChatReplyMode('always', { '-1': { replyMode: 'mention' } }, '-1')).toBe(
+      'mention',
+    );
+    expect(effectiveTelegramChatReplyMode('mention', { '-1': { replyMode: 'inherit' } }, '-1')).toBe(
+      'mention',
+    );
+    expect(effectiveTelegramChatReplyMode('always', {}, '-1')).toBe('always');
+    expect(isTelegramChatDisabled({ '-1': { enabled: false } }, '-1')).toBe(true);
+    expect(isTelegramChatDisabled({ '-1': { enabled: true } }, '-1')).toBe(false);
   });
 });

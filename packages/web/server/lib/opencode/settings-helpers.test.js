@@ -383,6 +383,44 @@ describe('settings helpers', () => {
     expect(merged.themeId).toBe('default');
   });
 
+  it('normalizes telegram chatPolicies and projectBindings, dropping invalid entries', () => {
+    const helpers = createTestHelpers();
+
+    expect(helpers.sanitizeSettingsUpdate({
+      telegram: {
+        botToken: 'tok',
+        chatPolicies: {
+          '-1001': { enabled: true, replyMode: 'mention', syncProjects: true },
+          '-1002': { enabled: false },
+          '-1003': { replyMode: 'inherit' },
+          '': { enabled: true },
+          '-1004': { replyMode: 'bogus', enabled: 'yes', syncProjects: 'true' },
+          '-1005': {},
+        },
+        projectBindings: [
+          { chatId: '-1001', projectPath: '/a', projectLabel: 'A', messageThreadId: '42' },
+          { chatId: '-1002', projectPath: '/b' },
+          { chatId: '', projectPath: '/x' },
+          { chatId: '-1003' },
+          null,
+        ],
+      },
+    })).toEqual({
+      telegram: {
+        botToken: 'tok',
+        chatPolicies: {
+          '-1001': { enabled: true, replyMode: 'mention', syncProjects: true },
+          '-1002': { enabled: false },
+          '-1003': { replyMode: 'inherit' },
+        },
+        projectBindings: [
+          { chatId: '-1001', projectPath: '/a', projectLabel: 'A', messageThreadId: '42' },
+          { chatId: '-1002', projectPath: '/b' },
+        ],
+      },
+    });
+  });
+
   it('strips the telegram bot token from the formatted settings response', () => {
     const helpers = createTestHelpers();
     const formatted = helpers.formatSettingsResponse({

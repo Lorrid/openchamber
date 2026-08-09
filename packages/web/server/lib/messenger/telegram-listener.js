@@ -7,6 +7,7 @@ import {
 } from './telegram-api.js';
 import {
   evaluateTelegramAccess,
+  effectiveTelegramChatReplyMode,
   normalizeTelegramAccessSettings,
 } from './telegram-access.js';
 
@@ -154,6 +155,7 @@ async function dispatchMessage(state, update, broadcastEvent, bridge) {
     isBot: Boolean(from.is_bot),
     ownerUserIds: state.ownerUserIds,
     allowedChatIds: state.allowedChatIds,
+    chatPolicies: state.chatPolicies,
   });
   if (!access.allowed) {
     state.accessDeniedCount = (state.accessDeniedCount || 0) + 1;
@@ -184,7 +186,7 @@ async function dispatchMessage(state, update, broadcastEvent, bridge) {
   // Reply-mode gating. DMs always reach the bot. Groups reach it when the
   // message addresses the bot (@mention, reply, /command) or the chat already
   // has a session binding — mirroring Discord's mention-mode semantics.
-  // `defaultReplyMode: 'mention'` additionally confines groups to addressed
+  // Per-chat replyMode (with inherit → default) confines groups to addressed
   // messages even when the chat is unbound.
   const isGroup = chatType === 'group' || chatType === 'supergroup';
   const command = parseTelegramCommand(text, state.botUsername);
@@ -197,7 +199,9 @@ async function dispatchMessage(state, update, broadcastEvent, bridge) {
       channelId: String(chat.id),
       threadId: message.message_thread_id ?? null,
     });
-    const mentionOnly = state.defaultReplyMode === 'mention';
+    const mentionOnly =
+      effectiveTelegramChatReplyMode(state.defaultReplyMode, state.chatPolicies, chat.id) ===
+      'mention';
     if (mentionOnly || !hasBinding) {
       state.filteredOutCount += 1;
       return;
@@ -311,6 +315,7 @@ async function dispatchCallbackQuery(state, callbackQuery, broadcastEvent, bridg
     isBot: Boolean(from.is_bot),
     ownerUserIds: state.ownerUserIds,
     allowedChatIds: state.allowedChatIds,
+    chatPolicies: state.chatPolicies,
   });
   if (!access.allowed) {
     state.accessDeniedCount = (state.accessDeniedCount || 0) + 1;
@@ -565,6 +570,10 @@ export function createTelegramListenerRegistry({ broadcastEvent, bridge = null }
       defaultReplyMode: opts.defaultReplyMode === 'mention' ? 'mention' : 'always',
       ownerUserIds: access.ownerUserIds,
       allowedChatIds: access.allowedChatIds,
+      chatPolicies:
+        opts.chatPolicies && typeof opts.chatPolicies === 'object' && !Array.isArray(opts.chatPolicies)
+          ? opts.chatPolicies
+          : {},
       resolveProject: opts.resolveProject ?? null,
       abort: new AbortController(),
       offset: 0,
@@ -639,6 +648,7 @@ export function createTelegramListenerRegistry({ broadcastEvent, bridge = null }
       ownerUserIds: state.ownerUserIds.length > 0 ? state.ownerUserIds : undefined,
       ownerUserId: state.ownerUserIds[0] || undefined,
       allowedChatIds: state.allowedChatIds.length > 0 ? state.allowedChatIds : undefined,
+      chatPolicies: state.chatPolicies && Object.keys(state.chatPolicies).length > 0 ? state.chatPolicies : undefined,
       botId: state.botId,
       botUsername: state.botUsername,
       startedAt: state.startedAt,
@@ -685,6 +695,12 @@ export function createTelegramListenerRegistry({ broadcastEvent, bridge = null }
       state.allowedChatIds = normalizeTelegramAccessSettings({
         allowedChatIds: opts.allowedChatIds,
       }).allowedChatIds;
+    }
+    if (Object.prototype.hasOwnProperty.call(opts, 'chatPolicies')) {
+      state.chatPolicies =
+        opts.chatPolicies && typeof opts.chatPolicies === 'object' && !Array.isArray(opts.chatPolicies)
+          ? opts.chatPolicies
+          : {};
     }
     state.bridgeEnabled = true;
   }
