@@ -152,7 +152,7 @@ async function dispatchMessage(state, update, broadcastEvent, bridge) {
     chatId: chat.id ?? null,
     chatType,
     isBot: Boolean(from.is_bot),
-    ownerUserId: state.ownerUserId,
+    ownerUserIds: state.ownerUserIds,
     allowedChatIds: state.allowedChatIds,
   });
   if (!access.allowed) {
@@ -309,7 +309,7 @@ async function dispatchCallbackQuery(state, callbackQuery, broadcastEvent, bridg
     chatId,
     chatType: message?.chat?.type ?? null,
     isBot: Boolean(from.is_bot),
-    ownerUserId: state.ownerUserId,
+    ownerUserIds: state.ownerUserIds,
     allowedChatIds: state.allowedChatIds,
   });
   if (!access.allowed) {
@@ -555,6 +555,7 @@ export function createTelegramListenerRegistry({ broadcastEvent, bridge = null }
     const access = normalizeTelegramAccessSettings({
       defaultUserId: opts.defaultUserId,
       ownerUserId: opts.ownerUserId,
+      ownerUserIds: opts.ownerUserIds,
       allowedChatIds: opts.allowedChatIds,
     });
     const state = {
@@ -562,7 +563,7 @@ export function createTelegramListenerRegistry({ broadcastEvent, bridge = null }
       autoReply: opts.autoReply !== false,
       bridgeEnabled: true,
       defaultReplyMode: opts.defaultReplyMode === 'mention' ? 'mention' : 'always',
-      ownerUserId: access.ownerUserId,
+      ownerUserIds: access.ownerUserIds,
       allowedChatIds: access.allowedChatIds,
       resolveProject: opts.resolveProject ?? null,
       abort: new AbortController(),
@@ -635,7 +636,8 @@ export function createTelegramListenerRegistry({ broadcastEvent, bridge = null }
       autoReply: state.autoReply,
       bridgeEnabled: state.bridgeEnabled,
       defaultReplyMode: state.defaultReplyMode,
-      ownerUserId: state.ownerUserId || undefined,
+      ownerUserIds: state.ownerUserIds.length > 0 ? state.ownerUserIds : undefined,
+      ownerUserId: state.ownerUserIds[0] || undefined,
       allowedChatIds: state.allowedChatIds.length > 0 ? state.allowedChatIds : undefined,
       botId: state.botId,
       botUsername: state.botUsername,
@@ -670,12 +672,14 @@ export function createTelegramListenerRegistry({ broadcastEvent, bridge = null }
     }
     if (
       Object.prototype.hasOwnProperty.call(opts, 'defaultUserId') ||
-      Object.prototype.hasOwnProperty.call(opts, 'ownerUserId')
+      Object.prototype.hasOwnProperty.call(opts, 'ownerUserId') ||
+      Object.prototype.hasOwnProperty.call(opts, 'ownerUserIds')
     ) {
-      state.ownerUserId = normalizeTelegramAccessSettings({
+      state.ownerUserIds = normalizeTelegramAccessSettings({
         defaultUserId: opts.defaultUserId,
         ownerUserId: opts.ownerUserId,
-      }).ownerUserId;
+        ownerUserIds: opts.ownerUserIds,
+      }).ownerUserIds;
     }
     if (Object.prototype.hasOwnProperty.call(opts, 'allowedChatIds')) {
       state.allowedChatIds = normalizeTelegramAccessSettings({

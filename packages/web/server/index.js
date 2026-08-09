@@ -2014,6 +2014,7 @@ async function main(options = {}) {
           const result = telegramListener.start(telegramConfig.botToken, {
             autoReply: telegramConfig.autoReply !== false,
             defaultUserId: telegramConfig.defaultUserId,
+            ownerUserIds: telegramConfig.ownerUserIds,
             allowedChatIds: telegramConfig.allowedChatIds,
             defaultReplyMode: telegramConfig.defaultReplyMode,
           });
@@ -2077,6 +2078,7 @@ async function main(options = {}) {
           const startResult = telegramListener.start(cfg.botToken, {
             autoReply: cfg.autoReply !== false,
             defaultUserId: cfg.defaultUserId,
+            ownerUserIds: cfg.ownerUserIds,
             allowedChatIds: cfg.allowedChatIds,
             defaultReplyMode: cfg.defaultReplyMode,
           });

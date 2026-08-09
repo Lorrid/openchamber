@@ -337,11 +337,33 @@ describe('settings helpers', () => {
         botToken: 'tok',
         defaultChatId: '-1001',
         defaultUserId: '42',
+        ownerUserIds: ['42'],
         allowedChatIds: ['-1001', '55'],
         defaultReplyMode: 'mention',
         listenerEnabled: false,
         autoReply: true,
       },
+    });
+
+    expect(helpers.sanitizeSettingsUpdate({
+      telegram: {
+        botToken: 'tok',
+        ownerUserIds: ['99', '0', '42', '99'],
+        defaultUserId: '42',
+      },
+    })).toEqual({
+      telegram: {
+        botToken: 'tok',
+        defaultUserId: '42',
+        ownerUserIds: ['42', '99'],
+      },
+    });
+
+    // Literal "0" / empty owner lists are dropped (never persist a zero owner).
+    expect(helpers.sanitizeSettingsUpdate({
+      telegram: { botToken: 'tok', defaultUserId: '0', ownerUserIds: ['0', ''] },
+    })).toEqual({
+      telegram: { botToken: 'tok' },
     });
 
     // Invalid entries are dropped; bridgeEnabled always coerces to true.

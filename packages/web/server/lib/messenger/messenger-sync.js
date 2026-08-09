@@ -11,7 +11,7 @@ import {
   sendTelegramMessage,
   friendlyTelegramError,
 } from './telegram-api.js';
-import { normalizeTelegramChatIds } from './telegram-access.js';
+import { normalizeTelegramChatIds, normalizeTelegramAccessSettings } from './telegram-access.js';
 import { createMessengerOpencodeBridge } from './messenger-opencode-bridge.js';
 import { createDiscordAgentRouter } from './discord-agent-api.js';
 import { parseVerbosityLevel, VERBOSITY_LEVELS } from './messenger-verbosity.js';
@@ -28,6 +28,24 @@ import {
   normalizeMessengerInterruptTimeoutMs,
 } from './messenger-bridge-store.js';
 import { resolvePrimaryWorktreeRoot } from '../git/service.js';
+
+/**
+ * Resolve owner user ids for Telegram persistence / listener start.
+ * Accepts ownerUserIds and/or legacy defaultUserId; always returns both
+ * ownerUserIds and defaultUserId (first owner) for back-compat.
+ */
+function resolveTelegramOwnerFields(input = {}, prev = {}) {
+  const hasOwnerUserIds = Object.prototype.hasOwnProperty.call(input, 'ownerUserIds');
+  const access = normalizeTelegramAccessSettings({
+    ownerUserIds: hasOwnerUserIds ? input.ownerUserIds : prev.ownerUserIds,
+    defaultUserId: input.defaultUserId || prev.defaultUserId,
+    ownerUserId: input.ownerUserId,
+  });
+  return {
+    ownerUserIds: access.ownerUserIds.length > 0 ? access.ownerUserIds : undefined,
+    defaultUserId: access.ownerUserId || undefined,
+  };
+}
 
 /**
  * Messenger sync routes for Discord.
@@ -2988,14 +3006,30 @@ export function createMessengerSyncRouter({
       autoReply,
       defaultChatId,
       defaultUserId,
+      ownerUserIds,
       allowedChatIds,
       defaultReplyMode,
     } = req.body ?? {};
     const token = await resolveTelegramBotToken(req.body?.token);
     if (!token) return res.status(400).json({ error: 'token required' });
+
+    let prev = {};
+    if (readSettings) {
+      try {
+        const current = await readSettings();
+        prev = current?.telegram ?? {};
+      } catch {
+        prev = {};
+      }
+    }
+    const owners = resolveTelegramOwnerFields(
+      { defaultUserId, ownerUserIds, ownerUserId: req.body?.ownerUserId },
+      prev,
+    );
     const result = telegramListener.start(token, {
       autoReply: autoReply !== false,
-      defaultUserId,
+      defaultUserId: owners.defaultUserId,
+      ownerUserIds: owners.ownerUserIds,
       allowedChatIds,
       defaultReplyMode,
     });
@@ -3014,8 +3048,6 @@ export function createMessengerSyncRouter({
     // the Discord start route.
     if (persistSettings) {
       try {
-        const current = readSettings ? await readSettings() : null;
-        const prev = current?.telegram ?? {};
         const hasAllowedChatIds = Object.prototype.hasOwnProperty.call(req.body ?? {}, 'allowedChatIds');
         await persistSettings({
           telegram: {
@@ -3028,7 +3060,8 @@ export function createMessengerSyncRouter({
             // undone by a later start-config merge that omitted the flag.
             listenerEnabled: true,
             defaultChatId: defaultChatId || prev.defaultChatId || undefined,
-            defaultUserId: defaultUserId || prev.defaultUserId || undefined,
+            defaultUserId: owners.defaultUserId,
+            ownerUserIds: owners.ownerUserIds,
             allowedChatIds: hasAllowedChatIds
               ? normalizeTelegramChatIds(allowedChatIds)
               : prev.allowedChatIds || undefined,
@@ -3111,6 +3144,16 @@ export function createMessengerSyncRouter({
         ...telegramListener.status(token),
         defaultReplyMode: telegram.defaultReplyMode === 'mention' ? 'mention' : 'always',
         defaultChatId: telegram.defaultChatId ?? undefined,
+        // Prefer live listener owners; fall back to persisted settings so the
+        // UI can hydrate telegramOwnerUserIds when the listener is stopped.
+        ...(() => {
+          const owners = resolveTelegramOwnerFields(telegram, telegram);
+          return {
+            ownerUserIds: owners.ownerUserIds,
+            defaultUserId: owners.defaultUserId,
+            ownerUserId: owners.defaultUserId,
+          };
+        })(),
         allowedChatIds: Array.isArray(telegram.allowedChatIds) ? telegram.allowedChatIds : undefined,
       });
     } catch (err) {
@@ -3158,6 +3201,7 @@ export function createMessengerSyncRouter({
       autoReply,
       defaultChatId,
       defaultUserId,
+      ownerUserIds,
       allowedChatIds,
       defaultReplyMode,
     } = req.body ?? {};
@@ -3165,6 +3209,10 @@ export function createMessengerSyncRouter({
       const current = readSettings ? await readSettings() : null;
       const prev = current?.telegram ?? {};
       const hasAllowedChatIds = Object.prototype.hasOwnProperty.call(req.body ?? {}, 'allowedChatIds');
+      const owners = resolveTelegramOwnerFields(
+        { defaultUserId, ownerUserIds, ownerUserId: req.body?.ownerUserId },
+        prev,
+      );
       await persistSettings({
         telegram: {
           ...prev,
@@ -3172,7 +3220,8 @@ export function createMessengerSyncRouter({
           autoReply: autoReply !== false,
           bridgeEnabled: true,
           defaultChatId: defaultChatId || prev.defaultChatId || undefined,
-          defaultUserId: defaultUserId || prev.defaultUserId || undefined,
+          defaultUserId: owners.defaultUserId,
+          ownerUserIds: owners.ownerUserIds,
           allowedChatIds: hasAllowedChatIds
             ? normalizeTelegramChatIds(allowedChatIds)
             : prev.allowedChatIds || undefined,
@@ -3193,7 +3242,8 @@ export function createMessengerSyncRouter({
             defaultReplyMode === 'always' || defaultReplyMode === 'mention'
               ? defaultReplyMode
               : prev.defaultReplyMode,
-          defaultUserId: defaultUserId || prev.defaultUserId,
+          defaultUserId: owners.defaultUserId,
+          ownerUserIds: owners.ownerUserIds,
           ...(hasAllowedChatIds ? { allowedChatIds: normalizeTelegramChatIds(allowedChatIds) } : {}),
         });
       }
@@ -3237,9 +3287,11 @@ export function createMessengerSyncRouter({
       if (telegram.listenerEnabled === false) {
         return res.json({ ok: false, reason: 'listener-disabled' });
       }
+      const owners = resolveTelegramOwnerFields(telegram, telegram);
       const result = telegramListener.start(telegram.botToken, {
         autoReply: telegram.autoReply !== false,
-        defaultUserId: telegram.defaultUserId,
+        defaultUserId: owners.defaultUserId,
+        ownerUserIds: owners.ownerUserIds,
         allowedChatIds: telegram.allowedChatIds,
         defaultReplyMode: telegram.defaultReplyMode,
       });

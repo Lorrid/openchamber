@@ -163,6 +163,7 @@ describe('messenger /telegram config persistence', () => {
     expect(saved.botToken).toBe(SETTINGS_TOKEN);
     expect(saved.defaultChatId).toBe(CHAT);
     expect(saved.defaultUserId).toBe('42');
+    expect(saved.ownerUserIds).toEqual(['42']);
     expect(saved.allowedChatIds).toEqual([CHAT, '-1009']);
     expect(saved.defaultReplyMode).toBe('mention');
     expect(saved.bridgeEnabled).toBe(true);
@@ -223,6 +224,7 @@ describe('messenger /telegram config persistence', () => {
     expect(saved.botToken).toBe('tg-start-token');
     expect(saved.listenerEnabled).toBe(true);
     expect(saved.defaultUserId).toBe('42');
+    expect(saved.ownerUserIds).toEqual(['42']);
   });
 
   it('listener/stop persists the sticky listenerEnabled:false', async () => {

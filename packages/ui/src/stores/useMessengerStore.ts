@@ -190,6 +190,11 @@ export interface MessengerConnection {
   telegramCanReadAllGroupMessages?: boolean | null;
   /** Default Telegram chat id that test messages are sent to. */
   defaultChatId?: string;
+  /**
+   * Telegram user ids of bot owners. In groups, only listed owners can talk
+   * to the bot. Loaded from `ownerUserIds` or legacy `defaultUserId`.
+   */
+  telegramOwnerUserIds?: string[];
   /** Optional allow-list of chat ids the bot answers in (empty = all chats). */
   telegramAllowedChatIds?: string[];
   telegramDefaultReplyMode?: 'always' | 'mention';
@@ -781,6 +786,9 @@ type TelegramListenerStatusPayload = {
   lastError?: string | null;
   defaultReplyMode?: 'always' | 'mention';
   defaultChatId?: string;
+  defaultUserId?: string;
+  ownerUserId?: string;
+  ownerUserIds?: string[];
   allowedChatIds?: string[];
 };
 
@@ -2129,12 +2137,17 @@ export const useMessengerStore = create<MessengerState>()(
         // save: the server falls back to the settings.json token when the body
         // omits botToken — same contract as saveDiscordConfig.
         if (!conn.botToken && !conn.telegramServerConfigured) return;
+        const ownerUserIds =
+          conn.telegramOwnerUserIds ??
+          (conn.defaultUserId ? [conn.defaultUserId] : []);
         try {
           await postJson('/api/messenger/telegram/save-config', {
             ...(conn.botToken ? { botToken: conn.botToken } : {}),
             autoReply: true,
             defaultChatId: conn.defaultChatId,
-            defaultUserId: conn.defaultUserId,
+            ownerUserIds,
+            // First owner kept as defaultUserId for older server / listener compat.
+            defaultUserId: ownerUserIds[0],
             allowedChatIds: conn.telegramAllowedChatIds ?? [],
             defaultReplyMode: conn.telegramDefaultReplyMode ?? 'always',
           });
@@ -2148,6 +2161,9 @@ export const useMessengerStore = create<MessengerState>()(
         // Tokenless start is allowed — the endpoint falls back to the token
         // saved in settings.json (same pattern as /test and /listener/stop).
         if (!conn?.botToken && !conn?.telegramServerConfigured) return false;
+        const ownerUserIds =
+          conn.telegramOwnerUserIds ??
+          (conn.defaultUserId ? [conn.defaultUserId] : []);
         try {
           const data = await postJson<{
             ok: boolean;
@@ -2163,7 +2179,8 @@ export const useMessengerStore = create<MessengerState>()(
           }>('/api/messenger/telegram/listener/start', {
             ...(conn.botToken ? { token: conn.botToken } : {}),
             defaultChatId: conn.defaultChatId,
-            defaultUserId: conn.defaultUserId,
+            ownerUserIds,
+            defaultUserId: ownerUserIds[0],
             allowedChatIds: conn.telegramAllowedChatIds ?? [],
             defaultReplyMode: conn.telegramDefaultReplyMode ?? 'always',
           });
@@ -2282,6 +2299,18 @@ export const useMessengerStore = create<MessengerState>()(
           }
           if (Array.isArray(data.allowedChatIds) && !conn?.telegramAllowedChatIds) {
             updates.telegramAllowedChatIds = data.allowedChatIds;
+          }
+          // Prefer ownerUserIds; fall back to legacy single defaultUserId / ownerUserId.
+          if (!conn?.telegramOwnerUserIds?.length) {
+            const loadedOwners = Array.isArray(data.ownerUserIds)
+              ? data.ownerUserIds.filter(Boolean)
+              : [data.ownerUserId ?? data.defaultUserId].filter(
+                  (id): id is string => typeof id === 'string' && id.trim().length > 0,
+                );
+            if (loadedOwners.length > 0) {
+              updates.telegramOwnerUserIds = loadedOwners;
+              updates.defaultUserId = loadedOwners[0];
+            }
           }
           if (data.botId) updates.telegramBotId = data.botId;
           if (data.botUsername) updates.telegramBotUsername = data.botUsername;
@@ -2754,14 +2783,36 @@ export const useMessengerStore = create<MessengerState>()(
         })),
         projectMappings: state.projectMappings,
       }),
-      merge: (persistedState: unknown, currentState: MessengerState): MessengerState => ({
-        ...currentState,
-        ...(persistedState as Partial<MessengerState>),
-        // Mark the store fully rehydrated so the settings UI won't flash
-        // the "Connect Discord" tile on every reload while waiting for
-        // localStorage.
-        hasHydrated: true,
-      }),
+      merge: (persistedState: unknown, currentState: MessengerState): MessengerState => {
+        const persisted = (persistedState as Partial<MessengerState>) ?? {};
+        const connections = (persisted.connections ?? currentState.connections).map((c) => {
+          if (c.type !== 'telegram') return c;
+          if (c.telegramOwnerUserIds?.length) {
+            return {
+              ...c,
+              defaultUserId: c.telegramOwnerUserIds[0] ?? c.defaultUserId,
+            };
+          }
+          const legacyOwners = [c.defaultUserId].filter(
+            (id): id is string => typeof id === 'string' && id.trim().length > 0,
+          );
+          if (legacyOwners.length === 0) return c;
+          return {
+            ...c,
+            telegramOwnerUserIds: legacyOwners,
+            defaultUserId: legacyOwners[0],
+          };
+        });
+        return {
+          ...currentState,
+          ...persisted,
+          connections,
+          // Mark the store fully rehydrated so the settings UI won't flash
+          // the "Connect Discord" tile on every reload while waiting for
+          // localStorage.
+          hasHydrated: true,
+        };
+      },
       onRehydrateStorage: () => () => {
         // Always unblock the Integrations UI — even when rehydrate fails.
         useMessengerStore.setState({ hasHydrated: true });

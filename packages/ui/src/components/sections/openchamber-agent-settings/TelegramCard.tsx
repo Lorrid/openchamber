@@ -28,7 +28,9 @@ import {
   MessengerSegmentedControl,
   SessionBindingsPanel,
   StatusBadge,
+  TelegramUserInfoBotHint,
   formatRelative,
+  parseMessengerIdList,
   type MessengerBehaviorStrings,
 } from './messenger-shared';
 import { TelegramOnboardingWizard } from './TelegramOnboardingWizard';
@@ -484,23 +486,38 @@ function TelegramAdvancedSettings({ conn }: { conn: MessengerConnection }) {
             </div>
           </DangerZoneRow>
           <DangerZoneRow
-            label={t('settings.integrations.telegram.advanced.ownerUserId.title')}
+            label={t('settings.integrations.telegram.advanced.ownerUserIds.title')}
             open={dangerOpen === 'owner'}
             onToggle={() => toggleDanger('owner')}
           >
             <div data-settings-item="integrations.telegram.owner-user" className="space-y-2">
               <div className="text-xs text-muted-foreground leading-snug">
-                {t('settings.integrations.telegram.advanced.ownerUserId.description')}
+                <TelegramUserInfoBotHint
+                  beforeKey="settings.integrations.telegram.advanced.ownerUserIds.description.before"
+                  afterKey="settings.integrations.telegram.advanced.ownerUserIds.description.after"
+                />
               </div>
-              <input
-                type="text"
-                value={conn.defaultUserId ?? ''}
-                onChange={(e) =>
-                  updateConnection('telegram', { defaultUserId: e.target.value.trim() })
-                }
-                onBlur={persist}
-                placeholder={t('settings.integrations.telegram.advanced.ownerUserId.placeholder')}
-                className={inputClass}
+              <p className="text-xs text-[var(--status-warning)] leading-snug">
+                {t('settings.integrations.telegram.advanced.ownerUserIds.required')}
+              </p>
+              <textarea
+                value={(conn.telegramOwnerUserIds ?? []).join('\n')}
+                onChange={(e) => {
+                  const telegramOwnerUserIds = parseMessengerIdList(e.target.value);
+                  updateConnection('telegram', {
+                    telegramOwnerUserIds,
+                    defaultUserId: telegramOwnerUserIds[0],
+                  });
+                }}
+                onBlur={() => {
+                  const latest = useMessengerStore
+                    .getState()
+                    .connections.find((c) => c.type === 'telegram');
+                  if (!(latest?.telegramOwnerUserIds ?? []).length) return;
+                  persist();
+                }}
+                placeholder={t('settings.integrations.telegram.advanced.ownerUserIds.placeholder')}
+                className={cn(inputClass, 'min-h-16 resize-y')}
               />
             </div>
           </DangerZoneRow>
@@ -516,10 +533,7 @@ function TelegramAdvancedSettings({ conn }: { conn: MessengerConnection }) {
               <textarea
                 value={(conn.telegramAllowedChatIds ?? []).join('\n')}
                 onChange={(e) => {
-                  const telegramAllowedChatIds = e.target.value
-                    .split(/[\s,]+/)
-                    .map((id) => id.trim())
-                    .filter(Boolean);
+                  const telegramAllowedChatIds = parseMessengerIdList(e.target.value);
                   updateConnection('telegram', { telegramAllowedChatIds });
                 }}
                 onBlur={persist}

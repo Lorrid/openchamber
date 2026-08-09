@@ -1,3 +1,8 @@
+import {
+  normalizeTelegramChatIds,
+  normalizeTelegramUserIds,
+} from '../messenger/telegram-access.js';
+
 export const createSettingsHelpers = (dependencies) => {
   const {
     normalizePathForPersistence,
@@ -990,10 +995,25 @@ export const createSettingsHelpers = (dependencies) => {
         result.defaultChatId = chatId;
       }
     }
-    if (typeof value.defaultUserId === 'string') {
-      const userId = value.defaultUserId.trim();
-      if (userId.length > 0) {
-        result.defaultUserId = userId;
+    // Prefer ownerUserIds; still accept legacy defaultUserId / ownerUserId.
+    // Reject literal "0". Persist both ownerUserIds and defaultUserId (first)
+    // so older UI readers keep working.
+    const hasOwnerUserIds = Object.prototype.hasOwnProperty.call(value, 'ownerUserIds');
+    const hasDefaultUserId = Object.prototype.hasOwnProperty.call(value, 'defaultUserId');
+    const hasOwnerUserId = Object.prototype.hasOwnProperty.call(value, 'ownerUserId');
+    if (hasOwnerUserIds || hasDefaultUserId || hasOwnerUserId) {
+      const ownerUserIds = normalizeTelegramUserIds([
+        ...(hasDefaultUserId ? [value.defaultUserId] : []),
+        ...(hasOwnerUserId ? [value.ownerUserId] : []),
+        ...(hasOwnerUserIds
+          ? Array.isArray(value.ownerUserIds)
+            ? value.ownerUserIds
+            : [value.ownerUserIds]
+          : []),
+      ]);
+      if (ownerUserIds.length > 0) {
+        result.ownerUserIds = ownerUserIds;
+        result.defaultUserId = ownerUserIds[0];
       }
     }
     if (typeof value.autoReply === 'boolean') {
@@ -1003,13 +1023,7 @@ export const createSettingsHelpers = (dependencies) => {
       result.defaultReplyMode = value.defaultReplyMode;
     }
     if (Array.isArray(value.allowedChatIds)) {
-      result.allowedChatIds = Array.from(
-        new Set(
-          value.allowedChatIds
-            .map((id) => (typeof id === 'string' ? id.trim() : String(id ?? '').trim()))
-            .filter((id) => id.length > 0),
-        ),
-      );
+      result.allowedChatIds = normalizeTelegramChatIds(value.allowedChatIds);
     }
     // Global bridge mute is not a Telegram setting either — responding is
     // governed by access control (owner / allowed chats). Coerce legacy false
