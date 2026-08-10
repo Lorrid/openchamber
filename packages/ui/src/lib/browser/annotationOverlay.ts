@@ -63,7 +63,7 @@ export type BrowserAnnotationOverlayLabels = {
 
 /** Global names the overlay defines on the page. Kept in one place so the host can clean up. */
 export const ANNOTATION_REVERT_HOOK = '__openchamberBrowserAnnotationRevert';
-export const ANNOTATION_ACTIVE_FLAG = '__openchamberBrowserAnnotationActive';
+const ANNOTATION_ACTIVE_FLAG = '__openchamberBrowserAnnotationActive';
 
 /**
  * Cancels any overlay left behind by an earlier session and reverts its style

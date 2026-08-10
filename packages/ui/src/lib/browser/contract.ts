@@ -120,7 +120,7 @@ const isStringRecord = (value: unknown): value is Record<string, string> => (
   isRecord(value) && Object.values(value).every((entry) => typeof entry === 'string')
 );
 
-export const isBrowserRect = (value: unknown): value is BrowserRect => (
+const isBrowserRect = (value: unknown): value is BrowserRect => (
   isRecord(value)
   && isFiniteNumber(value.x)
   && isFiniteNumber(value.y)

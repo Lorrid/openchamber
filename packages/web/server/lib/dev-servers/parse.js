@@ -61,7 +61,7 @@ export const isLocallyReachableHost = (host) => {
   return LOOPBACK_TOKENS.has(value) || WILDCARD_TOKENS.has(value);
 };
 
-export const isIgnoredDevPort = (port) => IGNORED_PORTS.has(port);
+const isIgnoredDevPort = (port) => IGNORED_PORTS.has(port);
 
 /**
  * Parses `lsof -iTCP -sTCP:LISTEN -P -n -F pcn`.
