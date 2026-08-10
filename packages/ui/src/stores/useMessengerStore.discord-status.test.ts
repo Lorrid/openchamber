@@ -24,6 +24,18 @@ describe('deriveDiscordDisplayStatus', () => {
     ).toBe('connecting');
   });
 
+  test('shows disconnected when the integration switch explicitly stops the listener', () => {
+    expect(
+      deriveDiscordDisplayStatus({
+        status: 'connected',
+        botToken: 'tok',
+        discordListenerEnabled: false,
+        discordListenerRunning: false,
+        discordListenerConnected: false,
+      }),
+    ).toBe('disconnected');
+  });
+
   test('shows connecting when a token exists but live state is not reconciled yet', () => {
     expect(
       deriveDiscordDisplayStatus({

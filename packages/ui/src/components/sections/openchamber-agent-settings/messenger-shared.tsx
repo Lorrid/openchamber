@@ -74,6 +74,25 @@ export function parseMessengerIdList(value: string): string[] {
   );
 }
 
+/**
+ * True when the messenger listener is enabled. The listener flag is the
+ * authoritative runtime setting; the legacy connection `enabled` field can
+ * be stale after the server auto-starts or another client changes the
+ * listener state.
+ */
+// eslint-disable-next-line react-refresh/only-export-components
+export function isMessengerIntegrationEnabled(conn: {
+  type: MessengerType;
+  /** Legacy UI flag retained for callers; listener state below is authoritative. */
+  enabled?: boolean;
+  discordListenerEnabled?: boolean;
+  telegramListenerEnabled?: boolean;
+}): boolean {
+  const listenerEnabled =
+    conn.type === 'discord' ? conn.discordListenerEnabled : conn.telegramListenerEnabled;
+  return listenerEnabled !== false;
+}
+
 export type MessengerStatusLabels = Record<
   MessengerConnection['status'],
   string
@@ -260,8 +279,6 @@ export interface MessengerBehaviorStrings {
   permissionOptions: { id: MessengerPermissionMode; label: string; desc: string }[];
   notifyTitle: string;
   notifyDescription: string;
-  critiqueTitle: string;
-  critiqueDescription: string;
   interruptTitle: string;
   interruptUnit: string;
   interruptDescription: string;
@@ -293,8 +310,6 @@ export function BehaviorPanel({
   const setBridgePermissionMode = useMessengerStore((s) => s.setBridgePermissionMode);
   const bridgeNotifyOnComplete = useMessengerStore((s) => s.bridgeNotifyOnComplete);
   const setBridgeNotifyOnComplete = useMessengerStore((s) => s.setBridgeNotifyOnComplete);
-  const bridgeCritiqueEnabled = useMessengerStore((s) => s.bridgeCritiqueEnabled);
-  const setBridgeCritiqueEnabled = useMessengerStore((s) => s.setBridgeCritiqueEnabled);
   const bridgeInterruptTimeoutMs = useMessengerStore((s) => s.bridgeInterruptTimeoutMs);
   const setBridgeInterruptTimeoutMs = useMessengerStore((s) => s.setBridgeInterruptTimeoutMs);
   useEffect(() => {
@@ -313,7 +328,6 @@ export function BehaviorPanel({
     strings.permissionOptions.find((o) => o.id === currentPermissionMode) ??
     strings.permissionOptions[0];
   const notifyOnComplete = bridgeNotifyOnComplete[type] ?? false;
-  const critiqueEnabled = bridgeCritiqueEnabled[type] ?? false;
   const interruptTimeoutMs =
     bridgeInterruptTimeoutMs[type] ?? MESSENGER_INTERRUPT_TIMEOUT_DEFAULT_MS;
   const controlsDisabled = !bridgeStatus.enabled;
@@ -372,25 +386,6 @@ export function BehaviorPanel({
             <span className="block text-sm font-medium text-foreground">{strings.notifyTitle}</span>
             <span className="block text-xs text-muted-foreground leading-snug">
               {strings.notifyDescription}
-            </span>
-          </span>
-        </label>
-      </div>
-
-      <div data-settings-item={`${settingsItemPrefix}.critique`} className="space-y-1">
-        <label className="flex cursor-pointer items-start gap-2">
-          <Checkbox
-            checked={critiqueEnabled}
-            onChange={(checked) => setBridgeCritiqueEnabled(type, checked)}
-            disabled={controlsDisabled}
-            ariaLabel={strings.critiqueTitle}
-          />
-          <span className="min-w-0">
-            <span className="block text-sm font-medium text-foreground">
-              {strings.critiqueTitle}
-            </span>
-            <span className="block text-xs text-muted-foreground leading-snug">
-              {strings.critiqueDescription}
             </span>
           </span>
         </label>

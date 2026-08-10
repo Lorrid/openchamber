@@ -1,5 +1,4 @@
 import React, { useEffect, useState } from 'react';
-import { RiAlertLine } from '@remixicon/react';
 import {
   deriveTelegramDisplayStatus,
   isTelegramChatProjectSyncable,
@@ -18,6 +17,7 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { Switch } from '@/components/ui/switch';
 import { useOpenChamberAgentEventsStore, type OpenChamberAgentUiRealtimeEvent } from '@/stores/useOpenChamberAgentEventsStore';
 import { Button } from '@/components/ui/button';
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import {
   Dialog,
   DialogContent,
@@ -38,6 +38,7 @@ import {
   StatusBadge,
   TelegramUserInfoBotHint,
   formatRelative,
+  isMessengerIntegrationEnabled,
   parseMessengerIdList,
   type MessengerBehaviorStrings,
 } from './messenger-shared';
@@ -120,8 +121,6 @@ function useTelegramBehaviorStrings(): MessengerBehaviorStrings {
     })),
     notifyTitle: t('settings.integrations.telegram.bridge.notifyOnComplete.title'),
     notifyDescription: t('settings.integrations.telegram.bridge.notifyOnComplete.description'),
-    critiqueTitle: t('settings.integrations.telegram.bridge.critique.title'),
-    critiqueDescription: t('settings.integrations.telegram.bridge.critique.description'),
     interruptTitle: t('settings.integrations.telegram.bridge.interruptTimeout.title'),
     interruptUnit: t('settings.integrations.telegram.bridge.interruptTimeout.unit'),
     interruptDescription: t('settings.integrations.telegram.bridge.interruptTimeout.description'),
@@ -341,6 +340,8 @@ function TelegramChatRow({
 }) {
   const { t } = useI18n();
   const setTelegramChatPolicy = useMessengerStore((s) => s.setTelegramChatPolicy);
+  const critiqueEnabled = useMessengerStore((s) => s.bridgeCritiqueEnabled.telegram ?? false);
+  const setBridgeCritiqueEnabled = useMessengerStore((s) => s.setBridgeCritiqueEnabled);
   const syncTelegramChatProjects = useMessengerStore((s) => s.syncTelegramChatProjects);
   const sendTestMessage = useMessengerStore((s) => s.sendTestMessage);
   const projects = useProjectsStore((s) => s.projects);
@@ -483,6 +484,24 @@ function TelegramChatRow({
               </label>
             )}
 
+            {syncable && (
+              <label className="flex min-w-0 flex-1 cursor-pointer items-start gap-2.5">
+                <Checkbox
+                  checked={critiqueEnabled}
+                  onChange={(checked) => void setBridgeCritiqueEnabled('telegram', checked)}
+                  ariaLabel={t('settings.integrations.telegram.bridge.critique.title')}
+                />
+                <span className="min-w-0">
+                  <span className="block text-xs font-semibold text-foreground">
+                    {t('settings.integrations.telegram.bridge.critique.title')}
+                  </span>
+                  <span className="mt-0.5 block text-[11px] leading-snug text-muted-foreground">
+                    {t('settings.integrations.telegram.bridge.critique.description')}
+                  </span>
+                </span>
+              </label>
+            )}
+
             <div className="flex shrink-0 flex-wrap items-center gap-1.5">
               {syncable && (
                 <Button
@@ -592,21 +611,29 @@ function TelegramOwnerUserIdsEditor({ conn }: { conn: MessengerConnection }) {
   );
 }
 
-function TelegramGroupsList({ conn }: { conn: MessengerConnection }) {
+function TelegramGroupsList({
+  conn,
+  showHeader = true,
+}: {
+  conn: MessengerConnection;
+  showHeader?: boolean;
+}) {
   const { t } = useI18n();
   const inbound = useMessengerStore((s) => s.telegramInbound);
   const chats = listTelegramManagedChats(conn, inbound);
 
   return (
     <div data-settings-item="integrations.telegram.groups" className="space-y-3">
-      <div>
-        <div className="text-sm font-semibold text-foreground">
-          {t('settings.integrations.telegram.groups.title')}
+      {showHeader && (
+        <div>
+          <div className="text-sm font-semibold text-foreground">
+            {t('settings.integrations.telegram.groups.title')}
+          </div>
+          <p className="mt-1 text-xs text-muted-foreground leading-snug">
+            {t('settings.integrations.telegram.groups.description')}
+          </p>
         </div>
-        <p className="mt-1 text-xs text-muted-foreground leading-snug">
-          {t('settings.integrations.telegram.groups.description')}
-        </p>
-      </div>
+      )}
 
       {chats.length === 0 ? (
         <p className="text-xs text-muted-foreground leading-snug">
@@ -660,33 +687,22 @@ function TelegramLastSyncResults({ conn }: { conn: MessengerConnection }) {
   );
 }
 
-/** Collapsed by default: click to show owner IDs + groups; click again to hide. */
+/** Main Telegram card content: the chat list is no longer a nested accordion. */
 function TelegramOwnersAndGroupsPanel({ conn }: { conn: MessengerConnection }) {
   const { t } = useI18n();
-  const [open, setOpen] = useState(false);
-  const ownerCount = (conn.telegramOwnerUserIds ?? []).length;
-  const inbound = useMessengerStore((s) => s.telegramInbound);
-  const chatCount = listTelegramManagedChats(conn, inbound).length;
 
   return (
-    <AdvancedSectionCard
-      icon="shield-user"
-      title={t('settings.integrations.telegram.controls.title')}
-      meta={t('settings.integrations.telegram.controls.meta', {
-        owners: ownerCount,
-        chats: chatCount,
-      })}
-      open={open}
-      onOpenChange={setOpen}
-    >
-      <div className="space-y-4">
-        <p className="text-xs text-muted-foreground leading-snug">
+    <div className="space-y-3">
+      <div>
+        <div className="text-base font-semibold text-foreground">
+          {t('settings.integrations.telegram.controls.title')}
+        </div>
+        <p className="mt-1 text-xs text-muted-foreground leading-snug">
           {t('settings.integrations.telegram.controls.description')}
         </p>
-        <TelegramOwnerUserIdsEditor conn={conn} />
-        <TelegramGroupsList conn={conn} />
       </div>
-    </AdvancedSectionCard>
+      <TelegramGroupsList conn={conn} showHeader={false} />
+    </div>
   );
 }
 
@@ -766,6 +782,8 @@ function TelegramAdvancedSettings({ conn }: { conn: MessengerConnection }) {
           {t('settings.integrations.telegram.advanced.description')}
         </p>
       </div>
+
+      <TelegramOwnerUserIdsEditor conn={conn} />
 
       <TelegramLastSyncResults conn={conn} />
 
@@ -947,8 +965,11 @@ export function TelegramSectionCard({ conn }: { conn: MessengerConnection }) {
   const testConnection = useMessengerStore((s) => s.testConnection);
   const disconnectTelegram = useMessengerStore((s) => s.disconnectTelegram);
   const saveTelegramConfig = useMessengerStore((s) => s.saveTelegramConfig);
+  const startTelegramListener = useMessengerStore((s) => s.startTelegramListener);
+  const stopTelegramListener = useMessengerStore((s) => s.stopTelegramListener);
   const onboardingStep = useMessengerStore((s) => s.onboardingStep);
   const onboardingType = useMessengerStore((s) => s.onboardingType);
+  const [cardOpen, setCardOpen] = useState(false);
   const [advancedOpen, setAdvancedOpen] = useState(false);
   const [showToken, setShowToken] = useState(false);
   const [tokenInput, setTokenInput] = useState('');
@@ -959,6 +980,10 @@ export function TelegramSectionCard({ conn }: { conn: MessengerConnection }) {
   const hasToken = Boolean(conn.botToken);
   const configured = hasToken || Boolean(conn.telegramServerConfigured);
   const showWizard = onboardingStep !== null && onboardingType === 'telegram';
+
+  useEffect(() => {
+    if (showWizard) setCardOpen(true);
+  }, [showWizard]);
 
   // Reconcile badge + listener with the live server when this card opens.
   useEffect(() => {
@@ -979,53 +1004,84 @@ export function TelegramSectionCard({ conn }: { conn: MessengerConnection }) {
   const inputClass =
     'w-full rounded-md border border-border bg-background px-3 py-1.5 text-xs text-foreground focus:outline-none focus:ring-1 focus:ring-ring';
 
+  const integrationEnabled = isMessengerIntegrationEnabled(conn);
+  const toggleIntegration = (enabled: boolean) => {
+    void (enabled ? startTelegramListener() : stopTelegramListener());
+  };
+
   return (
-    <div className="rounded-xl border border-[var(--interactive-border)] bg-[var(--surface-elevated)] p-5 shadow-sm space-y-5">
-      <div className="flex items-center justify-between gap-2">
-        <div className="flex min-w-0 flex-1 items-center gap-2 overflow-hidden">
-          <Icon name="telegram-fill" className={cn('size-5 shrink-0', TELEGRAM_BRAND_CLASS)} />
-          <span className="shrink-0 text-sm font-semibold text-foreground">Telegram</span>
-          <StatusBadge status={displayStatus} labels={statusLabels} />
-          {conn.telegramBotUsername && (
-            <span className="min-w-0 truncate text-xs text-muted-foreground">
-              @{conn.telegramBotUsername}
-            </span>
-          )}
+    <Collapsible open={cardOpen} onOpenChange={setCardOpen}>
+      <div className="overflow-hidden rounded-xl border border-[var(--interactive-border)] bg-[var(--surface-elevated)] shadow-sm">
+        <div className="flex items-center gap-2 p-5">
+          <CollapsibleTrigger
+            className="min-w-0 flex-1 justify-start gap-2 overflow-hidden rounded-md p-0 hover:bg-transparent"
+            aria-label={t('settings.integrations.telegram.controls.title')}
+          >
+            <Icon name="telegram-fill" className={cn('size-5 shrink-0', TELEGRAM_BRAND_CLASS)} />
+            <span className="shrink-0 text-sm font-semibold text-foreground">Telegram</span>
+            <StatusBadge status={displayStatus} labels={statusLabels} />
+            {conn.telegramBotUsername && (
+              <span className="min-w-0 truncate text-xs text-muted-foreground">
+                @{conn.telegramBotUsername}
+              </span>
+            )}
+            <Icon
+              name={cardOpen ? 'arrow-up-s' : 'arrow-down-s'}
+              className="ml-auto size-4 shrink-0 text-muted-foreground"
+            />
+          </CollapsibleTrigger>
+          <div className="flex shrink-0 items-center gap-1.5">
+            <Switch
+              checked={integrationEnabled}
+              onCheckedChange={toggleIntegration}
+              aria-label={t('settings.integrations.telegram.listener.title')}
+              className="data-[checked]:bg-[var(--status-success)]"
+            />
+            {!showWizard && (
+              <Button
+                type="button"
+                variant="outline"
+                size="icon"
+                className={cn(
+                  'size-8',
+                  advancedOpen &&
+                    'border-primary text-primary shadow-[0_0_12px_var(--primary-base)]',
+                )}
+                aria-expanded={advancedOpen}
+                aria-label={t('settings.integrations.telegram.actions.advancedSettings')}
+                title={t('settings.integrations.telegram.actions.advancedSettings')}
+                onClick={() => {
+                  setCardOpen(true);
+                  setAdvancedOpen((open) => !open);
+                }}
+              >
+                <Icon name="settings-3" className="size-4" />
+              </Button>
+            )}
+            {configured && (
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon"
+                className="size-8 text-[var(--status-error)] hover:text-[var(--status-error)]"
+                aria-label={t('settings.integrations.telegram.disconnect.button')}
+                title={t('settings.integrations.telegram.disconnect.button')}
+                onClick={() => setDisconnectConfirmOpen(true)}
+              >
+                <Icon name="link-unlink-m" className="size-4" />
+              </Button>
+            )}
+          </div>
         </div>
-        <div className="flex shrink-0 items-center gap-1.5">
-          {!showWizard && (
-            <Button
-              type="button"
-              variant="outline"
-              size="xs"
-              className="!font-normal whitespace-nowrap"
-              onClick={() => setAdvancedOpen((open) => !open)}
-            >
-              <Icon name="settings-3" className="size-3.5" />
-              {t('settings.integrations.telegram.actions.advancedSettings')}
-            </Button>
-          )}
-          {configured && (
-            <Button
-              type="button"
-              variant="outline"
-              size="xs"
-              className="!font-normal whitespace-nowrap text-[var(--status-error)] hover:text-[var(--status-error)] border-[var(--status-error)]/40"
-              onClick={() => setDisconnectConfirmOpen(true)}
-            >
-              {t('settings.integrations.telegram.disconnect.button')}
-            </Button>
-          )}
-        </div>
-      </div>
 
       {conn.error && (
-        <div className="rounded-md bg-destructive/10 px-3 py-2 text-xs text-destructive flex items-start gap-2">
-          <RiAlertLine className="size-3.5 shrink-0 mt-0.5" />
+        <div className="mx-5 mb-4 rounded-md bg-destructive/10 px-3 py-2 text-xs text-destructive flex items-start gap-2">
+          <Icon name="alert" className="size-3.5 shrink-0 mt-0.5" />
           <span>{conn.error}</span>
         </div>
       )}
 
+        <CollapsibleContent className="border-t border-[var(--interactive-border)] px-5 pb-5 pt-5">
       {showWizard ? (
         <TelegramOnboardingWizard conn={conn} />
       ) : (
@@ -1092,6 +1148,8 @@ export function TelegramSectionCard({ conn }: { conn: MessengerConnection }) {
         </>
       )}
 
+        </CollapsibleContent>
+
       <Dialog open={disconnectConfirmOpen} onOpenChange={setDisconnectConfirmOpen}>
         <DialogContent className="max-w-md">
           <DialogHeader>
@@ -1127,7 +1185,8 @@ export function TelegramSectionCard({ conn }: { conn: MessengerConnection }) {
           </DialogFooter>
         </DialogContent>
       </Dialog>
-    </div>
+      </div>
+    </Collapsible>
   );
 }
 

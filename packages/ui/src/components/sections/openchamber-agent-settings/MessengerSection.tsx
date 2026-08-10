@@ -1,5 +1,4 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { RiAlertLine } from '@remixicon/react';
 import {
   deriveDiscordDisplayStatus,
   deriveDiscordViewState,
@@ -17,7 +16,7 @@ import { useDiscordGuildMembershipPoll } from './useDiscordGuildMembershipPoll';
 import { useOpenChamberAgentEventsStore, type OpenChamberAgentUiRealtimeEvent } from '@/stores/useOpenChamberAgentEventsStore';
 import { useProjectsStore } from '@/stores/useProjectsStore';
 import { Checkbox } from '@/components/ui/checkbox';
-import { Collapsible, CollapsibleContent } from '@/components/ui/collapsible';
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { Button } from '@/components/ui/button';
 import {
   Dialog,
@@ -41,6 +40,7 @@ import {
   StatusBadge,
   TelegramUserInfoBotLink,
   formatRelative,
+  isMessengerIntegrationEnabled,
   type MessengerBehaviorStrings,
 } from './messenger-shared';
 import { TelegramConnectTile, TelegramSectionCard } from './TelegramCard';
@@ -549,8 +549,6 @@ function useDiscordBehaviorStrings(): MessengerBehaviorStrings {
     })),
     notifyTitle: t('settings.integrations.discord.bridge.notifyOnComplete.title'),
     notifyDescription: t('settings.integrations.discord.bridge.notifyOnComplete.description'),
-    critiqueTitle: t('settings.integrations.discord.bridge.critique.title'),
-    critiqueDescription: t('settings.integrations.discord.bridge.critique.description'),
     interruptTitle: t('settings.integrations.discord.bridge.interruptTimeout.title'),
     interruptUnit: t('settings.integrations.discord.bridge.interruptTimeout.unit'),
     interruptDescription: t('settings.integrations.discord.bridge.interruptTimeout.description'),
@@ -1156,6 +1154,8 @@ function DiscordServerRow({
 }) {
   const { t } = useI18n();
   const setDiscordGuildPolicy = useMessengerStore((s) => s.setDiscordGuildPolicy);
+  const critiqueEnabled = useMessengerStore((s) => s.bridgeCritiqueEnabled.discord ?? false);
+  const setBridgeCritiqueEnabled = useMessengerStore((s) => s.setBridgeCritiqueEnabled);
   const resolveDiscordGuild = useMessengerStore((s) => s.resolveDiscordGuild);
   const sendTestMessage = useMessengerStore((s) => s.sendTestMessage);
   const syncDiscordGuildProjects = useMessengerStore((s) => s.syncDiscordGuildProjects);
@@ -1299,6 +1299,22 @@ function DiscordServerRow({
                 </span>
                 <span className="mt-0.5 block text-[11px] leading-snug text-muted-foreground">
                   {t('settings.integrations.discord.servers.syncProjects.hint')}
+                </span>
+              </span>
+            </label>
+
+            <label className="flex min-w-0 flex-1 cursor-pointer items-start gap-2.5">
+              <Checkbox
+                checked={critiqueEnabled}
+                onChange={(checked) => void setBridgeCritiqueEnabled('discord', checked)}
+                ariaLabel={t('settings.integrations.discord.bridge.critique.title')}
+              />
+              <span className="min-w-0">
+                <span className="block text-xs font-semibold text-foreground">
+                  {t('settings.integrations.discord.bridge.critique.title')}
+                </span>
+                <span className="mt-0.5 block text-[11px] leading-snug text-muted-foreground">
+                  {t('settings.integrations.discord.bridge.critique.description')}
                 </span>
               </span>
             </label>
@@ -1513,22 +1529,26 @@ function ConnectionCard({ conn }: { conn: MessengerConnection }) {
   const testConnection = useMessengerStore((s) => s.testConnection);
   const disconnectDiscord = useMessengerStore((s) => s.disconnectDiscord);
   const saveDiscordConfig = useMessengerStore((s) => s.saveDiscordConfig);
+  const startDiscordListener = useMessengerStore((s) => s.startDiscordListener);
+  const stopDiscordListener = useMessengerStore((s) => s.stopDiscordListener);
   const [disconnecting, setDisconnecting] = useState(false);
 
+  const cardContentRef = useRef<HTMLDivElement>(null);
   const advancedSectionRef = useRef<HTMLDivElement>(null);
+  const [cardOpen, setCardOpen] = useState(false);
   const [advancedOpen, setAdvancedOpen] = useState(false);
   const [showToken, setShowToken] = useState(false);
   const [tokenInput, setTokenInput] = useState('');
   const [disconnectConfirmOpen, setDisconnectConfirmOpen] = useState(false);
 
   const scrollToSection = (section: 'token' | 'guild' | 'channel' | 'test' | 'advanced') => {
-    // The per-server sync/channel/test controls now live under Advanced and on
-    // the server rows, so the wizard's legacy targets resolve to the advanced
-    // panel. Token change also lives inside Advanced.
+    // Token changes live inside Advanced. Per-server sync/channel/test controls
+    // are shown in the main card content and on the server rows.
     const resolved =
       section === 'guild' || section === 'channel' || section === 'test' || section === 'token'
         ? 'advanced'
         : section;
+    setCardOpen(true);
     if (resolved === 'advanced') {
       setAdvancedOpen(true);
       if (section === 'token') {
@@ -1536,7 +1556,8 @@ function ConnectionCard({ conn }: { conn: MessengerConnection }) {
       }
     }
     window.requestAnimationFrame(() => {
-      advancedSectionRef.current?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+      const targetRef = resolved === 'advanced' ? advancedSectionRef : cardContentRef;
+      targetRef.current?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
     });
   };
 
@@ -1560,6 +1581,10 @@ function ConnectionCard({ conn }: { conn: MessengerConnection }) {
       wizardActive: onboardingStep !== null && onboardingType === 'discord',
     }) !== 'configured';
 
+  useEffect(() => {
+    if (showWizard) setCardOpen(true);
+  }, [showWizard]);
+
   // Reconcile badge + listener with the live server when this card opens.
   // Depends on botToken so we still run after Zustand persist hydration.
   useEffect(() => {
@@ -1581,68 +1606,97 @@ function ConnectionCard({ conn }: { conn: MessengerConnection }) {
   const inputClass =
     'w-full rounded-md border border-border bg-background px-3 py-1.5 text-xs text-foreground focus:outline-none focus:ring-1 focus:ring-ring';
 
+  const integrationEnabled = isMessengerIntegrationEnabled(conn);
+  const toggleIntegration = (enabled: boolean) => {
+    void (enabled ? startDiscordListener() : stopDiscordListener());
+  };
+
   return (
-    <div className="rounded-xl border border-[var(--interactive-border)] bg-[var(--surface-elevated)] p-5 shadow-sm space-y-5">
-      {/* Header — Discord mark + status; Advanced then Disconnect (one row). */}
-      <div className="flex items-center justify-between gap-2">
-        <div className="flex min-w-0 flex-1 items-center gap-2 overflow-hidden">
-          <Icon name="discord-fill" className={cn('size-5 shrink-0', meta.color)} />
-          <span className="shrink-0 text-sm font-semibold text-foreground">{meta.name}</span>
-          <StatusBadge status={displayStatus} labels={statusLabels} />
-          {conn.discordBotUsername && (
-            <span className="min-w-0 truncate text-xs text-muted-foreground">
-              {conn.discordBotUsername}
-              {conn.discordBotDiscriminator && conn.discordBotDiscriminator !== '0'
-                ? `#${conn.discordBotDiscriminator}`
-                : ''}
-            </span>
-          )}
-        </div>
-        <div className="flex shrink-0 items-center gap-1.5">
-          {!showWizard && (
-            <Button
-              type="button"
-              variant="outline"
-              size="xs"
-              className="!font-normal whitespace-nowrap"
-              onClick={() => {
-                setAdvancedOpen((open) => !open);
-                if (!advancedOpen) {
-                  window.requestAnimationFrame(() => {
-                    advancedSectionRef.current?.scrollIntoView({
-                      behavior: 'smooth',
-                      block: 'nearest',
+    <Collapsible open={cardOpen} onOpenChange={setCardOpen}>
+      <div className="overflow-hidden rounded-xl border border-[var(--interactive-border)] bg-[var(--surface-elevated)] shadow-sm">
+        <div className="flex items-center gap-2 p-5">
+          <CollapsibleTrigger
+            className="min-w-0 flex-1 justify-start gap-2 overflow-hidden rounded-md p-0 hover:bg-transparent"
+            aria-label={t('settings.integrations.discord.servers.title')}
+          >
+            <Icon name="discord-fill" className={cn('size-5 shrink-0', meta.color)} />
+            <span className="shrink-0 text-sm font-semibold text-foreground">{meta.name}</span>
+            <StatusBadge status={displayStatus} labels={statusLabels} />
+            {conn.discordBotUsername && (
+              <span className="min-w-0 truncate text-xs text-muted-foreground">
+                {conn.discordBotUsername}
+                {conn.discordBotDiscriminator && conn.discordBotDiscriminator !== '0'
+                  ? `#${conn.discordBotDiscriminator}`
+                  : ''}
+              </span>
+            )}
+            <Icon
+              name={cardOpen ? 'arrow-up-s' : 'arrow-down-s'}
+              className="ml-auto size-4 shrink-0 text-muted-foreground"
+            />
+          </CollapsibleTrigger>
+          <div className="flex shrink-0 items-center gap-1.5">
+            <Switch
+              checked={integrationEnabled}
+              onCheckedChange={toggleIntegration}
+              aria-label={t('settings.integrations.discord.listener.title')}
+              className="data-[checked]:bg-[var(--status-success)]"
+            />
+            {!showWizard && (
+              <Button
+                type="button"
+                variant="outline"
+                size="icon"
+                className={cn(
+                  'size-8',
+                  advancedOpen &&
+                    'border-primary text-primary shadow-[0_0_12px_var(--primary-base)]',
+                )}
+                aria-expanded={advancedOpen}
+                aria-label={t('settings.integrations.discord.actions.advancedSettings')}
+                title={t('settings.integrations.discord.actions.advancedSettings')}
+                onClick={() => {
+                  setCardOpen(true);
+                  setAdvancedOpen((open) => !open);
+                  if (!advancedOpen) {
+                    window.requestAnimationFrame(() => {
+                      advancedSectionRef.current?.scrollIntoView({
+                        behavior: 'smooth',
+                        block: 'nearest',
+                      });
                     });
-                  });
-                }
-              }}
-            >
-              <Icon name="settings-3" className="size-3.5" />
-              {t('settings.integrations.discord.actions.advancedSettings')}
-            </Button>
-          )}
-          {configured && (
-            <Button
-              type="button"
-              variant="outline"
-              size="xs"
-              className="!font-normal whitespace-nowrap text-[var(--status-error)] hover:text-[var(--status-error)] border-[var(--status-error)]/40"
-              onClick={() => setDisconnectConfirmOpen(true)}
-            >
-              {t('settings.integrations.discord.disconnect.button')}
-            </Button>
-          )}
+                  }
+                }}
+              >
+                <Icon name="settings-3" className="size-4" />
+              </Button>
+            )}
+            {configured && (
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon"
+                className="size-8 text-[var(--status-error)] hover:text-[var(--status-error)]"
+                aria-label={t('settings.integrations.discord.disconnect.button')}
+                title={t('settings.integrations.discord.disconnect.button')}
+                onClick={() => setDisconnectConfirmOpen(true)}
+              >
+                <Icon name="link-unlink-m" className="size-4" />
+              </Button>
+            )}
+          </div>
         </div>
-      </div>
 
       {/* Connection error */}
       {conn.error && (
-        <div className="rounded-md bg-destructive/10 px-3 py-2 text-xs text-destructive flex items-start gap-2">
-          <RiAlertLine className="size-3.5 shrink-0 mt-0.5" />
+        <div className="mx-5 mb-4 rounded-md bg-destructive/10 px-3 py-2 text-xs text-destructive flex items-start gap-2">
+          <Icon name="alert" className="size-3.5 shrink-0 mt-0.5" />
           <span>{conn.error}</span>
         </div>
       )}
 
+        <CollapsibleContent className="border-t border-[var(--interactive-border)] px-5 pb-5 pt-5">
+          <div ref={cardContentRef}>
       {/* The wizard is the only token-entry UI. With a token saved, the
           configured view is stable regardless of transient live status. */}
       {showWizard ? (
@@ -1719,6 +1773,9 @@ function ConnectionCard({ conn }: { conn: MessengerConnection }) {
           </div>
         </>
       )}
+          </div>
+
+        </CollapsibleContent>
 
       <Dialog open={disconnectConfirmOpen} onOpenChange={setDisconnectConfirmOpen}>
         <DialogContent className="max-w-md">
@@ -1755,7 +1812,8 @@ function ConnectionCard({ conn }: { conn: MessengerConnection }) {
           </DialogFooter>
         </DialogContent>
       </Dialog>
-    </div>
+      </div>
+    </Collapsible>
   );
 }
 

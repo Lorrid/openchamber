@@ -929,9 +929,15 @@ async function verifyTelegramBot(
 export function deriveDiscordDisplayStatus(
   conn: Pick<
     MessengerConnection,
-    'status' | 'botToken' | 'discordServerConfigured' | 'discordListenerRunning' | 'discordListenerConnected'
+    | 'status'
+    | 'botToken'
+    | 'discordServerConfigured'
+    | 'discordListenerEnabled'
+    | 'discordListenerRunning'
+    | 'discordListenerConnected'
   >,
 ): MessengerConnection['status'] {
+  if (conn.discordListenerEnabled === false) return 'disconnected';
   if (conn.discordListenerConnected) return 'connected';
   if (conn.status === 'connecting') return 'connecting';
   if (conn.discordListenerRunning) return 'connecting';
@@ -980,9 +986,15 @@ export function deriveDiscordViewState(input: {
 export function deriveTelegramDisplayStatus(
   conn: Pick<
     MessengerConnection,
-    'status' | 'botToken' | 'telegramServerConfigured' | 'telegramListenerRunning' | 'telegramListenerConnected'
+    | 'status'
+    | 'botToken'
+    | 'telegramServerConfigured'
+    | 'telegramListenerEnabled'
+    | 'telegramListenerRunning'
+    | 'telegramListenerConnected'
   >,
 ): MessengerConnection['status'] {
+  if (conn.telegramListenerEnabled === false) return 'disconnected';
   if (conn.telegramListenerConnected) return 'connected';
   if (conn.status === 'connecting') return 'connecting';
   if (conn.telegramListenerRunning) return 'connecting';
@@ -2128,6 +2140,7 @@ export const useMessengerStore = create<MessengerState>()(
             discordListenerEnabled: false,
             discordListenerRunning: false,
             discordListenerConnected: false,
+            status: 'disconnected',
           });
           return true;
         } catch (e) {
@@ -2509,6 +2522,7 @@ export const useMessengerStore = create<MessengerState>()(
             telegramListenerEnabled: false,
             telegramListenerRunning: false,
             telegramListenerConnected: false,
+            status: 'disconnected',
           });
           return true;
         } catch (e) {
