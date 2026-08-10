@@ -13,7 +13,7 @@
 import { runtimeFetch } from '@/lib/runtime-fetch';
 import { subscribeOpenchamberEvents } from '@/lib/openchamberEvents';
 
-export type BrowserControlRequest = {
+type BrowserControlRequest = {
   readonly requestId: string;
   readonly action: string;
   readonly parameters: Record<string, unknown>;
