@@ -10,6 +10,8 @@ import {
   effectiveTelegramChatReplyMode,
   normalizeTelegramAccessSettings,
 } from './telegram-access.js';
+import { createTelegramModelWizard } from './telegram-model-wizard.js';
+import { createTelegramCommandWizards } from './telegram-command-wizards.js';
 
 /**
  * Telegram Bot API long-polling listener registry, keyed by bot token.
@@ -231,6 +233,61 @@ async function dispatchMessage(state, update, broadcastEvent, bridge) {
     return;
   }
 
+  // Interactive wizard commands (Discord slash-menu parity). Bare `/model`,
+  // `/agent`, `/verbosity`, `/skill`, `/yolo`|`/permissions`, `/login` open
+  // inline-keyboard menus instead of posting a text list or prompting the agent.
+  // Commands with args (e.g. `/model anthropic/…`) still use the text pipeline.
+  if (command && !(command.args && String(command.args).trim())) {
+    const wizardCtx = {
+      chatId: String(chat.id),
+      threadId: message.message_thread_id ?? null,
+      messageId: message.message_id,
+      from: {
+        id: from.id != null ? String(from.id) : null,
+        username: from.username ?? null,
+        firstName: inbound.from.firstName,
+      },
+    };
+    const name = command.name === 'models' ? 'model' : command.name;
+    try {
+      if (name === 'model' && state.modelWizard) {
+        await state.modelWizard.start(state, wizardCtx);
+        state.totalReplied += 1;
+        return;
+      }
+      if (state.commandWizards) {
+        if (name === 'verbosity') {
+          await state.commandWizards.startVerbosity(state, wizardCtx);
+          state.totalReplied += 1;
+          return;
+        }
+        if (name === 'agent') {
+          await state.commandWizards.startAgent(state, wizardCtx);
+          state.totalReplied += 1;
+          return;
+        }
+        if (name === 'skill') {
+          await state.commandWizards.startSkill(state, wizardCtx);
+          state.totalReplied += 1;
+          return;
+        }
+        if (name === 'login') {
+          await state.commandWizards.startLogin(state, wizardCtx);
+          state.totalReplied += 1;
+          return;
+        }
+        if (name === 'yolo' || name === 'permissions') {
+          await state.commandWizards.startPermissions(state, wizardCtx);
+          state.totalReplied += 1;
+          return;
+        }
+      }
+    } catch (err) {
+      state.lastError = err?.message ?? 'wizard failed';
+      // Fall through to the text bridge pipeline as a safe fallback.
+    }
+  }
+
   // Forward to the OpenCode bridge. Commands are normalized (`/status@Bot` →
   // `/status`) so the shared pipeline sees the same text as Discord's `!cmd`.
   const bridgeText = command?.normalized ?? text;
@@ -326,6 +383,17 @@ async function dispatchCallbackQuery(state, callbackQuery, broadcastEvent, bridg
       text: 'Access denied.',
       showAlert: true,
     }).catch(() => {});
+    return;
+  }
+
+  // Interactive wizards (model / agent / verbosity / …) — same menu approach
+  // as Discord slash-command select menus, via inline keyboards.
+  if (state.modelWizard?.ownsCallback?.(data)) {
+    await state.modelWizard.handleCallback(state, callbackQuery);
+    return;
+  }
+  if (state.commandWizards?.ownsCallback?.(data)) {
+    await state.commandWizards.handleCallback(state, callbackQuery);
     return;
   }
 
@@ -550,6 +618,9 @@ async function pollLoop(state, broadcastEvent, bridge) {
 }
 
 export function createTelegramListenerRegistry({ broadcastEvent, bridge = null } = {}) {
+  const modelWizard = createTelegramModelWizard({ bridge });
+  const commandWizards = createTelegramCommandWizards({ bridge });
+
   function start(token, opts = {}) {
     const key = tokenKey(token);
     const existing = listeners.get(key);
@@ -575,6 +646,8 @@ export function createTelegramListenerRegistry({ broadcastEvent, bridge = null }
           ? opts.chatPolicies
           : {},
       resolveProject: opts.resolveProject ?? null,
+      modelWizard,
+      commandWizards,
       abort: new AbortController(),
       offset: 0,
       botId: null,

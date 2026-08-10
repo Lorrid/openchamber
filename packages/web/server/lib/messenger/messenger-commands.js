@@ -254,6 +254,8 @@ const COMMAND_ALIASES = new Map([
   ['permissions', 'yolo'],
   ['credits', 'usage'],
   ['restart-opencode-server', 'reload-opencode'],
+  // Common plural typo — without this `/models` falls through as an agent prompt.
+  ['models', 'model'],
 ]);
 
 const KNOWN_TOP_LEVEL = new Set([
