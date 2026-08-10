@@ -1,22 +1,40 @@
 ---
-title: Navegador no Desktop
-description: Navegue por qualquer página dentro do app de desktop, com inspeção e captura de console.
+title: Painel do navegador
+description: Navegue em qualquer página dentro do aplicativo, anote-a e deixe o agente conduzi-la.
 ---
 
-# Navegador no Desktop
+# Painel do navegador
 
-O app de desktop tem um navegador integrado para você abrir qualquer página logo ao lado do seu chat, apontar para elementos para perguntar sobre eles e capturar o console da página. Abra-o pelo botão de globo no cabeçalho do app.
+O painel do navegador abre qualquer página bem ao lado do seu chat. Abra-o pelo botão do globo no cabeçalho.
 
-> O navegador no desktop é um recurso **apenas para desktop**. Na web, o painel de [preview](/pt-br/preview/) oferece as mesmas ferramentas de inspeção e console para o seu servidor de desenvolvimento local.
+No aplicativo desktop é um navegador de verdade: seus logins persistem, a recarga a quente funciona e as ferramentas de desenvolvedor estão a um clique. Em uma aba do navegador o painel exibe a página, mas não consegue olhar dentro dela — as ferramentas de anotação abaixo são exclusivas do desktop.
 
-## Inspecionar e anotar
+## Anotar uma página
 
-Ative o **inspect** e clique em qualquer elemento da página. O OpenChamber captura uma nota sobre ele — o que é, seus estilos, onde fica e uma captura de tela — e a anexa à sua mensagem no chat. É a forma mais rápida de dizer ao agente "este elemento, bem aqui".
+Pressione **Anotar** e uma barra aparece sobre a página com três ferramentas:
 
-## Captura de console
+- **Selecionar** — clique em elementos. Marque vários para falar deles juntos.
+- **Região** — arraste um retângulo em volta de uma área.
+- **Desenhar** — rabisque à mão livre sobre a página.
 
-O navegador coleta a saída do console da página — erros, avisos e logs — para que você possa filtrá-la e lê-la sem abrir as ferramentas de desenvolvedor.
+Com elementos selecionados, abra **Estilos** para mudar tamanho e peso do texto, cores, bordas, tamanho e opacidade. As mudanças valem na página ao vivo, para você ver, e o OpenChamber registra o que você mudou e a partir de qual valor.
+
+Escreva o que quer no campo de comentário e pressione **Anexar**. Sua mensagem ganha um cartão com tudo o que você marcou, as mudanças de estilo pedidas e uma captura recortada naquela área — assim você pode dizer "este botão, um pouco mais arredondado" em vez de descrever onde ele está.
+
+Nada do que você experimentou fica para trás: a página volta ao estilo original assim que a anotação é anexada, e `Esc` cancela tudo.
+
+## Deixar o agente conduzir
+
+O agente pode usar o painel do navegador sozinho — abrir uma página, ler o que há nela, clicar, digitar e rolar — para conferir o próprio trabalho em vez de pedir isso a você. Você vê acontecendo no painel.
+
+O agente não pode executar código arbitrário na página. O navegador guarda seus logins reais, então ele fica limitado às ações acima.
+
+Isso faz parte da ferramenta de agente do OpenChamber, que você pode desligar em **Configurações → Geral → OpenCode CLI**.
+
+## Ferramentas de desenvolvedor
+
+Pressione o botão de terminal na barra para abrir as ferramentas de desenvolvedor do próprio Chromium para a página — console, rede, elementos, tudo o que você espera.
 
 ## Relacionado
 
-- [Preview e Servidores de Desenvolvimento](/pt-br/preview/) — as mesmas ferramentas para o seu servidor de desenvolvimento local
+- [Pré-visualização e servidores de desenvolvimento](/preview/) — abrir seu aplicativo em execução, inclusive em uma máquina remota

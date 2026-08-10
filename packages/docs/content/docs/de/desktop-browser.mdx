@@ -1,22 +1,40 @@
 ---
-title: Desktop-Browser
-description: Durchsuche jede Seite in der Desktop-App mit Inspektion und Konsolenaufzeichnung.
+title: Browser-Panel
+description: Öffne jede Seite in der App, annotiere sie und lass den Agenten sie bedienen.
 ---
 
-# Desktop-Browser
+# Browser-Panel
 
-Die Desktop-App hat einen eingebauten Browser, damit du jede Seite direkt neben deinem Chat öffnen, auf Elemente zeigen und danach fragen sowie die Konsole der Seite aufzeichnen kannst. Öffne ihn über die Globus-Schaltfläche im App-Kopfbereich.
+Das Browser-Panel öffnet jede Seite direkt neben deinem Chat. Öffne es über die Globus-Schaltfläche in der Kopfzeile.
 
-> Der Desktop-Browser ist eine Funktion **nur für den Desktop**. Im Web bietet das [Preview](/preview/)-Panel dieselben Inspektions- und Konsolentools für deinen lokalen Dev-Server.
+In der Desktop-App ist es ein echter Browser: Deine Logins bleiben erhalten, Hot Reload funktioniert, und die Entwicklerwerkzeuge sind einen Klick entfernt. In einem Browser-Tab zeigt das Panel eine Seite zwar an, kann aber nicht in sie hineinsehen — die Annotationswerkzeuge unten gibt es nur auf dem Desktop.
 
-## Inspizieren und annotieren
+## Eine Seite annotieren
 
-Aktiviere **inspect** und klicke auf ein beliebiges Element auf der Seite. OpenChamber erstellt dazu eine Notiz — was es ist, welche Stile es hat, wo es sich befindet und einen Screenshot — und hängt sie an deine Chatnachricht an. Das ist der schnellste Weg, dem Agenten zu sagen: „dieses Element, genau hier“.
+Drücke **Annotieren**, und über der Seite erscheint eine Leiste mit drei Werkzeugen:
 
-## Konsolenaufzeichnung
+- **Auswählen** — klicke Elemente an. Klicke mehrere, um gemeinsam über sie zu sprechen.
+- **Bereich** — ziehe einen Rahmen um einen Ausschnitt.
+- **Zeichnen** — skizziere frei über die Seite.
 
-Der Browser sammelt die Konsolenausgabe der Seite — Fehler, Warnungen und Logs — damit du sie filtern und lesen kannst, ohne die Entwicklertools zu öffnen.
+Sind Elemente ausgewählt, öffne **Stile**, um Textgröße und -stärke, Farben, Rahmen, Größe und Deckkraft zu ändern. Die Änderungen greifen auf der lebenden Seite, du siehst sie also sofort, und OpenChamber hält fest, was du von wo nach wo geändert hast.
+
+Schreib dein Anliegen ins Kommentarfeld und drücke **Anhängen**. Deine Chat-Nachricht bekommt eine Karte mit allem Markierten, den gewünschten Stiländerungen und einem auf den Bereich zugeschnittenen Screenshot — du kannst also „dieser Button, etwas runder" sagen, statt zu beschreiben, wo er steht.
+
+Nichts vom Ausprobierten bleibt zurück: Die Seite kehrt zu ihrem ursprünglichen Aussehen zurück, sobald die Annotation angehängt ist, und `Esc` bricht alles ab.
+
+## Den Agenten steuern lassen
+
+Der Agent kann das Browser-Panel selbst benutzen — eine Seite öffnen, lesen, was darauf steht, klicken, tippen und scrollen — um seine eigene Arbeit zu prüfen, statt dich darum zu bitten. Du siehst es im Panel passieren.
+
+Beliebigen Code kann der Agent auf der Seite nicht ausführen. Der Browser behält deine echten Logins, deshalb bleibt er auf die genannten Aktionen beschränkt.
+
+Das gehört zum OpenChamber-Agentenwerkzeug, das du unter **Einstellungen → Allgemein → OpenCode CLI** abschalten kannst.
+
+## Entwicklerwerkzeuge
+
+Drücke die Terminal-Schaltfläche in der Leiste, um Chromiums eigene Entwicklerwerkzeuge für die Seite zu öffnen — Konsole, Netzwerk, Elemente, alles Gewohnte.
 
 ## Verwandt
 
-- [Preview & Dev Servers](/preview/) — dieselben Tools für deinen lokalen Dev-Server
+- [Vorschau & Dev-Server](/preview/) — deine laufende App öffnen, auch auf einem entfernten Rechner

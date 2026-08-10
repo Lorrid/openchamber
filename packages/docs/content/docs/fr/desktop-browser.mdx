@@ -1,22 +1,40 @@
 ---
-title: Navigateur desktop
-description: Parcourez n’importe quelle page dans l’application desktop, avec inspection et capture de console.
+title: Panneau navigateur
+description: Parcourez n'importe quelle page dans l'application, annotez-la et laissez l'agent la piloter.
 ---
 
-# Navigateur desktop
+# Panneau navigateur
 
-L’application desktop possède un navigateur intégré pour ouvrir n’importe quelle page juste à côté de votre chat, pointer des éléments pour poser des questions à leur sujet et capturer la console de la page. Ouvrez-le avec le bouton globe dans l’en-tête de l’application.
+Le panneau navigateur ouvre n'importe quelle page juste à côté de votre discussion. Ouvrez-le depuis le bouton globe de l'en-tête.
 
-> Le navigateur desktop est une fonctionnalité **desktop uniquement**. Sur le web, le panneau [aperçu](/preview/) offre les mêmes outils d’inspection et de console pour votre serveur de dev local.
+Dans l'application de bureau, c'est un vrai navigateur : vos connexions persistent, le rechargement à chaud fonctionne et les outils de développement sont à un clic. Dans un onglet de navigateur, le panneau affiche bien une page mais ne peut pas regarder à l'intérieur — les outils d'annotation ci-dessous sont réservés au bureau.
 
-## Inspecter et annoter
+## Annoter une page
 
-Activez **inspect** et cliquez sur n’importe quel élément de la page. OpenChamber capture une note à son sujet — ce que c’est, ses styles, sa position et une capture d’écran — puis l’attache à votre message de chat. C’est le moyen le plus rapide de dire à l’agent « cet élément, juste ici ».
+Appuyez sur **Annoter** : une barre apparaît au-dessus de la page avec trois outils.
 
-## Capture de console
+- **Sélection** — cliquez sur des éléments. Cliquez-en plusieurs pour en parler ensemble.
+- **Zone** — tracez un cadre autour d'une portion.
+- **Dessin** — croquez à main levée par-dessus la page.
 
-Le navigateur collecte la sortie console de la page — erreurs, avertissements et logs — pour que vous puissiez la filtrer et la lire sans ouvrir les outils développeur.
+Une fois des éléments sélectionnés, ouvrez **Styles** pour modifier la taille et la graisse du texte, les couleurs, les bordures, la taille et l'opacité. Les changements s'appliquent à la page vivante pour que vous les voyiez, et OpenChamber note ce que vous avez changé et à partir de quelle valeur.
 
-## Pages liées
+Écrivez votre demande dans le champ de commentaire et appuyez sur **Joindre**. Votre message reçoit une carte avec tout ce que vous avez marqué, les changements de style demandés et une capture recadrée sur la zone — vous pouvez donc dire « ce bouton, un peu plus arrondi » au lieu de décrire où il se trouve.
 
-- [Aperçu et serveurs de dev](/preview/) — les mêmes outils pour votre serveur de dev local
+Rien de ce que vous essayez ne subsiste : la page retrouve son style d'origine dès l'annotation jointe, et `Échap` annule l'ensemble.
+
+## Laisser l'agent piloter
+
+L'agent peut se servir lui-même du panneau navigateur — ouvrir une page, lire ce qu'elle contient, cliquer, saisir du texte et faire défiler — afin de vérifier son propre travail plutôt que de vous le demander. Vous le voyez faire dans le panneau.
+
+L'agent ne peut pas exécuter de code arbitraire dans la page. Le navigateur conserve vos vraies connexions ; il s'en tient donc aux actions ci-dessus.
+
+Cela fait partie de l'outil d'agent OpenChamber, que vous pouvez désactiver dans **Réglages → Général → OpenCode CLI**.
+
+## Outils de développement
+
+Appuyez sur le bouton terminal de la barre pour ouvrir les outils de développement de Chromium pour la page — console, réseau, éléments, tout ce à quoi vous vous attendez.
+
+## Voir aussi
+
+- [Aperçu et serveurs de développement](/preview/) — ouvrir votre application en cours, y compris sur une machine distante

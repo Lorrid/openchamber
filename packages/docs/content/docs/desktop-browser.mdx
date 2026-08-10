@@ -1,22 +1,40 @@
 ---
-title: Desktop Browser
-description: Browse any page inside the desktop app, with inspect and console capture.
+title: Browser Panel
+description: Browse any page inside the app, annotate it, and let the agent drive it.
 ---
 
-# Desktop Browser
+# Browser Panel
 
-The desktop app has a built-in browser so you can open any page right next to your chat, point at elements to ask about them, and capture the page's console. Open it from the globe button in the app header.
+The browser panel opens any page right next to your chat. Open it from the globe button in the app header.
 
-> The desktop browser is a **desktop-only** feature. On the web, the [preview](/preview/) panel offers the same inspect-and-console tools for your local dev server.
+On the desktop app it is a real browser: your logins persist, hot reload works, and developer tools are one click away. In a web browser tab the panel can still display a page, but it cannot look inside one — the annotation tools below are desktop-only.
 
-## Inspect and annotate
+## Annotate a page
 
-Turn on **inspect** and click any element on the page. OpenChamber captures a note about it — what it is, its styles, where it sits, and a screenshot — and attaches it to your chat message. It's the quickest way to tell the agent "this element, right here."
+Press **Annotate** and a toolbar appears over the page with three tools:
 
-## Console capture
+- **Select** — click elements. Click several to talk about them together.
+- **Region** — drag a box around an area.
+- **Draw** — sketch freehand over the page.
 
-The browser collects the page's console output — errors, warnings, and logs — so you can filter and read it without opening developer tools.
+With elements selected, open **Styles** to change text size and weight, colours, borders, size, and opacity. The changes apply to the live page so you can see them, and OpenChamber records what you changed from and to.
+
+Write what you want in the comment box and press **Attach**. Your chat message gets a card with everything you marked, the style changes you asked for, and a screenshot cropped to the area — so you can say "this button, a bit rounder" instead of describing where it is.
+
+Nothing you try out is left behind: the page returns to its original styling as soon as the annotation is attached, and `Esc` cancels the whole thing.
+
+## Let the agent drive
+
+The agent can use the browser panel itself — opening a page, reading what is on it, clicking, typing, and scrolling — so it can check its own work instead of asking you to. You will see it happening in the panel.
+
+The agent cannot run arbitrary code in the page. The browser keeps your real logins, so it is limited to the specific actions above.
+
+This is part of the OpenChamber agent tool, which you can turn off in **Settings → General → OpenCode CLI**.
+
+## Developer tools
+
+Press the terminal button in the toolbar to open Chromium's own developer tools for the page — console, network, elements, everything you would expect.
 
 ## Related
 
-- [Preview & Dev Servers](/preview/) — the same tools for your local dev server
+- [Preview & Dev Servers](/preview/) — opening your running app, including on a remote machine
