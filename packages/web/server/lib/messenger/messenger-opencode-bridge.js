@@ -1203,15 +1203,16 @@ export function createMessengerOpencodeBridge({
    * web UI's project-channel sync created a SECOND, empty channel for the
    * project while the real conversation stayed orphaned here.
    */
-  async function bindChannelToBootstrappedProject({ type, token, channelId, project }) {
+  async function bindChannelToBootstrappedProject({ type, token, channelId, threadId = null, project }) {
     if ((type !== 'discord' && type !== 'telegram') || !channelId || !project?.path) return;
     const projectLabel =
       project.label ?? project.path.split('/').pop() ?? project.path;
+    const surfaceKey = targetKey({ type, channelId, threadId: threadId ?? null });
     try {
       bridgeStore.bind({
         type,
         botTokenHash: tokenHash(token),
-        targetKey: String(channelId),
+        targetKey: surfaceKey,
         sessionId: '', // session is lazily created on the next message
         projectPath: project.path,
         projectLabel,
@@ -1223,10 +1224,25 @@ export function createMessengerOpencodeBridge({
       const current = await readTelegramBindings();
       if (!current) return;
       const { telegram, bindings } = current;
-      const next = bindings.filter(
-        (b) => b && b.projectPath !== project.path && String(b.chatId) !== String(channelId),
-      );
-      next.push({ chatId: String(channelId), projectPath: project.path, projectLabel });
+      const threadKey =
+        threadId != null && String(threadId).length > 0 ? String(threadId) : null;
+      // Replace only the matching chat/topic row — do not wipe sibling forum
+      // topic bindings for the same chat when bootstrapping one topic.
+      const next = bindings.filter((b) => {
+        if (!b || !b.chatId || !b.projectPath) return false;
+        if (b.projectPath === project.path) return false;
+        if (String(b.chatId) !== String(channelId)) return true;
+        if (threadKey) {
+          return String(b.messageThreadId ?? '') !== threadKey;
+        }
+        return b.messageThreadId != null && String(b.messageThreadId).length > 0;
+      });
+      next.push({
+        chatId: String(channelId),
+        projectPath: project.path,
+        projectLabel,
+        ...(threadKey ? { messageThreadId: threadKey } : {}),
+      });
       await persistTelegramBindings(next, telegram);
       return;
     }
@@ -1268,7 +1284,62 @@ export function createMessengerOpencodeBridge({
     return name;
   }
 
+  async function resolveTelegramProjectFromSettings({ channelId, threadId } = {}) {
+    const current = await readTelegramBindings();
+    if (!current) return null;
+    const id = String(channelId ?? '');
+    if (!id) return null;
+    const threadKey =
+      threadId != null && String(threadId).length > 0 ? String(threadId) : null;
+    if (threadKey) {
+      const threaded = current.bindings.find(
+        (b) =>
+          b &&
+          String(b.chatId) === id &&
+          b.messageThreadId != null &&
+          String(b.messageThreadId) === threadKey,
+      );
+      if (threaded?.projectPath) {
+        return {
+          projectPath: threaded.projectPath,
+          projectLabel: threaded.projectLabel ?? null,
+        };
+      }
+    }
+    const chatLevel = current.bindings.find(
+      (b) =>
+        b &&
+        String(b.chatId) === id &&
+        (b.messageThreadId == null || b.messageThreadId === ''),
+    );
+    if (chatLevel?.projectPath) {
+      return {
+        projectPath: chatLevel.projectPath,
+        projectLabel: chatLevel.projectLabel ?? null,
+      };
+    }
+    return null;
+  }
+
   async function autoResolveProject({ type, token, channelId, threadId }) {
+    if (!listProjects && type !== 'telegram') return null;
+    // Telegram has no Discord-style channel-name lookup. Re-read persisted
+    // projectBindings so a just-synced forum topic resolves even when the
+    // live listener's resolveProject snapshot is stale.
+    if (type === 'telegram') {
+      const fromSettings = await resolveTelegramProjectFromSettings({
+        channelId,
+        threadId,
+      });
+      if (fromSettings?.projectPath) {
+        return {
+          projectPath: fromSettings.projectPath,
+          projectLabel: fromSettings.projectLabel,
+          autoResolved: 'settings-binding',
+          resolvedFromName: null,
+        };
+      }
+    }
     if (!listProjects) return null;
     let projects = [];
     try {
@@ -4191,6 +4262,7 @@ export function createMessengerOpencodeBridge({
           type,
           token,
           channelId,
+          threadId: threadId ?? null,
           project: result.project,
         });
         const discord = type === 'discord'
@@ -4221,6 +4293,7 @@ export function createMessengerOpencodeBridge({
           type,
           token,
           channelId,
+          threadId: threadId ?? null,
           project: result.project,
         });
         const discord = type === 'discord'
@@ -5286,6 +5359,7 @@ export function createMessengerOpencodeBridge({
             type,
             token,
             channelId,
+            threadId: threadId ?? null,
             project: result.project,
           });
           await postMessengerSurface(
@@ -5337,7 +5411,26 @@ export function createMessengerOpencodeBridge({
             channelId,
             threadId: threadId ?? null,
           });
-          if (!auto || auto.autoResolved !== 'slug-match') {
+          const boundFromAuto =
+            auto &&
+            (auto.autoResolved === 'slug-match' || auto.autoResolved === 'settings-binding');
+          if (boundFromAuto && auto.projectPath) {
+            projectPath = auto.projectPath;
+            projectLabel = projectLabel ?? auto.projectLabel ?? null;
+            // Pre-bind so the next message does not re-resolve via settings.
+            try {
+              bridgeStore.bind({
+                type,
+                botTokenHash: hash,
+                targetKey: keyForStore,
+                sessionId: '',
+                projectPath,
+                projectLabel: projectLabel ?? undefined,
+              });
+            } catch {
+              // best-effort
+            }
+          } else if (!boundFromAuto) {
             bootstrapPending.set(surfaceKey, {
               type,
               token,

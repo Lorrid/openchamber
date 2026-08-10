@@ -12,6 +12,28 @@
 const TELEGRAM_MESSAGE_LIMIT = 4096;
 /** Telegram callback_data is capped at 64 bytes — keep custom ids short. */
 const TELEGRAM_CALLBACK_DATA_LIMIT = 64;
+const TELEGRAM_API_RETRY_MAX = 5;
+
+function defaultSleep(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+/**
+ * Parse Telegram's 429 `retry_after` (seconds) from the Bot API envelope or
+ * description text (`Too Many Requests: retry after N`).
+ * Exported for testing.
+ */
+export function parseTelegramRetryAfterMs(body, status) {
+  const retryAfter = body?.parameters?.retry_after;
+  if (Number.isFinite(Number(retryAfter))) {
+    return Math.max(0, Math.ceil(Number(retryAfter) * 1000));
+  }
+  const description = typeof body?.description === 'string' ? body.description : '';
+  const match = description.match(/retry after (\d+)/i);
+  if (match) return Math.max(0, Math.ceil(Number(match[1]) * 1000));
+  if (status === 429 || body?.error_code === 429) return 5_000;
+  return null;
+}
 
 export async function telegramApi(token, method, body, { timeoutMs = 15_000, signal } = {}) {
   const url = `https://api.telegram.org/bot${encodeURIComponent(token)}/${method}`;
@@ -29,6 +51,32 @@ export async function telegramApi(token, method, body, { timeoutMs = 15_000, sig
   } catch (err) {
     return { ok: false, status: 0, body: null, error: err?.message ?? 'telegram request failed' };
   }
+}
+
+/**
+ * Bot API call with automatic backoff on HTTP/error_code 429. Honors
+ * `parameters.retry_after` so multi-project sync can wait and continue instead
+ * of marking remaining projects as failed.
+ */
+export async function telegramApiWithRetry(
+  token,
+  method,
+  body,
+  { timeoutMs = 15_000, signal, maxRetries = TELEGRAM_API_RETRY_MAX, sleep = defaultSleep } = {},
+) {
+  for (let attempt = 0; attempt <= maxRetries; attempt++) {
+    const result = await telegramApi(token, method, body, { timeoutMs, signal });
+    const isRateLimited =
+      result.status === 429 ||
+      result.body?.error_code === 429 ||
+      /too many requests/i.test(String(result.body?.description ?? ''));
+    if (!isRateLimited || attempt >= maxRetries) {
+      return result;
+    }
+    const waitMs = parseTelegramRetryAfterMs(result.body, result.status) ?? 2_500 * (attempt + 1);
+    if (waitMs > 0) await sleep(waitMs);
+  }
+  return { ok: false, status: 429, body: null, error: 'telegramApiWithRetry: exhausted retries' };
 }
 
 /** Short human-readable reason for a failed Bot API call (router error fields). */
@@ -66,7 +114,7 @@ export async function sendTelegramMessage({
     payload.reply_parameters = { message_id: replyToMessageId, allow_sending_without_reply: true };
   }
   if (replyMarkup) payload.reply_markup = replyMarkup;
-  const r = await telegramApi(token, 'sendMessage', payload);
+  const r = await telegramApiWithRetry(token, 'sendMessage', payload);
   if (!r.ok) return { ok: false, error: friendlyTelegramError(r.status, r.body, r.error) };
   return { ok: true, messageId: r.body?.result?.message_id ?? null };
 }
@@ -183,7 +231,7 @@ export async function createTelegramForumTopic({ token, chatId, name }) {
     chat_id: chatId,
     name: String(name ?? 'project').slice(0, 128) || 'project',
   };
-  const r = await telegramApi(token, 'createForumTopic', payload);
+  const r = await telegramApiWithRetry(token, 'createForumTopic', payload);
   if (!r.ok) {
     return {
       ok: false,

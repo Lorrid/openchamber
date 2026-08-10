@@ -702,6 +702,12 @@ export function createTelegramListenerRegistry({ broadcastEvent, bridge = null }
           ? opts.chatPolicies
           : {};
     }
+    // Hot-apply project bindings so /telegram/sync-projects (and save-config)
+    // take effect without Stop → Start. Without this, freshly synced forum
+    // topics keep hitting the bootstrap dialogue until listener restart.
+    if (Object.prototype.hasOwnProperty.call(opts, 'resolveProject')) {
+      state.resolveProject = typeof opts.resolveProject === 'function' ? opts.resolveProject : null;
+    }
     state.bridgeEnabled = true;
   }
 

@@ -2,8 +2,10 @@ import React, { useEffect, useState } from 'react';
 import { RiAlertLine } from '@remixicon/react';
 import {
   deriveTelegramDisplayStatus,
+  isTelegramChatProjectSyncable,
   isTelegramChatSyncing,
   listTelegramManagedChats,
+  telegramChatOpenUrl,
   useMessengerStore,
   type MessengerConnection,
   type MessengerInboundMessage,
@@ -354,15 +356,18 @@ function TelegramChatRow({
       : conn.telegramDefaultReplyMode === 'mention'
         ? 'mention'
         : 'always';
-  const syncing = isTelegramChatSyncing(conn, chat.id);
+  const syncable = isTelegramChatProjectSyncable(chat);
+  const syncing = syncable && isTelegramChatSyncing(conn, chat.id);
   const configured = Boolean(conn.botToken || conn.telegramServerConfigured);
   const busy = conn.lastSyncStatus === 'sending';
+  const isDm = chat.chatType === 'private' || chat.chatType === 'dm';
   const title =
     chat.title && chat.title !== chat.id
       ? chat.title
-      : chat.chatType === 'private'
+      : isDm
         ? t('settings.integrations.telegram.groups.dm')
         : t('settings.integrations.telegram.groups.untitled', { id: chat.id });
+  const openUrl = telegramChatOpenUrl(chat.id);
 
   return (
     <div className="space-y-2">
@@ -370,9 +375,21 @@ function TelegramChatRow({
         <div className="flex min-w-0 flex-1 items-center gap-2.5">
           <Icon name="telegram-fill" className={cn('size-5 shrink-0', TELEGRAM_BRAND_CLASS)} />
           <div className="min-w-0">
-            <div className="min-w-0 break-words text-sm font-semibold leading-snug text-foreground">
-              {title}
-            </div>
+            {openUrl ? (
+              <button
+                type="button"
+                className="min-w-0 break-words text-left text-sm font-semibold leading-snug text-foreground hover:underline"
+                onClick={() => window.open(openUrl, '_blank', 'noopener,noreferrer')}
+                aria-label={t('settings.integrations.telegram.groups.openChat', { title })}
+                title={t('settings.integrations.telegram.groups.openChat', { title })}
+              >
+                {title}
+              </button>
+            ) : (
+              <div className="min-w-0 break-words text-sm font-semibold leading-snug text-foreground">
+                {title}
+              </div>
+            )}
             <div className="truncate text-[10px] text-muted-foreground">{chat.id}</div>
           </div>
         </div>
@@ -448,45 +465,49 @@ function TelegramChatRow({
           </button>
 
           <div className="flex flex-wrap items-start gap-3 pr-8">
-            <label className="flex min-w-0 flex-1 cursor-pointer items-start gap-2.5">
-              <Checkbox
-                checked={syncing}
-                onChange={(checked) => setTelegramChatPolicy(chat.id, { syncProjects: checked })}
-                ariaLabel={t('settings.integrations.telegram.groups.syncProjects.label')}
-              />
-              <span className="min-w-0">
-                <span className="block text-xs font-semibold text-foreground">
-                  {t('settings.integrations.telegram.groups.syncProjects.label')}
+            {syncable && (
+              <label className="flex min-w-0 flex-1 cursor-pointer items-start gap-2.5">
+                <Checkbox
+                  checked={syncing}
+                  onChange={(checked) => setTelegramChatPolicy(chat.id, { syncProjects: checked })}
+                  ariaLabel={t('settings.integrations.telegram.groups.syncProjects.label')}
+                />
+                <span className="min-w-0">
+                  <span className="block text-xs font-semibold text-foreground">
+                    {t('settings.integrations.telegram.groups.syncProjects.label')}
+                  </span>
+                  <span className="mt-0.5 block text-[11px] leading-snug text-muted-foreground">
+                    {t('settings.integrations.telegram.groups.syncProjects.hint')}
+                  </span>
                 </span>
-                <span className="mt-0.5 block text-[11px] leading-snug text-muted-foreground">
-                  {t('settings.integrations.telegram.groups.syncProjects.hint')}
-                </span>
-              </span>
-            </label>
+              </label>
+            )}
 
             <div className="flex shrink-0 flex-wrap items-center gap-1.5">
-              <Button
-                type="button"
-                variant="outline"
-                size="xs"
-                className="!font-normal"
-                disabled={!configured || busy || !syncing}
-                onClick={() => {
-                  setRowAction('sync');
-                  void syncTelegramChatProjects(
-                    buildTelegramProjectSyncPayloads(projects),
-                    buildTelegramProjectSyncSummary(projects),
-                    { chatId: chat.id },
-                  ).finally(() => setRowAction(null));
-                }}
-              >
-                {rowAction === 'sync' ? (
-                  <Icon name="loader-4" className="size-3.5 animate-spin" />
-                ) : (
-                  <Icon name="refresh" className="size-3.5" />
-                )}
-                {t('settings.integrations.telegram.groups.syncNow')}
-              </Button>
+              {syncable && (
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="xs"
+                  className="!font-normal"
+                  disabled={!configured || busy || !syncing}
+                  onClick={() => {
+                    setRowAction('sync');
+                    void syncTelegramChatProjects(
+                      buildTelegramProjectSyncPayloads(projects),
+                      buildTelegramProjectSyncSummary(projects),
+                      { chatId: chat.id },
+                    ).finally(() => setRowAction(null));
+                  }}
+                >
+                  {rowAction === 'sync' ? (
+                    <Icon name="loader-4" className="size-3.5 animate-spin" />
+                  ) : (
+                    <Icon name="refresh" className="size-3.5" />
+                  )}
+                  {t('settings.integrations.telegram.groups.syncNow')}
+                </Button>
+              )}
               <Button
                 type="button"
                 variant="outline"
@@ -510,14 +531,16 @@ function TelegramChatRow({
             </div>
           </div>
 
-          {conn.telegramCanReadAllGroupMessages === false && (
+          {syncable && conn.telegramCanReadAllGroupMessages === false && (
             <p className="text-[11px] leading-snug text-muted-foreground">
               {t('settings.integrations.telegram.groups.restriction.privacy')}
             </p>
           )}
-          <p className="text-[11px] leading-snug text-muted-foreground">
-            {t('settings.integrations.telegram.groups.restriction.topics')}
-          </p>
+          {syncable && (
+            <p className="text-[11px] leading-snug text-muted-foreground">
+              {t('settings.integrations.telegram.groups.restriction.topics')}
+            </p>
+          )}
         </div>
       )}
     </div>
@@ -660,8 +683,6 @@ function TelegramAdvancedSettings({ conn }: { conn: MessengerConnection }) {
           {t('settings.integrations.telegram.advanced.description')}
         </p>
       </div>
-
-      <TelegramGroupsBlock conn={conn} />
 
       <div className="space-y-3">
         <AdvancedSectionCard
@@ -959,7 +980,9 @@ export function TelegramSectionCard({ conn }: { conn: MessengerConnection }) {
       {showWizard ? (
         <TelegramOnboardingWizard conn={conn} />
       ) : (
-        advancedOpen && (
+        <>
+          <TelegramGroupsBlock conn={conn} />
+          {advancedOpen && (
           <div className="space-y-4 border-t border-[var(--interactive-border)] pt-4">
             <div className="flex flex-wrap items-center gap-2">
               <div data-settings-item="integrations.telegram.commands">
@@ -1016,7 +1039,8 @@ export function TelegramSectionCard({ conn }: { conn: MessengerConnection }) {
 
             <TelegramAdvancedSettings conn={conn} />
           </div>
-        )
+          )}
+        </>
       )}
 
       <Dialog open={disconnectConfirmOpen} onOpenChange={setDisconnectConfirmOpen}>
