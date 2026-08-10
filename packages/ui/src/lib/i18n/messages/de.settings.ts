@@ -1,4 +1,5 @@
 import { telegramIntegrationI18n } from './telegram-integration.i18n';
+import { messengerIntegrationI18n } from './messenger-integration.i18n';
 
 export const settingsDict = {
   'settings.providers.page.openCodeGo.title': 'OpenCode Go Nutzungsverfolgung',
@@ -2123,4 +2124,5 @@ export const settingsDict = {
   'settings.openchamber.visual.option.themeMode.dark.description': 'Immer dunkles Erscheinungsbild verwenden',
   'chat.message.userText.collapseAria': 'Benutzernachricht einklappen',
   ...telegramIntegrationI18n.de,
+  ...messengerIntegrationI18n.de,
 };

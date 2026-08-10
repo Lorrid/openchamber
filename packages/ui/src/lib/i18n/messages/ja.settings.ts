@@ -1,5 +1,6 @@
 import { discordIntegrationI18n } from './discord-integration.i18n';
 import { telegramIntegrationI18n } from './telegram-integration.i18n';
+import { messengerIntegrationI18n } from './messenger-integration.i18n';
 
 export const settingsDict = {
   'settings.providers.page.openCodeGo.title': 'OpenCode Go 使用量追跡',
@@ -2136,6 +2137,7 @@ export const settingsDict = {
   'settings.openchamber.visual.option.followUpBehavior.queue.label': 'キュー',
   ...discordIntegrationI18n.ja,
   ...telegramIntegrationI18n.ja,
+  ...messengerIntegrationI18n.ja,
   'settings.integrations.discord.commands.category.project': 'プロジェクト',
   'settings.integrations.discord.commands.category.mcp': 'MCP サーバー',
   'settings.integrations.discord.commands.category.ops': 'セッション操作',

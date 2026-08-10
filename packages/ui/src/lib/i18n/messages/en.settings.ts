@@ -1,5 +1,6 @@
 import { discordIntegrationI18n } from './discord-integration.i18n';
 import { telegramIntegrationI18n } from './telegram-integration.i18n';
+import { messengerIntegrationI18n } from './messenger-integration.i18n';
 
 export const settingsDict = {
   'settings.providers.page.openCodeGo.title': 'OpenCode Go usage tracking',
@@ -2126,4 +2127,5 @@ export const settingsDict = {
   'settings.openchamber.visual.option.followUpBehavior.queue.label': 'Queue',
   ...discordIntegrationI18n.en,
   ...telegramIntegrationI18n.en,
+  ...messengerIntegrationI18n.en,
 } as const;
