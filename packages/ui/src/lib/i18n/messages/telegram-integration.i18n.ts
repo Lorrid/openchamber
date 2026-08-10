@@ -147,6 +147,10 @@ export const telegramIntegrationI18n = {
     'settings.integrations.telegram.bridge.interruptTimeout.unit': 'ms',
     'settings.integrations.telegram.bridge.activeOne': '1 prompt streaming…',
     'settings.integrations.telegram.bridge.activeMany': '{count} prompts streaming…',
+    'settings.integrations.telegram.controls.title': 'Owners & groups',
+    'settings.integrations.telegram.controls.description':
+      'Add at least one owner user id for safety, then choose which groups and chats the bot answers in.',
+    'settings.integrations.telegram.controls.meta': '{owners} owners · {chats} chats',
     'settings.integrations.telegram.groups.title': 'Groups & chats',
     'settings.integrations.telegram.groups.description':
       'Enable the groups and chats where OpenChamber should respond. Sync projects posts a status message into each selected chat and creates forum topics when the bot can manage topics.',
@@ -339,6 +343,10 @@ export const telegramIntegrationI18n = {
     'settings.integrations.telegram.bridge.activeOne': '1 Prompt wird gestreamt…',
     'settings.integrations.telegram.bridge.activeMany': '{count} Prompts werden gestreamt…',
 
+    'settings.integrations.telegram.controls.title': 'Eigentümer & Gruppen',
+    'settings.integrations.telegram.controls.description':
+      'Fügen Sie aus Sicherheitsgründen mindestens eine Eigentümer-Benutzer-ID hinzu und wählen Sie dann, in welchen Gruppen und Chats der Bot antwortet.',
+    'settings.integrations.telegram.controls.meta': '{owners} Eigentümer · {chats} Chats',
     'settings.integrations.telegram.groups.title': 'Gruppen & Chats',
     'settings.integrations.telegram.groups.description': 'Aktivieren Sie die Gruppen und Chats, in denen OpenChamber antworten soll. „Projekte synchronisieren“ sendet eine Statusnachricht in jeden ausgewählten Chat und erstellt Forumsthemen, wenn der Bot Themen verwalten darf.',
     'settings.integrations.telegram.groups.empty': 'Noch keine Chats. Schreiben Sie dem Bot oder fügen Sie Chat-IDs unter „Erlaubte Chat-IDs“ hinzu — dann erscheinen sie hier.',
@@ -550,6 +558,10 @@ export const telegramIntegrationI18n = {
     'settings.integrations.telegram.bridge.activeOne': '1 prompt en curso…',
     'settings.integrations.telegram.bridge.activeMany': '{count} prompts en curso…',
 
+    'settings.integrations.telegram.controls.title': 'Propietarios y grupos',
+    'settings.integrations.telegram.controls.description':
+      'Añade al menos un id de propietario por seguridad y luego elige en qué grupos y chats responde el bot.',
+    'settings.integrations.telegram.controls.meta': '{owners} propietarios · {chats} chats',
     'settings.integrations.telegram.groups.title': 'Grupos y chats',
     'settings.integrations.telegram.groups.description': 'Activa los grupos y chats donde OpenChamber debe responder. Sincronizar proyectos publica un mensaje de estado en cada chat seleccionado y crea temas de foro cuando el bot puede gestionar temas.',
     'settings.integrations.telegram.groups.empty': 'Aún no hay chats. Envía un mensaje al bot o añade IDs en «IDs de chat permitidos» y aparecerán aquí.',
@@ -761,6 +773,10 @@ export const telegramIntegrationI18n = {
     'settings.integrations.telegram.bridge.activeOne': '1 prompt en cours…',
     'settings.integrations.telegram.bridge.activeMany': '{count} prompts en cours…',
 
+    'settings.integrations.telegram.controls.title': 'Propriétaires et groupes',
+    'settings.integrations.telegram.controls.description':
+      'Ajoutez au moins un identifiant de propriétaire pour la sécurité, puis choisissez les groupes et discussions où le bot répond.',
+    'settings.integrations.telegram.controls.meta': '{owners} propriétaires · {chats} discussions',
     'settings.integrations.telegram.groups.title': 'Groupes et discussions',
     'settings.integrations.telegram.groups.description': 'Activez les groupes et discussions où OpenChamber doit répondre. Synchroniser les projets publie un message d’état dans chaque discussion sélectionnée et crée des sujets de forum lorsque le bot peut gérer les sujets.',
     'settings.integrations.telegram.groups.empty': 'Aucune discussion pour l’instant. Écrivez au bot ou ajoutez des identifiants sous « IDs de discussion autorisés », puis ils apparaîtront ici.',
@@ -972,6 +988,10 @@ export const telegramIntegrationI18n = {
     'settings.integrations.telegram.bridge.activeOne': '1 件のプロンプトを送信中…',
     'settings.integrations.telegram.bridge.activeMany': '{count} 件のプロンプトを送信中…',
 
+    'settings.integrations.telegram.controls.title': 'オーナーとグループ',
+    'settings.integrations.telegram.controls.description':
+      '安全のためオーナーのユーザー ID を少なくとも 1 つ追加し、ボットが応答するグループとチャットを選びます。',
+    'settings.integrations.telegram.controls.meta': 'オーナー {owners} · チャット {chats}',
     'settings.integrations.telegram.groups.title': 'グループとチャット',
     'settings.integrations.telegram.groups.description': 'OpenChamber が応答するグループとチャットを有効にします。「プロジェクトを同期」は選択した各チャットにステータスメッセージを投稿し、ボットがトピックを管理できる場合はフォーラムトピックを作成します。',
     'settings.integrations.telegram.groups.empty': 'まだチャットがありません。ボットにメッセージを送るか、「許可するチャット ID」に追加するとここに表示されます。',
@@ -1183,6 +1203,10 @@ export const telegramIntegrationI18n = {
     'settings.integrations.telegram.bridge.activeOne': '프롬프트 1개 스트리밍 중…',
     'settings.integrations.telegram.bridge.activeMany': '프롬프트 {count}개 스트리밍 중…',
 
+    'settings.integrations.telegram.controls.title': '소유자 및 그룹',
+    'settings.integrations.telegram.controls.description':
+      '보안을 위해 소유자 사용자 ID를 하나 이상 추가한 다음, 봇이 응답할 그룹과 채팅을 선택하세요.',
+    'settings.integrations.telegram.controls.meta': '소유자 {owners} · 채팅 {chats}',
     'settings.integrations.telegram.groups.title': '그룹 및 채팅',
     'settings.integrations.telegram.groups.description': 'OpenChamber가 응답할 그룹과 채팅을 활성화하세요. 프로젝트 동기화는 선택한 각 채팅에 상태 메시지를 게시하고, 봇이 주제를 관리할 수 있으면 포럼 주제를 만듭니다.',
     'settings.integrations.telegram.groups.empty': '아직 채팅이 없습니다. 봇에게 메시지를 보내거나 허용된 채팅 ID에 추가하면 여기에 표시됩니다.',
@@ -1394,6 +1418,10 @@ export const telegramIntegrationI18n = {
     'settings.integrations.telegram.bridge.activeOne': '1 prompt w toku…',
     'settings.integrations.telegram.bridge.activeMany': '{count} promptów w toku…',
 
+    'settings.integrations.telegram.controls.title': 'Właściciele i grupy',
+    'settings.integrations.telegram.controls.description':
+      'Dodaj co najmniej jeden identyfikator właściciela dla bezpieczeństwa, a następnie wybierz grupy i czaty, w których bot ma odpowiadać.',
+    'settings.integrations.telegram.controls.meta': '{owners} właścicieli · {chats} czatów',
     'settings.integrations.telegram.groups.title': 'Grupy i czaty',
     'settings.integrations.telegram.groups.description': 'Włącz grupy i czaty, w których OpenChamber ma odpowiadać. Synchronizacja projektów publikuje komunikat statusu w każdym wybranym czacie i tworzy tematy forum, gdy bot może zarządzać tematami.',
     'settings.integrations.telegram.groups.empty': 'Brak czatów. Napisz do bota lub dodaj ID w „Dozwolone ID czatów”, a pojawią się tutaj.',
@@ -1605,6 +1633,10 @@ export const telegramIntegrationI18n = {
     'settings.integrations.telegram.bridge.activeOne': '1 prompt em andamento…',
     'settings.integrations.telegram.bridge.activeMany': '{count} prompts em andamento…',
 
+    'settings.integrations.telegram.controls.title': 'Proprietários e grupos',
+    'settings.integrations.telegram.controls.description':
+      'Adicione pelo menos um id de proprietário por segurança e depois escolha em quais grupos e chats o bot responde.',
+    'settings.integrations.telegram.controls.meta': '{owners} proprietários · {chats} chats',
     'settings.integrations.telegram.groups.title': 'Grupos e chats',
     'settings.integrations.telegram.groups.description': 'Ative os grupos e chats em que o OpenChamber deve responder. Sincronizar projetos publica uma mensagem de status em cada chat selecionado e cria tópicos de fórum quando o bot pode gerenciar tópicos.',
     'settings.integrations.telegram.groups.empty': 'Nenhum chat ainda. Envie uma mensagem ao bot ou adicione IDs em «IDs de chat permitidos» e eles aparecerão aqui.',
@@ -1816,6 +1848,10 @@ export const telegramIntegrationI18n = {
     'settings.integrations.telegram.bridge.activeOne': '1 промпт надсилається…',
     'settings.integrations.telegram.bridge.activeMany': '{count} промптів надсилається…',
 
+    'settings.integrations.telegram.controls.title': 'Власники та групи',
+    'settings.integrations.telegram.controls.description':
+      'Додайте щонайменше один ідентифікатор власника для безпеки, а потім виберіть групи та чати, в яких бот відповідає.',
+    'settings.integrations.telegram.controls.meta': '{owners} власників · {chats} чатів',
     'settings.integrations.telegram.groups.title': 'Групи та чати',
     'settings.integrations.telegram.groups.description': 'Увімкніть групи та чати, де OpenChamber має відповідати. Синхронізація проєктів надсилає статус у кожний вибраний чат і створює теми форуму, коли бот може керувати темами.',
     'settings.integrations.telegram.groups.empty': 'Ще немає чатів. Напишіть боту або додайте ID в «Дозволені ID чатів» — тоді вони з’являться тут.',
@@ -2027,6 +2063,10 @@ export const telegramIntegrationI18n = {
     'settings.integrations.telegram.bridge.activeOne': '1 个提示正在流式传输…',
     'settings.integrations.telegram.bridge.activeMany': '{count} 个提示正在流式传输…',
 
+    'settings.integrations.telegram.controls.title': '所有者与群组',
+    'settings.integrations.telegram.controls.description':
+      '为安全起见请至少添加一个所有者用户 ID，然后选择机器人要回复的群组和聊天。',
+    'settings.integrations.telegram.controls.meta': '{owners} 位所有者 · {chats} 个聊天',
     'settings.integrations.telegram.groups.title': '群组与聊天',
     'settings.integrations.telegram.groups.description': '启用 OpenChamber 应回复的群组和聊天。“同步项目”会向每个选定聊天发布状态消息，并在机器人可管理话题时创建论坛话题。',
     'settings.integrations.telegram.groups.empty': '尚无聊天。先给机器人发消息，或在“允许的聊天 ID”中添加 ID，随后会显示在这里。',
@@ -2238,6 +2278,10 @@ export const telegramIntegrationI18n = {
     'settings.integrations.telegram.bridge.activeOne': '1 個提示正在串流…',
     'settings.integrations.telegram.bridge.activeMany': '{count} 個提示正在串流…',
 
+    'settings.integrations.telegram.controls.title': '擁有者與群組',
+    'settings.integrations.telegram.controls.description':
+      '為安全起見請至少新增一個擁有者使用者 ID，然後選擇機器人要回覆的群組與聊天。',
+    'settings.integrations.telegram.controls.meta': '{owners} 位擁有者 · {chats} 個聊天',
     'settings.integrations.telegram.groups.title': '群組與聊天',
     'settings.integrations.telegram.groups.description': '啟用 OpenChamber 應回覆的群組與聊天。「同步專案」會向每個選定聊天發布狀態訊息，並在機器人可管理主題時建立論壇主題。',
     'settings.integrations.telegram.groups.empty': '尚無聊天。先傳訊息給機器人，或在「允許的聊天 ID」中新增 ID，之後會顯示在這裡。',

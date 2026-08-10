@@ -303,7 +303,7 @@ function TelegramListenerPanel({ conn }: { conn: MessengerConnection }) {
   );
 }
 
-type TelegramDangerZoneKey = 'fallback' | 'owner' | 'allowed' | 'replyMode';
+type TelegramDangerZoneKey = 'fallback' | 'allowed' | 'replyMode';
 
 const TELEGRAM_CHAT_REPLY_MODES: Array<'always' | 'mention'> = ['always', 'mention'];
 
@@ -547,17 +547,60 @@ function TelegramChatRow({
   );
 }
 
-function TelegramGroupsBlock({ conn }: { conn: MessengerConnection }) {
+function TelegramOwnerUserIdsEditor({ conn }: { conn: MessengerConnection }) {
+  const { t } = useI18n();
+  const updateConnection = useMessengerStore((s) => s.updateConnection);
+  const saveTelegramConfig = useMessengerStore((s) => s.saveTelegramConfig);
+  const persist = () => setTimeout(() => saveTelegramConfig(), 0);
+  const inputClass =
+    'w-full rounded-md border border-border bg-background px-3 py-1.5 text-sm text-foreground focus:outline-none focus:ring-1 focus:ring-ring';
+
+  return (
+    <div data-settings-item="integrations.telegram.owner-user" className="space-y-2">
+      <div className="text-sm font-semibold text-foreground">
+        {t('settings.integrations.telegram.advanced.ownerUserIds.title')}
+      </div>
+      <div className="text-xs text-muted-foreground leading-snug">
+        <TelegramUserInfoBotHint
+          beforeKey="settings.integrations.telegram.advanced.ownerUserIds.description.before"
+          afterKey="settings.integrations.telegram.advanced.ownerUserIds.description.after"
+        />
+      </div>
+      <p className="text-xs text-[var(--status-warning)] leading-snug">
+        {t('settings.integrations.telegram.advanced.ownerUserIds.required')}
+      </p>
+      <textarea
+        value={(conn.telegramOwnerUserIds ?? []).join('\n')}
+        onChange={(e) => {
+          const telegramOwnerUserIds = parseMessengerIdList(e.target.value);
+          updateConnection('telegram', {
+            telegramOwnerUserIds,
+            defaultUserId: telegramOwnerUserIds[0],
+          });
+        }}
+        onBlur={() => {
+          const latest = useMessengerStore
+            .getState()
+            .connections.find((c) => c.type === 'telegram');
+          if (!(latest?.telegramOwnerUserIds ?? []).length) return;
+          persist();
+        }}
+        placeholder={t('settings.integrations.telegram.advanced.ownerUserIds.placeholder')}
+        className={cn(inputClass, 'min-h-16 resize-y')}
+      />
+    </div>
+  );
+}
+
+function TelegramGroupsList({ conn }: { conn: MessengerConnection }) {
   const { t } = useI18n();
   const inbound = useMessengerStore((s) => s.telegramInbound);
   const chats = listTelegramManagedChats(conn, inbound);
-  const restrictions = conn.lastSyncTelegramRestrictions ?? [];
-  const results = conn.lastSyncTelegramProjects ?? [];
 
   return (
     <div data-settings-item="integrations.telegram.groups" className="space-y-3">
       <div>
-        <div className="text-base font-semibold text-foreground">
+        <div className="text-sm font-semibold text-foreground">
           {t('settings.integrations.telegram.groups.title')}
         </div>
         <p className="mt-1 text-xs text-muted-foreground leading-snug">
@@ -576,34 +619,74 @@ function TelegramGroupsBlock({ conn }: { conn: MessengerConnection }) {
           ))}
         </div>
       )}
-
-      {(restrictions.length > 0 || results.length > 0) && (
-        <div className="space-y-1.5 rounded-lg border border-[var(--interactive-border)] bg-[var(--surface-muted)]/40 px-3 py-2">
-          <div className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
-            {t('settings.integrations.telegram.groups.syncResults')}
-          </div>
-          {restrictions.map((r) => (
-            <p key={r} className="text-[11px] leading-snug text-muted-foreground">
-              {r}
-            </p>
-          ))}
-          {results.map((row) => (
-            <div
-              key={`${row.chatId ?? ''}:${row.projectId}`}
-              className="text-[11px] leading-snug text-foreground"
-            >
-              {row.projectLabel}
-              {row.error
-                ? ` — ${row.error}`
-                : row.messageId
-                  ? ` — ✓${row.topicCreated ? ' topic' : ''}`
-                  : ''}
-              {row.topicSkippedReason ? ` (${row.topicSkippedReason})` : ''}
-            </div>
-          ))}
-        </div>
-      )}
     </div>
+  );
+}
+
+function TelegramLastSyncResults({ conn }: { conn: MessengerConnection }) {
+  const { t } = useI18n();
+  const restrictions = conn.lastSyncTelegramRestrictions ?? [];
+  const results = conn.lastSyncTelegramProjects ?? [];
+  if (restrictions.length === 0 && results.length === 0) return null;
+
+  return (
+    <div
+      data-settings-item="integrations.telegram.sync-results"
+      className="space-y-1.5 rounded-lg border border-[var(--interactive-border)] bg-[var(--surface-muted)]/40 px-3 py-2"
+    >
+      <div className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
+        {t('settings.integrations.telegram.groups.syncResults')}
+      </div>
+      {restrictions.map((r) => (
+        <p key={r} className="text-[11px] leading-snug text-muted-foreground">
+          {r}
+        </p>
+      ))}
+      {results.map((row) => (
+        <div
+          key={`${row.chatId ?? ''}:${row.projectId}`}
+          className="text-[11px] leading-snug text-foreground"
+        >
+          {row.projectLabel}
+          {row.error
+            ? ` — ${row.error}`
+            : row.messageId
+              ? ` — ✓${row.topicCreated ? ' topic' : ''}`
+              : ''}
+          {row.topicSkippedReason ? ` (${row.topicSkippedReason})` : ''}
+        </div>
+      ))}
+    </div>
+  );
+}
+
+/** Collapsed by default: click to show owner IDs + groups; click again to hide. */
+function TelegramOwnersAndGroupsPanel({ conn }: { conn: MessengerConnection }) {
+  const { t } = useI18n();
+  const [open, setOpen] = useState(false);
+  const ownerCount = (conn.telegramOwnerUserIds ?? []).length;
+  const inbound = useMessengerStore((s) => s.telegramInbound);
+  const chatCount = listTelegramManagedChats(conn, inbound).length;
+
+  return (
+    <AdvancedSectionCard
+      icon="shield-user"
+      title={t('settings.integrations.telegram.controls.title')}
+      meta={t('settings.integrations.telegram.controls.meta', {
+        owners: ownerCount,
+        chats: chatCount,
+      })}
+      open={open}
+      onOpenChange={setOpen}
+    >
+      <div className="space-y-4">
+        <p className="text-xs text-muted-foreground leading-snug">
+          {t('settings.integrations.telegram.controls.description')}
+        </p>
+        <TelegramOwnerUserIdsEditor conn={conn} />
+        <TelegramGroupsList conn={conn} />
+      </div>
+    </AdvancedSectionCard>
   );
 }
 
@@ -683,6 +766,8 @@ function TelegramAdvancedSettings({ conn }: { conn: MessengerConnection }) {
           {t('settings.integrations.telegram.advanced.description')}
         </p>
       </div>
+
+      <TelegramLastSyncResults conn={conn} />
 
       <div className="space-y-3">
         <AdvancedSectionCard
@@ -795,42 +880,6 @@ function TelegramAdvancedSettings({ conn }: { conn: MessengerConnection }) {
                   </Button>
                 </div>
               )}
-            </div>
-          </DangerZoneRow>
-          <DangerZoneRow
-            label={t('settings.integrations.telegram.advanced.ownerUserIds.title')}
-            open={dangerOpen === 'owner'}
-            onToggle={() => toggleDanger('owner')}
-          >
-            <div data-settings-item="integrations.telegram.owner-user" className="space-y-2">
-              <div className="text-xs text-muted-foreground leading-snug">
-                <TelegramUserInfoBotHint
-                  beforeKey="settings.integrations.telegram.advanced.ownerUserIds.description.before"
-                  afterKey="settings.integrations.telegram.advanced.ownerUserIds.description.after"
-                />
-              </div>
-              <p className="text-xs text-[var(--status-warning)] leading-snug">
-                {t('settings.integrations.telegram.advanced.ownerUserIds.required')}
-              </p>
-              <textarea
-                value={(conn.telegramOwnerUserIds ?? []).join('\n')}
-                onChange={(e) => {
-                  const telegramOwnerUserIds = parseMessengerIdList(e.target.value);
-                  updateConnection('telegram', {
-                    telegramOwnerUserIds,
-                    defaultUserId: telegramOwnerUserIds[0],
-                  });
-                }}
-                onBlur={() => {
-                  const latest = useMessengerStore
-                    .getState()
-                    .connections.find((c) => c.type === 'telegram');
-                  if (!(latest?.telegramOwnerUserIds ?? []).length) return;
-                  persist();
-                }}
-                placeholder={t('settings.integrations.telegram.advanced.ownerUserIds.placeholder')}
-                className={cn(inputClass, 'min-h-16 resize-y')}
-              />
             </div>
           </DangerZoneRow>
           <DangerZoneRow
@@ -981,7 +1030,7 @@ export function TelegramSectionCard({ conn }: { conn: MessengerConnection }) {
         <TelegramOnboardingWizard conn={conn} />
       ) : (
         <>
-          <TelegramGroupsBlock conn={conn} />
+          <TelegramOwnersAndGroupsPanel conn={conn} />
           {advancedOpen && (
           <div className="space-y-4 border-t border-[var(--interactive-border)] pt-4">
             <div className="flex flex-wrap items-center gap-2">
