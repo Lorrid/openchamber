@@ -1201,9 +1201,21 @@ function DiscordServerRow({
       <div className="flex flex-wrap items-center gap-x-3 gap-y-2 rounded-lg border border-[var(--interactive-border)] bg-[var(--surface-elevated)] px-3 py-2.5">
         <div className="flex min-w-0 flex-1 items-center gap-2.5">
           <DiscordGuildIcon guild={guild} />
-          <span className="min-w-0 break-words text-sm font-semibold leading-snug text-foreground">
+          <button
+            type="button"
+            className="min-w-0 break-words text-left text-sm font-semibold leading-snug text-foreground hover:underline"
+            onClick={() =>
+              window.open(
+                `https://discord.com/channels/${encodeURIComponent(guild.id)}`,
+                '_blank',
+                'noopener,noreferrer',
+              )
+            }
+            aria-label={t('settings.integrations.discord.servers.openServer', { name: guild.name })}
+            title={t('settings.integrations.discord.servers.openServer', { name: guild.name })}
+          >
             {guild.name}
-          </span>
+          </button>
         </div>
 
         <label className="flex shrink-0 cursor-pointer items-center gap-2">

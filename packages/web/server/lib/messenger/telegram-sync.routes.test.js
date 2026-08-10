@@ -485,4 +485,98 @@ describe('messenger /telegram/sync-projects', () => {
     expect(res.body.projects[0].topicSkippedReason).toBe('missing can_manage_topics');
     expect(res.body.projects[0].messageId).toBe(9);
   });
+
+  it('rejects project sync for private chats', async () => {
+    const readSettings = vi.fn(async () => ({ telegram: { botToken: SETTINGS_TOKEN } }));
+    stubFetch((url) => {
+      if (url.includes('/getMe')) {
+        return jsonResponse({ ok: true, result: { id: 1, is_bot: true } });
+      }
+      if (url.includes('/getChat')) {
+        return jsonResponse({
+          ok: true,
+          result: { id: 4242, type: 'private', first_name: 'Ada' },
+        });
+      }
+      throw new Error(`unexpected url ${url}`);
+    });
+
+    const res = await request(createApp({ readSettings }).app)
+      .post('/api/messenger/telegram/sync-projects')
+      .send({
+        chatId: '4242',
+        projects: [{ id: 'p1', path: '/p', label: 'P', body: 'b' }],
+      });
+
+    expect(res.status).toBe(400);
+    expect(res.body.error).toMatch(/groups and forums/i);
+  });
+
+  it('retries Too Many Requests mid-sync and finishes remaining projects', async () => {
+    const persistSettings = vi.fn(async () => {});
+    const readSettings = vi.fn(async () => ({ telegram: { botToken: SETTINGS_TOKEN } }));
+    let createCount = 0;
+    let sendCount = 0;
+
+    stubFetch((url) => {
+      if (url.includes('/getMe')) {
+        return jsonResponse({ ok: true, result: { id: 9911, is_bot: true, username: 'Bot' } });
+      }
+      if (url.includes('/getChatMember')) {
+        return jsonResponse({
+          ok: true,
+          result: { status: 'administrator', can_manage_topics: true, user: { id: 9911 } },
+        });
+      }
+      if (url.includes('/getChat')) {
+        return jsonResponse({
+          ok: true,
+          result: { id: Number(CHAT), type: 'supergroup', is_forum: true, title: 'Forum' },
+        });
+      }
+      if (url.includes('/createForumTopic')) {
+        createCount += 1;
+        // Second createForumTopic hits 429 once; telegramApiWithRetry retries.
+        if (createCount === 2) {
+          return jsonResponse(
+            {
+              ok: false,
+              error_code: 429,
+              description: 'Too Many Requests: retry after 0',
+              parameters: { retry_after: 0 },
+            },
+            { ok: false, status: 429 },
+          );
+        }
+        return jsonResponse({
+          ok: true,
+          result: { message_thread_id: 500 + createCount, name: `T${createCount}` },
+        });
+      }
+      if (url.includes('/sendMessage')) {
+        sendCount += 1;
+        return jsonResponse({ ok: true, result: { message_id: 80 + sendCount } });
+      }
+      throw new Error(`unexpected url ${url}`);
+    });
+
+    const res = await request(createApp({ readSettings, persistSettings }).app)
+      .post('/api/messenger/telegram/sync-projects')
+      .send({
+        chatId: CHAT,
+        projects: [
+          { id: 'a', path: '/a', label: 'Alpha', body: 'a' },
+          { id: 'b', path: '/b', label: 'Beta', body: 'b' },
+        ],
+      });
+
+    expect(res.status).toBe(200);
+    expect(res.body.ok).toBe(true);
+    expect(res.body.projects).toHaveLength(2);
+    expect(res.body.projects.every((p) => !p.error)).toBe(true);
+    expect(res.body.projects[0].messageThreadId).toBeTruthy();
+    expect(res.body.projects[1].messageThreadId).toBeTruthy();
+    const saved = persistSettings.mock.calls.at(-1)[0].telegram.projectBindings;
+    expect(saved).toHaveLength(2);
+  }, 20_000);
 });

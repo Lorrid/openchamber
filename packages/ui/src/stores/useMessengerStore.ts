@@ -1030,6 +1030,42 @@ export function isTelegramChatSyncing(
 }
 
 /**
+ * Project sync mirrors status into groups/forums. Private user chats (DMs)
+ * must not offer "Sync projects here" — only groups/supergroups/channels.
+ */
+export function isTelegramChatProjectSyncable(chat: {
+  id: string;
+  chatType: string | null;
+}): boolean {
+  const type = chat.chatType;
+  if (type === 'group' || type === 'supergroup' || type === 'channel') return true;
+  if (type === 'dm' || type === 'private') return false;
+  // Unknown type: Telegram group/supergroup ids are negative; user ids are positive.
+  return /^-/.test(String(chat.id));
+}
+
+/** Deep link to open a Telegram chat (web or app). */
+export function telegramChatOpenUrl(
+  chatId: string,
+  opts?: { username?: string | null; threadId?: string | number | null },
+): string | null {
+  const username =
+    typeof opts?.username === 'string' ? opts.username.replace(/^@/, '').trim() : '';
+  if (username) {
+    const base = `https://t.me/${encodeURIComponent(username)}`;
+    return opts?.threadId != null ? `${base}/${opts.threadId}` : base;
+  }
+  const id = String(chatId);
+  if (/^\d+$/.test(id)) return `tg://user?id=${id}`;
+  const privateSupergroup = id.match(/^-100(\d+)$/);
+  if (privateSupergroup) {
+    const base = `https://t.me/c/${privateSupergroup[1]}`;
+    return opts?.threadId != null ? `${base}/${opts.threadId}` : base;
+  }
+  return null;
+}
+
+/**
  * Build the Discord-like list of Telegram chats from allow-list, recent
  * inbound messages, saved policies, and project bindings.
  */

@@ -189,6 +189,7 @@ export const discordIntegrationI18n = {
     'settings.integrations.discord.servers.expandSettings': 'Expand server settings',
     'settings.integrations.discord.servers.iconAlt': '{name} server icon',
     'settings.integrations.discord.servers.title': 'Servers',
+    'settings.integrations.discord.servers.openServer': 'Open {name} in Discord',
     'settings.integrations.discord.servers.description':
       'Manage connected servers and bot response settings',
     'settings.integrations.discord.servers.inviteButton': 'Add Server',
@@ -443,6 +444,7 @@ export const discordIntegrationI18n = {
     'settings.integrations.discord.servers.expandSettings': 'Expandir ajustes del servidor',
     'settings.integrations.discord.servers.iconAlt': 'Icono del servidor {name}',
     'settings.integrations.discord.servers.title': 'Servidores',
+    'settings.integrations.discord.servers.openServer': 'Abrir {name} en Discord',
     'settings.integrations.discord.servers.description':
       'Gestiona los servidores conectados y la configuración de respuesta del bot',
     'settings.integrations.discord.servers.inviteButton': 'Añadir servidor',
@@ -697,6 +699,7 @@ export const discordIntegrationI18n = {
     'settings.integrations.discord.servers.expandSettings': 'Développer les paramètres du serveur',
     'settings.integrations.discord.servers.iconAlt': 'Icône du serveur {name}',
     'settings.integrations.discord.servers.title': 'Serveurs',
+    'settings.integrations.discord.servers.openServer': 'Ouvrir {name} dans Discord',
     'settings.integrations.discord.servers.description':
       'Gérez les serveurs connectés et les paramètres de réponse du bot',
     'settings.integrations.discord.servers.inviteButton': 'Ajouter un serveur',
@@ -951,6 +954,7 @@ export const discordIntegrationI18n = {
     'settings.integrations.discord.servers.expandSettings': 'サーバー設定を展開',
     'settings.integrations.discord.servers.iconAlt': '{name} のサーバーアイコン',
     'settings.integrations.discord.servers.title': 'サーバー',
+    'settings.integrations.discord.servers.openServer': 'Discordで{name}を開く',
     'settings.integrations.discord.servers.description':
       '接続済みサーバーとボットの応答設定を管理します',
     'settings.integrations.discord.servers.inviteButton': 'サーバーを追加',
@@ -1205,6 +1209,7 @@ export const discordIntegrationI18n = {
     'settings.integrations.discord.servers.expandSettings': '서버 설정 펼치기',
     'settings.integrations.discord.servers.iconAlt': '{name} 서버 아이콘',
     'settings.integrations.discord.servers.title': '서버',
+    'settings.integrations.discord.servers.openServer': 'Discord에서 {name} 열기',
     'settings.integrations.discord.servers.description':
       '연결된 서버와 봇 응답 설정을 관리합니다',
     'settings.integrations.discord.servers.inviteButton': '서버 추가',
@@ -1459,6 +1464,7 @@ export const discordIntegrationI18n = {
     'settings.integrations.discord.servers.expandSettings': 'Rozwiń ustawienia serwera',
     'settings.integrations.discord.servers.iconAlt': 'Ikona serwera {name}',
     'settings.integrations.discord.servers.title': 'Serwery',
+    'settings.integrations.discord.servers.openServer': 'Otwórz {name} w Discordzie',
     'settings.integrations.discord.servers.description':
       'Zarządzaj połączonymi serwerami i ustawieniami odpowiedzi bota',
     'settings.integrations.discord.servers.inviteButton': 'Dodaj serwer',
@@ -1713,6 +1719,7 @@ export const discordIntegrationI18n = {
     'settings.integrations.discord.servers.expandSettings': 'Expandir configurações do servidor',
     'settings.integrations.discord.servers.iconAlt': 'Ícone do servidor {name}',
     'settings.integrations.discord.servers.title': 'Servidores',
+    'settings.integrations.discord.servers.openServer': 'Abrir {name} no Discord',
     'settings.integrations.discord.servers.description':
       'Gerencie servidores conectados e as configurações de resposta do bot',
     'settings.integrations.discord.servers.inviteButton': 'Adicionar servidor',
@@ -1966,6 +1973,7 @@ export const discordIntegrationI18n = {
     'settings.integrations.discord.servers.expandSettings': '展开服务器设置',
     'settings.integrations.discord.servers.iconAlt': '{name} 服务器图标',
     'settings.integrations.discord.servers.title': '服务器',
+    'settings.integrations.discord.servers.openServer': '在 Discord 中打开{name}',
     'settings.integrations.discord.servers.description':
       '管理已连接的服务器和机器人响应设置',
     'settings.integrations.discord.servers.inviteButton': '添加服务器',
@@ -2216,6 +2224,7 @@ export const discordIntegrationI18n = {
     'settings.integrations.discord.servers.expandSettings': '展開伺服器設定',
     'settings.integrations.discord.servers.iconAlt': '{name} 伺服器圖示',
     'settings.integrations.discord.servers.title': '伺服器',
+    'settings.integrations.discord.servers.openServer': '在 Discord 中開啟{name}',
     'settings.integrations.discord.servers.description':
       '管理已連線的伺服器和機器人回應設定',
     'settings.integrations.discord.servers.inviteButton': '新增伺服器',
@@ -2486,6 +2495,7 @@ export const discordIntegrationI18n = {
     'settings.integrations.discord.servers.expandSettings': 'Розгорнути налаштування сервера',
     'settings.integrations.discord.servers.iconAlt': 'Іконка сервера {name}',
     'settings.integrations.discord.servers.title': 'Сервери',
+    'settings.integrations.discord.servers.openServer': 'Відкрити {name} у Discord',
     'settings.integrations.discord.servers.description':
       'Керуйте підключеними серверами та налаштуваннями відповідей бота',
     'settings.integrations.discord.servers.inviteButton': 'Додати сервер',

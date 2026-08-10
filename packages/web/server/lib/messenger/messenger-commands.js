@@ -143,13 +143,13 @@ const COMMAND_HELP = [
     name: 'skill',
     usage: '/skill [name]',
     summary:
-      'List the skills available to the agent / hand one to OpenChamber agent for the next turn. On Discord, run `/skill` for a dropdown picker.',
+      'List the skills available to the agent / hand one to OpenChamber agent for the next turn. On Discord or Telegram, run `/skill` with no args for a menu.',
   },
   {
     name: 'yolo',
     usage: '/yolo|/permissions [ask | yolo | agent | project <mode> | default <mode> | reset]',
     summary:
-      'How OpenChamber agent handles tool permissions: `ask` = ask all, `yolo` = allow all, `agent` = follow agent settings. `/permissions` is a synonym. On Discord, run `/yolo` or `/permissions` for a dropdown. Stop any run with `/abort`.',
+      'How OpenChamber agent handles tool permissions: `ask` = ask all, `yolo` = allow all, `agent` = follow agent settings. `/permissions` is a synonym. On Discord or Telegram, run `/yolo` or `/permissions` with no args for a menu. Stop any run with `/abort`.',
   },
   {
     name: 'sessions',
@@ -254,6 +254,8 @@ const COMMAND_ALIASES = new Map([
   ['permissions', 'yolo'],
   ['credits', 'usage'],
   ['restart-opencode-server', 'reload-opencode'],
+  // Common plural typo — without this `/models` falls through as an agent prompt.
+  ['models', 'model'],
 ]);
 
 const KNOWN_TOP_LEVEL = new Set([
@@ -764,7 +766,7 @@ export async function executeMessengerCommand({
       if (!/^[^/]+\/[^/]+$/.test(raw)) {
         return {
           reply:
-            '✗ Use `/model provider/model` (e.g. `/model anthropic/claude-sonnet-4`), or `/model default provider/model` for project-wide. Run `/model` with no args to see the list. Use `/model` on Discord to also pick a thinking effort.',
+            '✗ Use `/model provider/model` (e.g. `/model anthropic/claude-sonnet-4`), or `/model default provider/model` for project-wide. Run `/model` with no args for a menu (or to see the list when menus are unavailable).',
         };
       }
       // A new model invalidates any saved thinking-effort (variants are
@@ -1028,7 +1030,7 @@ export async function executeMessengerCommand({
           };
         }
         const lines = [
-          '**Available skills** — hand one to OpenChamber agent with `/skill <name>` (on Discord, `/skill` opens a dropdown)',
+          '**Available skills** — hand one to OpenChamber agent with `/skill <name>` (on Discord or Telegram, `/skill` opens a menu)',
           '',
         ];
         for (const s of skills.slice(0, 25)) {

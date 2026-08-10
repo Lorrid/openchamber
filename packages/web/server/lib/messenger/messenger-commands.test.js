@@ -145,6 +145,16 @@ describe('/model + /status surface the OpenChamber default model', () => {
     expect(result.reply).toMatch(/No default set/);
   });
 
+  it('/models is an alias for /model (does not fall through as a prompt)', async () => {
+    const { result } = await run('/models', {
+      opencode: {
+        listProviders: async () => [{ id: 'anthropic', name: 'Anthropic', models: [] }],
+      },
+      binding: {},
+    });
+    expect(result?.reply).toMatch(/model|Available|OpenCode default|No default set|nothing is set/i);
+  });
+
   it('/status falls back to the OpenChamber default model + agent', async () => {
     const { result } = await run('/status', {
       binding: {

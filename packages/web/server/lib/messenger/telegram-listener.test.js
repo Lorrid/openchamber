@@ -364,4 +364,93 @@ describe('telegram listener registry', () => {
     });
     expect(updated.allowedChatIds).toEqual(['-100500']);
   });
+
+  it('opens the model wizard for bare /model and /models without bridging to the agent', async () => {
+    const { calls } = installFetchMock({
+      updateBatches: [
+        [
+          {
+            update_id: 2000,
+            message: {
+              message_id: 20,
+              date: 1700000000,
+              chat: { id: 42, type: 'private', first_name: 'Ada' },
+              from: { id: 42, is_bot: false, first_name: 'Ada', username: 'ada' },
+              text: '/models',
+            },
+          },
+        ],
+      ],
+    });
+    const bridge = makeBridge({
+      fetchProviders: async () => ({
+        all: [
+          {
+            id: 'anthropic',
+            name: 'Anthropic',
+            models: [{ id: 'claude-sonnet-4', name: 'Sonnet' }],
+          },
+        ],
+        connected: ['anthropic'],
+      }),
+      getFavoriteModels: async () => [],
+      getHiddenModels: async () => [],
+      getSurfaceModelInfo: async () => null,
+    });
+    registry = createTelegramListenerRegistry({ broadcastEvent: vi.fn(), bridge });
+    registry.start(TOKEN, OWNER_OPTS);
+
+    await waitFor(() => calls.some((c) => c.method === 'sendMessage'));
+    expect(bridge.routeInbound).not.toHaveBeenCalled();
+    const sent = calls.find((c) => c.method === 'sendMessage');
+    expect(sent.body.text).toMatch(/Set model/i);
+    expect(sent.body.reply_markup?.inline_keyboard?.length).toBeGreaterThan(0);
+  });
+
+  it('hot-applies resolveProject so freshly synced topics bind without restart', async () => {
+    installFetchMock({ updateBatches: [[]] });
+    const bridge = makeBridge({
+      // Bound surfaces skip the group addressing gate (always-mode still
+      // requires a binding or an @mention before forwarding).
+      hasSurfaceBinding: () => true,
+    });
+    registry = createTelegramListenerRegistry({ broadcastEvent: vi.fn(), bridge });
+    registry.start(TOKEN, {
+      ...OWNER_OPTS,
+      resolveProject: () => null,
+    });
+    await waitFor(() => registry.status(TOKEN).connected === true);
+
+    registry.updateConfig(TOKEN, {
+      resolveProject: ({ chatId, threadId }) =>
+        String(chatId) === '-100123' && String(threadId) === '555'
+          ? { path: '/proj/main', label: 'Main' }
+          : null,
+    });
+
+    installFetchMock({
+      updateBatches: [
+        [
+          {
+            update_id: 42,
+            message: {
+              message_id: 7,
+              message_thread_id: 555,
+              text: 'hola',
+              chat: { id: -100123, type: 'supergroup', title: 'Forum', is_forum: true },
+              from: { id: 42, username: 'ada', first_name: 'Ada', is_bot: false },
+            },
+          },
+        ],
+      ],
+    });
+
+    await waitFor(() => bridge.routeInbound.mock.calls.length > 0);
+    expect(bridge.routeInbound.mock.calls[0][0]).toMatchObject({
+      projectPath: '/proj/main',
+      projectLabel: 'Main',
+      threadId: 555,
+      text: 'hola',
+    });
+  });
 });
