@@ -149,7 +149,7 @@ const COMMAND_HELP = [
     name: 'yolo',
     usage: '/yolo|/permissions [ask | yolo | agent | project <mode> | default <mode> | reset]',
     summary:
-      'How OpenChamber agent handles tool permissions: `ask` = ask all, `yolo` = allow all, `agent` = follow agent settings. `/permissions` is a synonym. On Discord, run `/yolo` or `/permissions` for a dropdown. Stop any run with `/abort`.',
+      'How OpenChamber agent handles tool permissions: `ask` = ask all, `yolo` = allow all, `agent` = follow agent settings. `/permissions` is a synonym. On Discord or Telegram, run `/yolo` or `/permissions` with no args for a menu. Stop any run with `/abort`.',
   },
   {
     name: 'sessions',
