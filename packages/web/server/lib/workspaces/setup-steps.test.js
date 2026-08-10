@@ -20,6 +20,7 @@ describe('workspace setup steps', () => {
     expect(workspaceSetupSteps('kubernetes', { available: true }).map((step) => step.id))
       .toEqual(['cli', 'cluster', 'namespace', 'permissions', 'isolation']);
     expect(workspaceSetupSteps('docker', { available: true }).map((step) => step.id)).toEqual(['cli', 'daemon']);
+    expect(workspaceSetupSteps('apple-container', { available: true }).map((step) => step.id)).toEqual(['platform', 'cli', 'egress']);
   });
 
   it('blocks the first step for an unrecognized failure rather than implying progress', () => {
@@ -56,6 +57,17 @@ describe('workspace setup steps', () => {
 
     expect(steps.find((step) => step.id === 'daemon')).toMatchObject({ status: WORKSPACE_SETUP_STEP_STATUS.BLOCKED, code: 'WORKSPACE_PROVIDER_DAEMON_UNAVAILABLE' });
     expect(steps.find((step) => step.id === 'cli')).not.toHaveProperty('code');
+  });
+
+  it('attributes unavailable Apple managed egress to the proxy requirement, not the installed CLI', () => {
+    const steps = workspaceSetupSteps('apple-container', { available: false, code: 'WORKSPACE_PROVIDER_CAPABILITY_UNAVAILABLE' });
+
+    expect(statuses(steps)).toEqual({
+      platform: WORKSPACE_SETUP_STEP_STATUS.SATISFIED,
+      cli: WORKSPACE_SETUP_STEP_STATUS.SATISFIED,
+      egress: WORKSPACE_SETUP_STEP_STATUS.BLOCKED,
+    });
+    expect(steps.find((step) => step.id === 'egress')).toHaveProperty('code', 'WORKSPACE_PROVIDER_CAPABILITY_UNAVAILABLE');
   });
 
   it('returns no steps for a provider it does not know', () => {

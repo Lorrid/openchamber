@@ -12,7 +12,7 @@
 const STEPS = Object.freeze({
   docker: ['cli', 'daemon'],
   kubernetes: ['cli', 'cluster', 'namespace', 'permissions', 'isolation'],
-  'apple-container': ['platform', 'cli'],
+  'apple-container': ['platform', 'cli', 'egress'],
 });
 
 // Which step a failure code belongs to. Codes absent here block the first step, because
@@ -27,7 +27,7 @@ const BLOCKING_STEP = Object.freeze({
   WORKSPACE_PROVIDER_RBAC_DENIED: 'permissions',
   WORKSPACE_PROVIDER_INGRESS_CONTROLLER_MISSING: 'permissions',
   WORKSPACE_PROVIDER_NETWORK_POLICY_UNENFORCED: 'isolation',
-  WORKSPACE_PROVIDER_CAPABILITY_UNAVAILABLE: 'cli',
+  WORKSPACE_PROVIDER_CAPABILITY_UNAVAILABLE: 'egress',
 });
 
 // Steps the app can complete on the person's behalf rather than instruct them to do.
