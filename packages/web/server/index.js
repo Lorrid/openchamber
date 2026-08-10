@@ -96,6 +96,8 @@ import { attachRealtimeProxy } from './lib/realtime-proxy.js';
 import { createRelayService } from './lib/relay/service.js';
 import { createRelayHostLock } from './lib/relay/host-lock.js';
 import { createAgentToolRuntime } from './lib/agent-tool/runtime.js';
+import { createBrowserControlBroker } from './lib/browser-control/broker.js';
+import { registerBrowserControlRoutes } from './lib/browser-control/routes.js';
 import { createSystemPromptRuntime } from './lib/system-prompt/runtime.js';
 import { createOpenChamberSessionService } from './lib/openchamber-sessions/routes.js';
 import { createScheduledTaskService } from './lib/scheduled-tasks/service.js';
@@ -1186,6 +1188,32 @@ const openChamberSessionService = createOpenChamberSessionService({
   waitForOpenCodeReady,
   emitSessionCreatedEvent,
 });
+// Browser actions are published to whichever OpenChamber clients are connected;
+// the one owning the browser panel answers. `emitRequest` returns the number of
+// clients reached so the broker can fail fast when nobody is listening.
+const browserControlBroker = createBrowserControlBroker({
+  createId: () => `browser-${crypto.randomUUID()}`,
+  emitRequest: (request) => {
+    let delivered = 0;
+    for (const client of uiOpenChamberEventClients) {
+      try {
+        writeSseEvent(client, {
+          type: 'openchamber:browser-control-request',
+          properties: {
+            requestId: request.requestId,
+            action: request.action,
+            parameters: request.parameters,
+          },
+        });
+        delivered += 1;
+      } catch {
+        uiOpenChamberEventClients.delete(client);
+      }
+    }
+    return delivered;
+  },
+});
+
 const openChamberControlService = createOpenChamberControlService({
   readSettingsFromDiskMigrated,
   sanitizeProjects,
@@ -1194,6 +1222,7 @@ const openChamberControlService = createOpenChamberControlService({
   waitForOpenCodeReady,
   sessionService: openChamberSessionService,
   scheduledTaskService,
+  browserControl: browserControlBroker,
 });
 
 const ensureGlobalWatcherStarted = async () => {
@@ -1650,6 +1679,8 @@ async function main(options = {}) {
   });
   relayServiceInstance = relayService;
   relayService.registerRoutes(app);
+
+  registerBrowserControlRoutes(app, { broker: browserControlBroker });
 
   await featureRoutesRuntime.registerRoutes(app, {
     crypto,

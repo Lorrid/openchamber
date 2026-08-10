@@ -1,0 +1,31 @@
+/**
+ * Result callback for in-app browser actions.
+ *
+ * The client that owns the browser view posts here with the outcome of a
+ * request it received over the event stream. Only the request id is trusted to
+ * correlate; an unknown id is accepted with `matched: false` rather than an
+ * error, because a client answering after a timeout has done nothing wrong.
+ */
+export function registerBrowserControlRoutes(app, { broker }) {
+  app.post('/api/browser-control/result', (req, res) => {
+    const body = req.body;
+    if (!body || typeof body !== 'object') {
+      res.status(400).json({ error: 'A JSON body is required' });
+      return;
+    }
+
+    const requestId = typeof body.requestId === 'string' ? body.requestId.trim() : '';
+    if (!requestId) {
+      res.status(400).json({ error: 'requestId is required' });
+      return;
+    }
+
+    const matched = broker.resolve(requestId, {
+      ok: body.ok === true,
+      data: body.data ?? null,
+      error: typeof body.error === 'string' ? body.error : '',
+    });
+
+    res.json({ matched });
+  });
+}

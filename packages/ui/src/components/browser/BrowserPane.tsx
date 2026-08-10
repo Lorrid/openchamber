@@ -14,6 +14,13 @@ import {
   type PageCapture,
 } from '@/lib/browser/annotationSession';
 import { resolveAnnotationOverlayTheme } from '@/lib/browser/overlayTheme';
+import { registerBrowserController } from '@/lib/browser/controlClient';
+import {
+  buildClickScript,
+  buildScrollScript,
+  buildSnapshotScript,
+  buildTypeScript,
+} from '@/lib/browser/pageActions';
 import { BrowserToolbar } from './BrowserToolbar';
 import { BrowserEmptyState } from './BrowserEmptyState';
 import { useAnnotationAttach, useAnnotationOverlayLabels } from './useAnnotationAttach';
@@ -139,6 +146,93 @@ const WebviewBrowser: React.FC<BrowserPaneProps> = ({ initialUrl, directory, tab
     window.addEventListener('keydown', handler, true);
     return () => window.removeEventListener('keydown', handler, true);
   }, [annotationHost, isAnnotating]);
+
+  // Agent-driven actions. Waiting for the page to settle after a navigation is
+  // deliberate: a snapshot taken mid-load describes a page that no longer
+  // exists by the time the agent reads it.
+  const waitForIdle = React.useCallback(async (timeoutMs = 10_000): Promise<void> => {
+    const startedAt = Date.now();
+    for (;;) {
+      const webview = webviewRef.current;
+      if (!webview) return;
+      let busy = false;
+      try {
+        busy = webview.isLoading();
+      } catch {
+        return;
+      }
+      if (!busy || Date.now() - startedAt > timeoutMs) return;
+      await new Promise((resolve) => setTimeout(resolve, 120));
+    }
+  }, []);
+
+  const runControlAction = React.useCallback(async (
+    action: string,
+    parameters: Record<string, unknown>,
+  ): Promise<unknown> => {
+    const webview = webviewRef.current;
+    if (!webview) throw new Error('The browser panel is not ready');
+
+    if (action === 'browser.open') {
+      const url = typeof parameters.url === 'string' ? parameters.url : '';
+      if (!url) throw new Error('url is required');
+      loadUrl(url);
+      await new Promise((resolve) => setTimeout(resolve, 150));
+      await waitForIdle(20_000);
+      let title = '';
+      try {
+        title = webview.getTitle() || '';
+      } catch {
+        title = '';
+      }
+      return { url: normalizeBrowserUrl(url), title, opened: true };
+    }
+
+    await waitForIdle();
+
+    const script = action === 'browser.snapshot'
+      ? buildSnapshotScript()
+      : action === 'browser.click'
+        ? buildClickScript({
+          selector: typeof parameters.selector === 'string' ? parameters.selector : undefined,
+          text: typeof parameters.text === 'string' ? parameters.text : undefined,
+        })
+        : action === 'browser.type'
+          ? buildTypeScript({
+            selector: String(parameters.selector ?? ''),
+            value: String(parameters.value ?? ''),
+            submit: parameters.submit === true,
+          })
+          : action === 'browser.scroll'
+            ? buildScrollScript({
+              selector: typeof parameters.selector === 'string' ? parameters.selector : undefined,
+              direction: typeof parameters.direction === 'string' ? parameters.direction : undefined,
+            })
+            : null;
+
+    if (!script) throw new Error(`Unsupported browser action: ${action}`);
+
+    const result = await webview.executeJavaScript(script, true);
+    if (!result || typeof result !== 'object') {
+      throw new Error('The page returned no result');
+    }
+    const record = result as Record<string, unknown>;
+    if (record.ok !== true) {
+      throw new Error(typeof record.error === 'string' && record.error ? record.error : 'Browser action failed');
+    }
+    // A click or a submit commonly starts a navigation; let it land so the
+    // agent's next snapshot sees the page the action produced.
+    if (action === 'browser.click' || (action === 'browser.type' && parameters.submit === true)) {
+      await new Promise((resolve) => setTimeout(resolve, 150));
+      await waitForIdle();
+    }
+    return result;
+  }, [loadUrl, waitForIdle]);
+
+  React.useEffect(
+    () => registerBrowserController({ run: runControlAction }),
+    [runControlAction],
+  );
 
   // Leaving the tab must not strand an overlay or live style overrides on the page.
   React.useEffect(() => {

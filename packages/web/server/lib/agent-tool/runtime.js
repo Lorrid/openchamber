@@ -44,6 +44,12 @@ const PLUGIN_PARAMETER_PROPERTIES = {
   cron: { type: 'string', description: 'Cron expression' },
   timezone: { type: 'string', description: 'IANA timezone' },
   disabled: { type: 'boolean', description: 'true disables and false enables; required for schedule.toggle' },
+  url: { type: 'string', description: 'http(s) URL for browser.open' },
+  selector: { type: 'string', description: 'CSS selector from a browser.snapshot result' },
+  text: { type: 'string', description: 'Visible label to match when no selector is given' },
+  value: { type: 'string', description: 'Text to type for browser.type' },
+  submit: { type: 'boolean', description: 'Press Enter after typing' },
+  direction: { type: 'string', enum: ['up', 'down', 'top', 'bottom'], description: 'Scroll direction for browser.scroll' },
 };
 
 const asNonEmptyString = (value) => {

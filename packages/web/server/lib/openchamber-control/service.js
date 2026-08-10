@@ -141,6 +141,7 @@ export const createOpenChamberControlService = (dependencies) => {
     waitForOpenCodeReady,
     sessionService,
     scheduledTaskService,
+    browserControl = null,
     createClient = createOpencodeClient,
     sleep = (duration) => new Promise((resolve) => setTimeout(resolve, duration)),
     now = Date.now,
@@ -320,10 +321,76 @@ export const createOpenChamberControlService = (dependencies) => {
     return publicResult;
   };
 
+  /**
+   * Validates browser inputs here rather than in the renderer: an invalid call
+   * should come back as a usage error the agent can correct, without waking a
+   * client or waiting for a round trip.
+   */
+  const browserAction = (action, input, signal) => {
+    const parameters = {};
+
+    if (action === 'browser.open') {
+      const url = asNonEmptyString(input.url);
+      if (!url) throw new OpenChamberControlError('url is required for browser.open', 400);
+      let parsed;
+      try {
+        parsed = new URL(url);
+      } catch {
+        throw new OpenChamberControlError('url must be an absolute http(s) URL', 400);
+      }
+      if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') {
+        throw new OpenChamberControlError('url must use http or https', 400);
+      }
+      parameters.url = parsed.toString();
+    }
+
+    if (action === 'browser.click') {
+      const selector = asNonEmptyString(input.selector);
+      const text = asNonEmptyString(input.text);
+      if (!selector && !text) {
+        throw new OpenChamberControlError('browser.click requires selector or text', 400);
+      }
+      if (selector) parameters.selector = selector;
+      if (text) parameters.text = text;
+    }
+
+    if (action === 'browser.type') {
+      const selector = asNonEmptyString(input.selector);
+      if (!selector) throw new OpenChamberControlError('selector is required for browser.type', 400);
+      if (typeof input.value !== 'string') {
+        throw new OpenChamberControlError('value is required for browser.type', 400);
+      }
+      parameters.selector = selector;
+      parameters.value = input.value;
+      parameters.submit = input.submit === true;
+    }
+
+    if (action === 'browser.scroll') {
+      const selector = asNonEmptyString(input.selector);
+      const direction = asNonEmptyString(input.direction);
+      if (!selector && !direction) {
+        throw new OpenChamberControlError('browser.scroll requires direction or selector', 400);
+      }
+      if (direction && !['up', 'down', 'top', 'bottom'].includes(direction)) {
+        throw new OpenChamberControlError('direction must be up, down, top, or bottom', 400);
+      }
+      if (selector) parameters.selector = selector;
+      if (direction) parameters.direction = direction;
+    }
+
+    return browserControl.request(action, parameters, { signal });
+  };
+
   const execute = async (action, input = {}, contextDirectory, options = {}) => {
     try {
       if (!CONTROL_ACTIONS.has(action)) {
         throw new OpenChamberControlError(`Unsupported OpenChamber action: ${action || 'missing'}`, 400);
+      }
+      if (action.startsWith('browser.')) {
+        if (!browserControl) {
+          throw new OpenChamberControlError('The in-app browser is not available on this server', 503);
+        }
+        return browserAction(action, input, options.signal);
       }
       if (action === 'projects.list') return { projects: await projects() };
       if (action === 'models.list') return models();

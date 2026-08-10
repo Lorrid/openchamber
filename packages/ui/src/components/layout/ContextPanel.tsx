@@ -29,6 +29,7 @@ import { setExternallyViewedSession, useDirectoryStore } from '@/sync/sync-conte
 import { ContextPanelContent } from './ContextSidebarTab';
 import { BrowserPane } from '@/components/browser/BrowserPane';
 import { browserUrlLabel } from '@/lib/browser/url';
+import { registerBrowserOpener } from '@/lib/browser/controlClient';
 import { getRuntimeBearerTokenSync, getRuntimeExtraHeadersSync } from '@/lib/runtime-auth';
 import { getRuntimeApiBaseUrl, getRuntimeKey } from '@/lib/runtime-switch';
 import { getActiveRelayDescriptor } from '@/lib/relay/runtime-tunnel';
@@ -423,6 +424,15 @@ export const ContextPanel: React.FC = () => {
   const toggleContextPanelExpanded = useUIStore((state) => state.toggleContextPanelExpanded);
   const setContextPanelWidth = useUIStore((state) => state.setContextPanelWidth);
   const setActiveContextPanelTab = useUIStore((state) => state.setActiveContextPanelTab);
+  const openContextBrowser = useUIStore((state) => state.openContextBrowser);
+
+  // Lets an agent's browser.open create the tab it needs when none is open yet.
+  // Registered from the panel because opening a tab is panel state, not
+  // something the browser view itself can do before it exists.
+  React.useEffect(() => {
+    if (!effectiveDirectory) return;
+    return registerBrowserOpener((url) => openContextBrowser(effectiveDirectory, url));
+  }, [effectiveDirectory, openContextBrowser]);
   const reorderContextPanelTabs = useUIStore((state) => state.reorderContextPanelTabs);
   const setSelectedFilePath = useFilesViewTabsStore((state) => state.setSelectedPath);
   const contextEditorTreeVisible = useUIStore((state) => state.contextEditorTreeVisible);

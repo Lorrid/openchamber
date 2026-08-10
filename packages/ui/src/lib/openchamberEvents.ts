@@ -20,7 +20,18 @@ type SessionCreatedEvent = {
   dispatchedAsCommand: boolean;
 };
 
-type OpenChamberEvent = ScheduledTaskRanEvent | SessionCreatedEvent;
+/**
+ * One in-app browser action requested by the agent tool. Broadcast to every
+ * connected client; only the one owning a browser view answers.
+ */
+type BrowserControlRequestEvent = {
+  type: 'browser-control-request';
+  requestId: string;
+  action: string;
+  parameters: Record<string, unknown>;
+};
+
+type OpenChamberEvent = ScheduledTaskRanEvent | SessionCreatedEvent | BrowserControlRequestEvent;
 type Listener = (event: OpenChamberEvent) => void;
 
 let eventSource: EventSource | null = null;
@@ -125,6 +136,29 @@ const dispatchFromEnvelope = (envelope: { type: string; properties: unknown }) =
       ...(typeof properties?.projectId === 'string' && properties.projectId.length > 0
         ? { projectId: properties.projectId }
         : {}),
+    };
+    for (const listener of listeners) {
+      listener(nextEvent);
+    }
+    return;
+  }
+
+  if (envelope.type === 'openchamber:browser-control-request') {
+    const properties = getEventProperties(envelope.properties);
+    const requestId = typeof properties?.requestId === 'string' ? properties.requestId : '';
+    const action = typeof properties?.action === 'string' ? properties.action : '';
+    if (!requestId || !action) {
+      return;
+    }
+
+    const rawParameters = properties?.parameters;
+    const nextEvent: BrowserControlRequestEvent = {
+      type: 'browser-control-request',
+      requestId,
+      action,
+      parameters: rawParameters && typeof rawParameters === 'object' && !Array.isArray(rawParameters)
+        ? rawParameters as Record<string, unknown>
+        : {},
     };
     for (const listener of listeners) {
       listener(nextEvent);
