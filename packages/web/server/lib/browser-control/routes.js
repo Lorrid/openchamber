@@ -6,8 +6,13 @@
  * correlate; an unknown id is accepted with `matched: false` rather than an
  * error, because a client answering after a timeout has done nothing wrong.
  */
-export function registerBrowserControlRoutes(app, { broker }) {
-  app.post('/api/browser-control/result', (req, res) => {
+export function registerBrowserControlRoutes(app, { express, broker }) {
+  // This server attaches body parsing per route rather than globally. Without
+  // it `req.body` is undefined here, the client's result is rejected, and the
+  // agent sees an unexplained timeout instead of its answer. A page snapshot
+  // carries the visible text plus every interactive element, so the limit is
+  // sized for that rather than for a small control message.
+  app.post('/api/browser-control/result', express.json({ limit: '2mb' }), (req, res) => {
     const body = req.body;
     if (!body || typeof body !== 'object') {
       res.status(400).json({ error: 'A JSON body is required' });

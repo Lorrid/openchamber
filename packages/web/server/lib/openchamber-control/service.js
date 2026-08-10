@@ -378,7 +378,11 @@ export const createOpenChamberControlService = (dependencies) => {
       if (direction) parameters.direction = direction;
     }
 
-    return browserControl.request(action, parameters, { signal });
+    // Opening a page waits for the navigation to settle, so its budget has to
+    // exceed the client's own wait; sharing one timeout with the quick actions
+    // made a slow page indistinguishable from an unreachable browser.
+    const timeoutMs = action === 'browser.open' ? 45_000 : 20_000;
+    return browserControl.request(action, parameters, { signal, timeoutMs });
   };
 
   const execute = async (action, input = {}, contextDirectory, options = {}) => {

@@ -54,6 +54,14 @@ const WebviewBrowser: React.FC<BrowserPaneProps> = ({ initialUrl, directory, tab
   const initialUrlRef = React.useRef(normalizeBrowserUrl(initialUrl));
   const startUrl = initialUrlRef.current !== BLANK_URL ? initialUrlRef.current : '';
 
+  // The first navigation goes through `src`, not `loadURL`. A tab opened in the
+  // background renders inside a hidden container, where the webview is not yet
+  // attached and an imperative navigation is simply lost — leaving a panel that
+  // never loads anything. Setting the attribute lets Chromium navigate whenever
+  // it does attach. Only the initial value is ever set here; everything after
+  // that is imperative.
+  const [initialSrc, setInitialSrc] = React.useState(BLANK_URL);
+
   const [address, setAddress] = React.useState(startUrl);
   const [isAnnotating, setIsAnnotating] = React.useState(false);
 
@@ -83,19 +91,30 @@ const WebviewBrowser: React.FC<BrowserPaneProps> = ({ initialUrl, directory, tab
     // confusing and useless to copy.
     setAddress(next);
     void resolveBrowsableUrl(next).then((target) => {
+      const webview = webviewRef.current;
+      if (!webview) {
+        setInitialSrc(target);
+        return;
+      }
       try {
-        webviewRef.current?.loadURL(target);
+        webview.loadURL(target);
       } catch {
-        // Not attached yet; the src attribute already points at the start URL.
+        // Not attached yet: hand the navigation to the attribute, which
+        // Chromium applies once the view attaches.
+        setInitialSrc(target);
       }
     });
   }, []);
 
-  // Navigate once the view exists. Going through loadUrl (rather than `src`)
-  // is what lets a persisted loopback URL reach a remote dev server.
+  // Resolving through the tunnel is what lets a persisted loopback URL reach a
+  // dev server on a remote host; locally it returns the URL unchanged.
   React.useEffect(() => {
     if (!startUrl) return;
-    loadUrl(startUrl);
+    let active = true;
+    void resolveBrowsableUrl(startUrl).then((target) => {
+      if (active) setInitialSrc(target);
+    });
+    return () => { active = false; };
     // Only ever the initial navigation; later changes come from the user.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -166,18 +185,22 @@ const WebviewBrowser: React.FC<BrowserPaneProps> = ({ initialUrl, directory, tab
   // Agent-driven actions. Waiting for the page to settle after a navigation is
   // deliberate: a snapshot taken mid-load describes a page that no longer
   // exists by the time the agent reads it.
-  const waitForIdle = React.useCallback(async (timeoutMs = 10_000): Promise<void> => {
+  const waitForIdle = React.useCallback(async (timeoutMs = 8_000): Promise<boolean> => {
     const startedAt = Date.now();
     for (;;) {
       const webview = webviewRef.current;
-      if (!webview) return;
+      if (!webview) return false;
       let busy = false;
       try {
         busy = webview.isLoading();
       } catch {
-        return;
+        return false;
       }
-      if (!busy || Date.now() - startedAt > timeoutMs) return;
+      if (!busy) return true;
+      // A page with a looping video or a long-lived stream can report loading
+      // indefinitely. Give up waiting and act on it anyway rather than letting
+      // the whole action expire.
+      if (Date.now() - startedAt > timeoutMs) return false;
       await new Promise((resolve) => setTimeout(resolve, 120));
     }
   }, []);
@@ -194,14 +217,16 @@ const WebviewBrowser: React.FC<BrowserPaneProps> = ({ initialUrl, directory, tab
       if (!url) throw new Error('url is required');
       loadUrl(url);
       await new Promise((resolve) => setTimeout(resolve, 150));
-      await waitForIdle(20_000);
+      const settled = await waitForIdle(25_000);
       let title = '';
       try {
         title = webview.getTitle() || '';
       } catch {
         title = '';
       }
-      return { url: normalizeBrowserUrl(url), title, opened: true };
+      // `settled: false` means the page is still fetching, not that opening
+      // failed — the agent can snapshot it and decide for itself.
+      return { url: normalizeBrowserUrl(url), title, opened: true, settled };
     }
 
     await waitForIdle();
@@ -300,7 +325,7 @@ const WebviewBrowser: React.FC<BrowserPaneProps> = ({ initialUrl, directory, tab
       <div className="relative min-h-0 flex-1 bg-background">
         <webview
           ref={webviewRef}
-          src={BLANK_URL}
+          src={initialSrc}
           partition="persist:openchamber-browser"
           allowpopups
           style={{ width: '100%', height: '100%', border: 'none' }}

@@ -1682,7 +1682,7 @@ async function main(options = {}) {
   relayServiceInstance = relayService;
   relayService.registerRoutes(app);
 
-  registerBrowserControlRoutes(app, { broker: browserControlBroker });
+  registerBrowserControlRoutes(app, { express, broker: browserControlBroker });
 
   // One scanner backs both discovery and the tunnel allowlist, so a port the
   // user can see is exactly a port the tunnel will dial.

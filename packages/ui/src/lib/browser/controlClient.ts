@@ -32,17 +32,29 @@ let activeController: BrowserController | null = null;
 let opener: BrowserOpener | null = null;
 let unsubscribe: (() => void) | null = null;
 
+/**
+ * Delivers a result to the server.
+ *
+ * A dropped result is indistinguishable from an unreachable browser on the
+ * agent's side, so a failure here is reported rather than swallowed — that
+ * silence is what once turned a missing body parser into an unexplained
+ * twenty-second timeout.
+ */
 const postResult = async (requestId: string, outcome: { ok: boolean; data?: unknown; error?: string }): Promise<void> => {
   try {
-    await runtimeFetch('/api/browser-control/result', {
+    const response = await runtimeFetch('/api/browser-control/result', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ requestId, ...outcome }),
     });
-  } catch {
-    // The request will time out on the server; there is nothing better to do
-    // from here, and retrying could deliver a result after a later request
-    // reused the id.
+    if (!response.ok) {
+      console.warn(
+        `[browser-control] the server rejected the result for ${requestId} (HTTP ${response.status}); `
+        + 'the agent will see this action time out',
+      );
+    }
+  } catch (error) {
+    console.warn(`[browser-control] could not deliver the result for ${requestId}:`, error);
   }
 };
 
