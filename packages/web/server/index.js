@@ -97,6 +97,8 @@ import { createRelayService } from './lib/relay/service.js';
 import { createRelayHostLock } from './lib/relay/host-lock.js';
 import { createAgentToolRuntime } from './lib/agent-tool/runtime.js';
 import { createBrowserControlBroker } from './lib/browser-control/broker.js';
+import { createDevServerScanner } from './lib/dev-servers/routes.js';
+import { createDevTunnelRuntime } from './lib/dev-tunnel/runtime.js';
 import { registerBrowserControlRoutes } from './lib/browser-control/routes.js';
 import { createSystemPromptRuntime } from './lib/system-prompt/runtime.js';
 import { createOpenChamberSessionService } from './lib/openchamber-sessions/routes.js';
@@ -1682,6 +1684,22 @@ async function main(options = {}) {
 
   registerBrowserControlRoutes(app, { broker: browserControlBroker });
 
+  // One scanner backs both discovery and the tunnel allowlist, so a port the
+  // user can see is exactly a port the tunnel will dial.
+  const devServerScanner = createDevServerScanner({ spawn, platform: process.platform });
+  const listDevServers = () => devServerScanner.discover({
+    ownPorts: [port, openCodePort].filter((value) => Number.isInteger(value) && value > 0),
+  });
+
+  createDevTunnelRuntime({
+    server,
+    discoverDevServers: listDevServers,
+    uiAuthController,
+    isRequestOriginAllowed,
+    rejectWebSocketUpgrade,
+    logger: console,
+  });
+
   await featureRoutesRuntime.registerRoutes(app, {
     crypto,
     fs,
@@ -1714,6 +1732,7 @@ async function main(options = {}) {
     // Dev-server discovery must not offer OpenChamber's own listeners back to
     // the user as something to preview.
     getOwnPorts: () => [port, openCodePort].filter((value) => Number.isInteger(value) && value > 0),
+    devServerScanner,
     buildAugmentedPath,
     projectConfigRuntime,
     scheduledTasksRuntime,

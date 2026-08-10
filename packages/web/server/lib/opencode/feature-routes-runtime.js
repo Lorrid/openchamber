@@ -112,6 +112,7 @@ export const createFeatureRoutesRuntime = (dependencies) => {
       getOpenCodeAuthHeaders,
       getOpenCodePort,
       getOwnPorts,
+      devServerScanner,
       buildAugmentedPath,
       projectConfigRuntime,
       scheduledTasksRuntime,
@@ -286,11 +287,7 @@ export const createFeatureRoutesRuntime = (dependencies) => {
     registerSessionGoalRoutes(app);
     registerGitHubRoutes(app);
     registerGitRoutes(app);
-    registerDevServerRoutes(app, {
-      spawn,
-      platform: process.platform,
-      getOwnPorts,
-    });
+    registerDevServerRoutes(app, { scanner: devServerScanner, getOwnPorts });
     registerMagicPromptRoutes(app, {
       fsPromises,
       path,

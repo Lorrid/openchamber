@@ -15,6 +15,7 @@ import {
 } from '@/lib/browser/annotationSession';
 import { resolveAnnotationOverlayTheme } from '@/lib/browser/overlayTheme';
 import { registerBrowserController } from '@/lib/browser/controlClient';
+import { resolveBrowsableUrl, toDisplayUrl } from '@/lib/browser/devTunnel';
 import {
   buildClickScript,
   buildScrollScript,
@@ -50,8 +51,8 @@ const WebviewBrowser: React.FC<BrowserPaneProps> = ({ initialUrl, directory, tab
 
   // The webview keeps its own history; `src` is only the starting point and must
   // not be re-driven by React, or every state update would reload the page.
-  const initialSrcRef = React.useRef(normalizeBrowserUrl(initialUrl));
-  const startUrl = initialSrcRef.current !== BLANK_URL ? initialSrcRef.current : '';
+  const initialUrlRef = React.useRef(normalizeBrowserUrl(initialUrl));
+  const startUrl = initialUrlRef.current !== BLANK_URL ? initialUrlRef.current : '';
 
   const [address, setAddress] = React.useState(startUrl);
   const [isAnnotating, setIsAnnotating] = React.useState(false);
@@ -64,8 +65,9 @@ const WebviewBrowser: React.FC<BrowserPaneProps> = ({ initialUrl, directory, tab
   const navigation = useWebviewNavigation(webviewRef, {
     initialUrl: startUrl,
     onUrlChange: React.useCallback((url: string) => {
-      setAddress(url);
-      persistUrl(url);
+      const display = toDisplayUrl(url);
+      setAddress(display);
+      persistUrl(display);
     }, [persistUrl]),
   });
 
@@ -76,12 +78,26 @@ const WebviewBrowser: React.FC<BrowserPaneProps> = ({ initialUrl, directory, tab
   const loadUrl = React.useCallback((value: string) => {
     const next = normalizeBrowserUrl(value);
     if (next === BLANK_URL) return;
+    // The address bar shows what the user asked for; a tunnel only changes
+    // where the bytes come from, and surfacing 127.0.0.1:<random> would be
+    // confusing and useless to copy.
     setAddress(next);
-    try {
-      webviewRef.current?.loadURL(next);
-    } catch {
-      // Not attached yet; the src attribute already points at the start URL.
-    }
+    void resolveBrowsableUrl(next).then((target) => {
+      try {
+        webviewRef.current?.loadURL(target);
+      } catch {
+        // Not attached yet; the src attribute already points at the start URL.
+      }
+    });
+  }, []);
+
+  // Navigate once the view exists. Going through loadUrl (rather than `src`)
+  // is what lets a persisted loopback URL reach a remote dev server.
+  React.useEffect(() => {
+    if (!startUrl) return;
+    loadUrl(startUrl);
+    // Only ever the initial navigation; later changes come from the user.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const annotationHost = React.useMemo<AnnotationHost>(() => ({
@@ -284,7 +300,7 @@ const WebviewBrowser: React.FC<BrowserPaneProps> = ({ initialUrl, directory, tab
       <div className="relative min-h-0 flex-1 bg-background">
         <webview
           ref={webviewRef}
-          src={initialSrcRef.current}
+          src={BLANK_URL}
           partition="persist:openchamber-browser"
           allowpopups
           style={{ width: '100%', height: '100%', border: 'none' }}

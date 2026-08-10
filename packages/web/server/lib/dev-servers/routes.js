@@ -88,9 +88,7 @@ export const createDevServerScanner = ({ spawn, platform }) => {
   };
 };
 
-export function registerDevServerRoutes(app, { spawn, platform, getOwnPorts }) {
-  const scanner = createDevServerScanner({ spawn, platform });
-
+export function registerDevServerRoutes(app, { scanner, getOwnPorts }) {
   app.get('/api/dev-servers', async (req, res) => {
     try {
       const ownPorts = typeof getOwnPorts === 'function' ? getOwnPorts() : [];
