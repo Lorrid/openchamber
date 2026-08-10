@@ -143,7 +143,7 @@ const COMMAND_HELP = [
     name: 'skill',
     usage: '/skill [name]',
     summary:
-      'List the skills available to the agent / hand one to OpenChamber agent for the next turn. On Discord, run `/skill` for a dropdown picker.',
+      'List the skills available to the agent / hand one to OpenChamber agent for the next turn. On Discord or Telegram, run `/skill` with no args for a menu.',
   },
   {
     name: 'yolo',
@@ -766,7 +766,7 @@ export async function executeMessengerCommand({
       if (!/^[^/]+\/[^/]+$/.test(raw)) {
         return {
           reply:
-            '✗ Use `/model provider/model` (e.g. `/model anthropic/claude-sonnet-4`), or `/model default provider/model` for project-wide. Run `/model` with no args to see the list. Use `/model` on Discord to also pick a thinking effort.',
+            '✗ Use `/model provider/model` (e.g. `/model anthropic/claude-sonnet-4`), or `/model default provider/model` for project-wide. Run `/model` with no args for a menu (or to see the list when menus are unavailable).',
         };
       }
       // A new model invalidates any saved thinking-effort (variants are
@@ -1030,7 +1030,7 @@ export async function executeMessengerCommand({
           };
         }
         const lines = [
-          '**Available skills** — hand one to OpenChamber agent with `/skill <name>` (on Discord, `/skill` opens a dropdown)',
+          '**Available skills** — hand one to OpenChamber agent with `/skill <name>` (on Discord or Telegram, `/skill` opens a menu)',
           '',
         ];
         for (const s of skills.slice(0, 25)) {
