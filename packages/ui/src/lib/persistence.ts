@@ -1030,6 +1030,13 @@ const sanitizeWebSettings = (payload: unknown): DesktopSettings | null => {
     const trimmed = candidate.opencodeBinary.trim();
     result.opencodeBinary = trimmed.length > 0 ? trimmed : undefined;
   }
+  if (typeof candidate.browserExecutablePath === 'string') {
+    // Persist empty string to clear a previous override (matches server sanitize).
+    result.browserExecutablePath = candidate.browserExecutablePath.trim();
+  }
+  if (typeof candidate.browserNoSandbox === 'boolean') {
+    result.browserNoSandbox = candidate.browserNoSandbox;
+  }
   if (typeof candidate.desktopLanAccessEnabled === 'boolean') {
     result.desktopLanAccessEnabled = candidate.desktopLanAccessEnabled;
   }

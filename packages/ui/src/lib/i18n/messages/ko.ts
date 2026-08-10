@@ -26,7 +26,7 @@ export const dict: Record<I18nKey, string> = {
   'agentBrowser.empty.title': '열린 브라우저 탭이 없습니다',
   'agentBrowser.empty.description': '탭을 열면 에이전트가 웹 앱을 탐색하고 조작하는 모습을 지켜볼 수 있습니다.',
   'agentBrowser.unsupported.title': '브라우저 화면을 사용할 수 없음',
-  'agentBrowser.unsupported.description': '서버에서 Chrome 호환 브라우저를 찾을 수 없습니다. Chrome 또는 Chromium을 설치하거나 OPENCHAMBER_BROWSER_PATH를 설정하세요.',
+  'agentBrowser.unsupported.description': '서버에서 Chrome 호환 브라우저를 찾을 수 없습니다. 설정 → 에이전트 브라우저에서 Chrome을 설치하거나 경로 또는 OPENCHAMBER_BROWSER_PATH를 설정하세요.',
   'agentBrowser.artifacts.title': '캡처',
   'agentBrowser.artifacts.screenshot': '스크린샷',
   'agentBrowser.artifacts.recording': '녹화',

@@ -1776,8 +1776,24 @@ async function main(options = {}) {
     uiAuthController,
     isRequestOriginAllowed,
     rejectWebSocketUpgrade,
+    getBrowserSettings: () => {
+      try {
+        if (!fs.existsSync(SETTINGS_FILE_PATH)) return {};
+        const parsed = JSON.parse(fs.readFileSync(SETTINGS_FILE_PATH, 'utf8'));
+        return {
+          browserExecutablePath: parsed?.browserExecutablePath,
+          browserNoSandbox: parsed?.browserNoSandbox,
+        };
+      } catch {
+        return {};
+      }
+    },
   });
-  registerBrowserRoutes(app, { browserRuntime });
+  registerBrowserRoutes(app, {
+    browserRuntime,
+    dataDir: OPENCHAMBER_DATA_DIR,
+    persistSettings,
+  });
   browserRuntime.attachWebSocket(server);
 
   const startupPipelineResult = await startupPipelineRuntime.run({

@@ -26,7 +26,7 @@ export const dict: Record<I18nKey, string> = {
   'agentBrowser.empty.title': 'Brak otwartej karty przeglądarki',
   'agentBrowser.empty.description': 'Otwórz kartę, aby agent mógł przeglądać i obsługiwać aplikację internetową na Twoich oczach.',
   'agentBrowser.unsupported.title': 'Powierzchnia przeglądarki niedostępna',
-  'agentBrowser.unsupported.description': 'Na serwerze nie znaleziono przeglądarki zgodnej z Chrome. Zainstaluj Chrome lub Chromium albo ustaw OPENCHAMBER_BROWSER_PATH.',
+  'agentBrowser.unsupported.description': 'Na serwerze nie znaleziono przeglądarki zgodnej z Chrome. Zainstaluj Chrome w Ustawieniach → Przeglądarka agenta, ustaw ścieżkę albo OPENCHAMBER_BROWSER_PATH.',
   'agentBrowser.artifacts.title': 'Przechwycenia',
   'agentBrowser.artifacts.screenshot': 'Zrzut ekranu',
   'agentBrowser.artifacts.recording': 'Nagranie',

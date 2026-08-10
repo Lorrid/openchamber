@@ -26,7 +26,7 @@ export const dict: Record<I18nKey, string> = {
   'agentBrowser.empty.title': '没有打开的浏览器标签页',
   'agentBrowser.empty.description': '打开一个标签页，让代理在你观看时浏览并操作 Web 应用。',
   'agentBrowser.unsupported.title': '浏览器界面不可用',
-  'agentBrowser.unsupported.description': '服务器上未找到兼容 Chrome 的浏览器。请安装 Chrome 或 Chromium，或设置 OPENCHAMBER_BROWSER_PATH。',
+  'agentBrowser.unsupported.description': '服务器上未找到兼容 Chrome 的浏览器。请在设置 → 代理浏览器中安装 Chrome，或设置路径 / OPENCHAMBER_BROWSER_PATH。',
   'agentBrowser.artifacts.title': '捕获',
   'agentBrowser.artifacts.screenshot': '屏幕截图',
   'agentBrowser.artifacts.recording': '录制',

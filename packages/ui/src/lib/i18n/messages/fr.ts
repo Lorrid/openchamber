@@ -25,7 +25,7 @@ export const dict = {
   'agentBrowser.empty.title': 'Aucun onglet de navigateur ouvert',
   'agentBrowser.empty.description': 'Ouvrez un onglet pour laisser l’agent naviguer et interagir avec une application web pendant que vous regardez.',
   'agentBrowser.unsupported.title': 'Surface de navigateur indisponible',
-  'agentBrowser.unsupported.description': 'Aucun navigateur compatible Chrome n’a été trouvé sur le serveur. Installez Chrome ou Chromium, ou définissez OPENCHAMBER_BROWSER_PATH.',
+  'agentBrowser.unsupported.description': 'Aucun navigateur compatible Chrome n\'a été trouvé sur le serveur. Installez Chrome via Réglages → Navigateur agent, définissez un chemin ou OPENCHAMBER_BROWSER_PATH.',
   'agentBrowser.artifacts.title': 'Captures',
   'agentBrowser.artifacts.screenshot': 'Capture d’écran',
   'agentBrowser.artifacts.recording': 'Enregistrement',

@@ -26,7 +26,7 @@ export const dict: Record<I18nKey, string> = {
   'agentBrowser.empty.title': 'ブラウザータブが開いていません',
   'agentBrowser.empty.description': 'タブを開くと、エージェントが Web アプリを操作する様子を見ることができます。',
   'agentBrowser.unsupported.title': 'ブラウザーサーフェスを利用できません',
-  'agentBrowser.unsupported.description': 'サーバーで Chrome 互換のブラウザーが見つかりませんでした。Chrome または Chromium をインストールするか、OPENCHAMBER_BROWSER_PATH を設定してください。',
+  'agentBrowser.unsupported.description': 'サーバーで Chrome 互換のブラウザーが見つかりませんでした。設定 → エージェントブラウザーから Chrome をインストールするか、パスまたは OPENCHAMBER_BROWSER_PATH を設定してください。',
   'agentBrowser.artifacts.title': 'キャプチャ',
   'agentBrowser.artifacts.screenshot': 'スクリーンショット',
   'agentBrowser.artifacts.recording': '録画',

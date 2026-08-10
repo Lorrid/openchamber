@@ -12,6 +12,7 @@ import {
   findBrowserExecutable as defaultFindBrowserExecutable,
   killChromeProcess,
   launchChrome as defaultLaunchChrome,
+  resolveBrowserExecutableSource,
 } from './chrome.js';
 import { keyEventsForCombo, parseKeyCombo } from './input.js';
 import { normalizeBrowserUrl } from './urls.js';
@@ -75,6 +76,7 @@ export const createBrowserRuntime = ({
   findBrowserExecutable = defaultFindBrowserExecutable,
   launchChrome = defaultLaunchChrome,
   idleShutdownMs = IDLE_SHUTDOWN_MS,
+  getBrowserSettings = () => ({}),
 }) => {
   const artifactsDir = path.join(dataDir, 'browser', 'artifacts');
   const profileDir = path.join(dataDir, 'browser', 'profile');
@@ -87,7 +89,35 @@ export const createBrowserRuntime = ({
   let wsServer = new WebSocketServer({ noServer: true, maxPayload: BROWSER_WS_MAX_PAYLOAD_BYTES });
   let idleTimer = null;
 
-  const isConfigured = () => Boolean(findBrowserExecutable({ fs, path, env, searchPathFor }));
+  const readBrowserSettings = () => {
+    try {
+      const settings = getBrowserSettings() || {};
+      return {
+        executablePath: typeof settings.browserExecutablePath === 'string'
+          ? settings.browserExecutablePath.trim()
+          : typeof settings.executablePath === 'string'
+            ? settings.executablePath.trim()
+            : '',
+        noSandbox: settings.browserNoSandbox === true || settings.noSandbox === true,
+      };
+    } catch {
+      return { executablePath: '', noSandbox: false };
+    }
+  };
+
+  const resolveExecutable = () => {
+    const settings = readBrowserSettings();
+    return findBrowserExecutable({
+      fs,
+      path,
+      env,
+      searchPathFor,
+      preferredPath: settings.executablePath,
+      dataDir,
+    });
+  };
+
+  const isConfigured = () => Boolean(resolveExecutable());
 
   const serializeTab = (tab) => ({
     id: tab.id,
@@ -172,11 +202,24 @@ export const createBrowserRuntime = ({
     if (browser) return browser;
     if (browserPromise) return browserPromise;
     browserPromise = (async () => {
-      const executable = findBrowserExecutable({ fs, path, env, searchPathFor });
+      const settings = readBrowserSettings();
+      const executable = resolveExecutable();
       if (!executable) {
-        throw new Error('No Chrome-compatible browser was found. Install Chrome/Chromium or set OPENCHAMBER_BROWSER_PATH.');
+        throw new Error(
+          settings.executablePath
+            ? `Configured browser was not found at ${settings.executablePath}. Update Settings → Agent Browser or install Chrome.`
+            : 'No Chrome-compatible browser was found. Install Chrome from Settings → Agent Browser, or set OPENCHAMBER_BROWSER_PATH.',
+        );
       }
-      const launched = await launchChrome({ fsPromises, path, spawn, executable, profileDir, env });
+      const launched = await launchChrome({
+        fsPromises,
+        path,
+        spawn,
+        executable,
+        profileDir,
+        env,
+        noSandbox: settings.noSandbox,
+      });
       const connection = await connectCdp(launched.webSocketDebuggerUrl);
       connection.onEvent(handleTargetEvent);
       connection.onClose(() => {
@@ -734,9 +777,38 @@ export const createBrowserRuntime = ({
     wsServer = null;
   };
 
+  const statusSnapshot = () => {
+    const settings = readBrowserSettings();
+    const resolved = resolveBrowserExecutableSource({
+      fs,
+      path,
+      env,
+      searchPathFor,
+      preferredPath: settings.executablePath,
+      dataDir,
+    });
+    return {
+      ...state(),
+      executable: resolved.executable,
+      source: resolved.source,
+      missingPreferred: resolved.missingPreferred === true,
+      configuredPath: settings.executablePath || null,
+      noSandbox: settings.noSandbox,
+      platform: process.platform,
+      arch: process.arch,
+    };
+  };
+
   return {
     isConfigured,
     state,
+    status: statusSnapshot,
+    /** Stop a running browser so the next action re-resolves the executable/settings. */
+    reloadConfiguration: async () => {
+      await closeBrowser();
+      broadcastState();
+      return statusSnapshot();
+    },
     executeAction,
     listArtifacts,
     readArtifact,

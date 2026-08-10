@@ -176,6 +176,15 @@ export const createSettingsHelpers = (dependencies) => {
       const normalized = normalizeDirectoryPath(candidate.opencodeBinary).trim();
       result.opencodeBinary = normalized;
     }
+    // Absolute path to the Agent Browser Chrome/Chromium executable (optional).
+    // Empty string clears a previous override so discovery/managed install can win.
+    if (typeof candidate.browserExecutablePath === 'string') {
+      const normalized = normalizeDirectoryPath(candidate.browserExecutablePath).trim();
+      result.browserExecutablePath = normalized;
+    }
+    if (typeof candidate.browserNoSandbox === 'boolean') {
+      result.browserNoSandbox = candidate.browserNoSandbox;
+    }
     if (typeof candidate.desktopLanAccessEnabled === 'boolean') {
       result.desktopLanAccessEnabled = candidate.desktopLanAccessEnabled;
     }

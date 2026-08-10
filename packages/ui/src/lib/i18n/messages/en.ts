@@ -1116,7 +1116,7 @@ export const dict = {
   'agentBrowser.empty.title': 'No browser tab open',
   'agentBrowser.empty.description': 'Open a tab to let the agent navigate and interact with a web app while you watch.',
   'agentBrowser.unsupported.title': 'Browser surface unavailable',
-  'agentBrowser.unsupported.description': 'No Chrome-compatible browser was found on the server. Install Chrome or Chromium, or set OPENCHAMBER_BROWSER_PATH.',
+  'agentBrowser.unsupported.description': 'No Chrome-compatible browser was found on the server. Install Chrome from Settings → Agent Browser, set a path, or use OPENCHAMBER_BROWSER_PATH.',
   'agentBrowser.artifacts.title': 'Captures',
   'agentBrowser.artifacts.screenshot': 'Screenshot',
   'agentBrowser.artifacts.recording': 'Recording',

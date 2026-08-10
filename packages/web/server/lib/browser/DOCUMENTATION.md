@@ -61,24 +61,36 @@ with the bearer token via `runtimeFetch` and rendered as object URLs.
 ## Setup / Installation
 
 1. **Chrome/Chromium on the OpenChamber host** (required for the surface to be
-   usable). The server discovers, in order:
-   - `OPENCHAMBER_BROWSER_PATH` (absolute path to a Chrome-compatible binary)
-   - common system installs (`google-chrome-stable`, `google-chrome`,
-     `chromium`, `chromium-browser`, and platform-specific app paths)
-2. **Agent control enabled** (default). Settings → OpenCode CLI /
+   usable). Resolution order:
+   - Settings → Agent Browser → **Browser executable** (`browserExecutablePath`)
+   - `OPENCHAMBER_BROWSER_PATH`
+   - Managed install under `<dataDir>/browser/install/` (Settings → **Install Chrome**)
+   - OS discovery (`google-chrome-stable`, `chromium`, snap paths, app bundles, …)
+2. **Headless / container hosts**: enable **Disable browser sandbox**
+   (`browserNoSandbox`) or set `OPENCHAMBER_BROWSER_NO_SANDBOX=true`. OpenChamber
+   also auto-enables `--no-sandbox` when running as root. Managed install turns
+   the setting on automatically for root/Docker Linux hosts. Launch always uses
+   `--headless=new`, `--disable-dev-shm-usage`, and `--disable-gpu`.
+3. **arm64 Linux**: managed install downloads Google Chrome's official
+   `arm64` `.deb` and extracts it without a system package install (`dpkg-deb`).
+   x64 Linux uses the amd64 `.deb`; macOS/Windows use Chrome for Testing zips.
+4. **Agent control enabled** (default). Settings → OpenCode CLI /
    `agentControlToolEnabled` must not be `false`, and OpenChamber must own the
    managed OpenCode process so `openchamber_browser` is injected.
-3. **Start the OpenChamber server** (web CLI, desktop in-process, or hosted).
+5. **Start the OpenChamber server** (web CLI, desktop in-process, or hosted).
    On startup, `syncSystemSkills` installs/refreshes the managed
    `agent-browser` skill into `~/.config/opencode/skills/agent-browser/SKILL.md`
    (same path OpenCode scans for every project).
-4. **Open Agent Browser** in the context rail to watch the live surface. Agents
+6. **Open Agent Browser** in the context rail to watch the live surface. Agents
    drive it with `openchamber_browser`; users can also send input over the same
    WebSocket.
 
 When no Chrome-compatible executable is found, `state().supported` is `false`
-and the UI shows an explicit unsupported state. Install Chrome/Chromium or set
-`OPENCHAMBER_BROWSER_PATH`, then restart the server.
+and the UI shows an explicit unsupported state. Use Settings → Agent Browser →
+Install Chrome, set a path, or set `OPENCHAMBER_BROWSER_PATH`, then Save (the
+runtime reloads configuration without a full server restart).
+
+Probe: `GET /api/browser/status`. Install: `POST /api/browser/install`.
 
 ## Agent Tool
 

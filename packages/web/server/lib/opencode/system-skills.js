@@ -212,7 +212,7 @@ function buildAgentBrowserSkill() {
     '',
     '### 1. Inspect current state',
     '',
-    'Call `openchamber_browser` with `action: "state"` and empty `parameters` to see open tabs, the active tab, and whether a recording is already running. If the surface reports it is unsupported, tell the user a Chrome-compatible browser is missing on the server (install Chrome/Chromium or set `OPENCHAMBER_BROWSER_PATH`) instead of inventing results.',
+    'Call `openchamber_browser` with `action: "state"` and empty `parameters` to see open tabs, the active tab, and whether a recording is already running. If the surface reports it is unsupported, tell the user to install Chrome from OpenChamber Settings → Agent Browser (or set a browser path / `OPENCHAMBER_BROWSER_PATH`, and enable Disable browser sandbox on headless/container hosts) instead of inventing results.',
     '',
     '### 2. Open or navigate',
     '',

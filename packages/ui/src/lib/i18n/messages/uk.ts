@@ -26,7 +26,7 @@ export const dict: Record<I18nKey, string> = {
   'agentBrowser.empty.title': 'Немає відкритої вкладки браузера',
   'agentBrowser.empty.description': 'Відкрийте вкладку, щоб агент міг переходити та взаємодіяти з вебзастосунком, поки ви спостерігаєте.',
   'agentBrowser.unsupported.title': 'Поверхня браузера недоступна',
-  'agentBrowser.unsupported.description': 'На сервері не знайдено браузер, сумісний із Chrome. Установіть Chrome або Chromium чи задайте OPENCHAMBER_BROWSER_PATH.',
+  'agentBrowser.unsupported.description': 'На сервері не знайдено браузер, сумісний із Chrome. Установіть Chrome у Налаштуваннях → Браузер агента, задайте шлях або OPENCHAMBER_BROWSER_PATH.',
   'agentBrowser.artifacts.title': 'Знімки',
   'agentBrowser.artifacts.screenshot': 'Знімок екрана',
   'agentBrowser.artifacts.recording': 'Запис',

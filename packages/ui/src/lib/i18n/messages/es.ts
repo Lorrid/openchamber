@@ -26,7 +26,7 @@ export const dict: Record<I18nKey, string> = {
   'agentBrowser.empty.title': 'No hay ninguna pestaña del navegador abierta',
   'agentBrowser.empty.description': 'Abre una pestaña para que el agente navegue e interactúe con una aplicación web mientras observas.',
   'agentBrowser.unsupported.title': 'Superficie del navegador no disponible',
-  'agentBrowser.unsupported.description': 'No se encontró ningún navegador compatible con Chrome en el servidor. Instala Chrome o Chromium, o define OPENCHAMBER_BROWSER_PATH.',
+  'agentBrowser.unsupported.description': 'No se encontró ningún navegador compatible con Chrome en el servidor. Instala Chrome en Ajustes → Navegador del agente, define una ruta o OPENCHAMBER_BROWSER_PATH.',
   'agentBrowser.artifacts.title': 'Capturas',
   'agentBrowser.artifacts.screenshot': 'Captura de pantalla',
   'agentBrowser.artifacts.recording': 'Grabación',

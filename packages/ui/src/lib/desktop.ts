@@ -58,6 +58,10 @@ export type DesktopSettings = {
   homeDirectory?: string;
   // Optional absolute path to `opencode` binary.
   opencodeBinary?: string;
+  // Optional absolute path to the Agent Browser Chrome/Chromium executable.
+  browserExecutablePath?: string;
+  // Disable Chromium sandbox (needed on many headless/container hosts).
+  browserNoSandbox?: boolean;
   desktopLanAccessEnabled?: boolean;
   desktopKeepAwakeEnabled?: boolean;
   desktopMinimizeToTrayEnabled?: boolean;
