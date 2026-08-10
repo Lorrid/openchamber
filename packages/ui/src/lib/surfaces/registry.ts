@@ -13,7 +13,6 @@ export type ContextSurfaceId =
   | 'notes'
   | 'context'
   | 'browser'
-  | 'preview'
   | 'chat';
 
 export type ContextSurfaceDescriptor = {
@@ -25,8 +24,8 @@ export type ContextSurfaceDescriptor = {
   /**
    * 'always' surfaces can be opened empty from the rail.
    * 'has-content' surfaces are content-driven: they need an existing tab of
-   * their mode (a preview URL emitted, a split session) and stay hidden on
-   * the rail until one exists.
+   * their mode (a split session, a diff to show) and stay hidden on the rail
+   * until one exists.
    */
   availability: 'always' | 'has-content';
   /** Short tooltip explanation shown on the rail. */
@@ -128,15 +127,6 @@ export const CONTEXT_SURFACES: readonly ContextSurfaceDescriptor[] = [
     icon: 'global',
     labelKey: 'contextPanel.mode.browser',
     availability: 'always',
-  },
-  {
-    id: 'preview',
-    descriptionKey: 'contextRail.surface.preview.description',
-    defaultWidthFraction: 0.45,
-    mode: 'preview',
-    icon: 'window',
-    labelKey: 'contextPanel.mode.preview',
-    availability: 'has-content',
   },
   {
     id: 'chat',

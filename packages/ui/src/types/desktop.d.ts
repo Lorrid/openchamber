@@ -14,11 +14,18 @@ declare global {
     loadURL(url: string): void;
     goBack(): void;
     goForward(): void;
+    canGoBack(): boolean;
+    canGoForward(): boolean;
     reload(): void;
+    reloadIgnoringCache(): void;
+    stop(): void;
     getURL(): string;
     getTitle(): string;
     isLoading(): boolean;
     getWebContentsId(): number;
+    openDevTools(): void;
+    closeDevTools(): void;
+    isDevToolsOpened(): boolean;
     executeJavaScript(code: string, userGesture?: boolean): Promise<unknown>;
   }
 

@@ -63,7 +63,6 @@ describe('useUIStore openContextSurface', () => {
   });
 
   test('does nothing for content-driven modes without existing content', () => {
-    useUIStore.getState().openContextSurface(directory, 'preview');
     useUIStore.getState().openContextSurface(directory, 'chat');
 
     expect(useUIStore.getState().contextPanelByDirectory[directory]).toBe(undefined);

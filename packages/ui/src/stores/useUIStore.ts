@@ -14,7 +14,7 @@ import { isWindowsArm64 } from '@/lib/platform';
 
 export type MainTab = 'chat' | 'plan' | 'git' | 'diff' | 'terminal' | 'files' | 'context' | 'diagram';
 export type PendingDiffScope = 'working' | 'staged' | 'turn';
-export type ContextPanelMode = 'diff' | 'walkthrough' | 'file' | 'context' | 'plan' | 'chat' | 'preview' | 'browser' | 'git' | 'pr' | 'notes' | 'terminal';
+export type ContextPanelMode = 'diff' | 'walkthrough' | 'file' | 'context' | 'plan' | 'chat' | 'browser' | 'git' | 'pr' | 'notes' | 'terminal';
 export type MermaidRenderingMode = 'svg' | 'ascii';
 export type UserMessageRenderingMode = 'markdown' | 'plain';
 export type ChatRenderMode = 'sorted' | 'live';
@@ -196,7 +196,7 @@ const buildDefaultContextPanelTabDedupeKey = (mode: ContextPanelMode, targetPath
     return targetPath || mode;
   }
 
-  if (mode === 'preview') {
+  if (mode === 'browser') {
     return targetPath || mode;
   }
 
@@ -288,7 +288,10 @@ const sanitizeContextPanelTabs = (tabs: unknown): ContextPanelTab[] => {
       touchedAt?: unknown;
     };
 
-    if (candidate.mode !== 'diff' && candidate.mode !== 'walkthrough' && candidate.mode !== 'file' && candidate.mode !== 'context' && candidate.mode !== 'plan' && candidate.mode !== 'chat' && candidate.mode !== 'preview' && candidate.mode !== 'browser' && candidate.mode !== 'git' && candidate.mode !== 'pr' && candidate.mode !== 'notes' && candidate.mode !== 'terminal') {
+    // Legacy 'preview' tabs are converted to 'browser' by the v14 migration;
+    // anything still carrying an unknown mode here is discarded rather than
+    // resurrected into a tab the panel cannot render.
+    if (candidate.mode !== 'diff' && candidate.mode !== 'walkthrough' && candidate.mode !== 'file' && candidate.mode !== 'context' && candidate.mode !== 'plan' && candidate.mode !== 'chat' && candidate.mode !== 'browser' && candidate.mode !== 'git' && candidate.mode !== 'pr' && candidate.mode !== 'notes' && candidate.mode !== 'terminal') {
       continue;
     }
 
@@ -523,7 +526,7 @@ const sanitizeContextPanelByDirectory = (
     if (candidate.widthByMode && typeof candidate.widthByMode === 'object') {
       for (const [mode, value] of Object.entries(candidate.widthByMode as Record<string, unknown>)) {
         if (
-          (mode === 'diff' || mode === 'file' || mode === 'context' || mode === 'plan' || mode === 'chat' || mode === 'preview' || mode === 'browser' || mode === 'git' || mode === 'pr' || mode === 'notes' || mode === 'terminal')
+          (mode === 'diff' || mode === 'file' || mode === 'context' || mode === 'plan' || mode === 'chat' || mode === 'browser' || mode === 'git' || mode === 'pr' || mode === 'notes' || mode === 'terminal')
           && typeof value === 'number'
           && Number.isFinite(value)
         ) {
@@ -1166,10 +1169,10 @@ export const useUIStore = create<UIStore>()(
             return;
           }
 
-          // Content-driven modes need a payload (a preview URL or session);
-          // the rail renders them disabled until content exists. 'file' opens
-          // an empty editor whose embedded tree picks the first file.
-          if (mode === 'preview' || mode === 'chat') {
+          // Content-driven modes need a payload (a session to split); the rail
+          // renders them disabled until content exists. 'file' opens an empty
+          // editor whose embedded tree picks the first file.
+          if (mode === 'chat') {
             return;
           }
 
@@ -1277,7 +1280,7 @@ export const useUIStore = create<UIStore>()(
           }
 
           get().openContextPanelTab(normalizedDirectory, {
-            mode: 'preview',
+            mode: 'browser',
             targetPath: normalizedUrl,
             dedupeKey: normalizedUrl,
             label,
@@ -1290,8 +1293,8 @@ export const useUIStore = create<UIStore>()(
           get().openContextPanelTab(normalizedDirectory, {
             mode: 'browser',
             targetPath: targetUrl,
-            dedupeKey: 'desktop-browser',
-            label: 'Browser',
+            dedupeKey: targetUrl || 'browser',
+            label: null,
           });
         },
 
@@ -2368,12 +2371,66 @@ export const useUIStore = create<UIStore>()(
       {
         name: 'ui-store',
         storage: createDeferredSafeJSONStorage(),
-        version: 13,
+        version: 14,
         migrate: (persistedState, version) => {
           if (!persistedState || typeof persistedState !== 'object') {
             return persistedState;
           }
           const state = persistedState as Record<string, unknown>;
+
+          // v13 -> v14: the separate 'preview' surface merged into 'browser'.
+          // Stored preview tabs keep their URL and become browser tabs; their
+          // id encodes the mode, so it is rebuilt rather than left dangling.
+          // Persisted widths recorded under 'preview' carry over only when the
+          // user has not already sized the browser surface.
+          if (version < 14) {
+            const byDirectory = state.contextPanelByDirectory;
+            if (byDirectory && typeof byDirectory === 'object') {
+              for (const directoryState of Object.values(byDirectory as Record<string, unknown>)) {
+                if (!directoryState || typeof directoryState !== 'object') continue;
+                const entry = directoryState as Record<string, unknown>;
+
+                const widths = entry.widthByMode;
+                if (widths && typeof widths === 'object') {
+                  const widthRecord = widths as Record<string, unknown>;
+                  if (widthRecord.preview !== undefined) {
+                    if (widthRecord.browser === undefined) widthRecord.browser = widthRecord.preview;
+                    delete widthRecord.preview;
+                  }
+                }
+
+                if (!Array.isArray(entry.tabs)) continue;
+                const seenIds = new Set<string>();
+                const migrated: Array<Record<string, unknown>> = [];
+                for (const rawTab of entry.tabs as Array<unknown>) {
+                  if (!rawTab || typeof rawTab !== 'object') continue;
+                  const tab = rawTab as Record<string, unknown>;
+                  if (tab.mode !== 'preview') {
+                    if (typeof tab.id === 'string') seenIds.add(tab.id);
+                    migrated.push(tab);
+                    continue;
+                  }
+
+                  const targetPath = typeof tab.targetPath === 'string' ? tab.targetPath : '';
+                  const dedupeKey = typeof tab.dedupeKey === 'string' && tab.dedupeKey.trim()
+                    ? tab.dedupeKey.trim()
+                    : (targetPath || 'browser');
+                  const id = dedupeKey === 'browser' ? 'browser' : `browser:${dedupeKey}`;
+                  // A converted tab can collide with a browser tab on the same
+                  // URL; keep the existing one rather than producing duplicates.
+                  if (seenIds.has(id)) continue;
+                  seenIds.add(id);
+                  migrated.push({ ...tab, mode: 'browser', id, dedupeKey });
+                }
+                entry.tabs = migrated;
+
+                if (typeof entry.activeTabId === 'string' && entry.activeTabId.startsWith('preview')) {
+                  const nextActive = migrated.find((tab) => typeof tab.id === 'string');
+                  entry.activeTabId = nextActive && typeof nextActive.id === 'string' ? nextActive.id : null;
+                }
+              }
+            }
+          }
 
           // v12 -> v13: promote FilesView localStorage autosave toggle into the store.
           if (version < 13) {
