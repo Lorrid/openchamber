@@ -90,6 +90,7 @@ import { createNotificationTemplateRuntime } from './lib/notifications/template-
 import { createPermissionAutoAcceptRuntime } from './lib/permission-auto-accept/runtime.js';
 import { createGracefulShutdownRuntime } from './lib/opencode/shutdown-runtime.js';
 import { createProjectConfigRuntime } from './lib/projects/project-config.js';
+import { createProjectContextRuntime } from './lib/project-context/runtime.js';
 import { createRemoteClientAuthRuntime } from './lib/client-auth/remote-clients.js';
 import { createClientPairingRuntime } from './lib/client-auth/pairing.js';
 import { createPreviewProxyRuntime } from './lib/preview/proxy-runtime.js';
@@ -465,6 +466,12 @@ const getUpstreamStallTimeoutMs = () => (
 );
 
 const projectConfigRuntime = createProjectConfigRuntime({
+  fsPromises,
+  path,
+  projectsDirPath: OPENCHAMBER_PROJECTS_CONFIG_DIR,
+});
+
+const projectContextRuntime = createProjectContextRuntime({
   fsPromises,
   path,
   projectsDirPath: OPENCHAMBER_PROJECTS_CONFIG_DIR,
@@ -1684,6 +1691,7 @@ async function main(options = {}) {
     getOpenCodePort: () => openCodePort,
     buildAugmentedPath,
     projectConfigRuntime,
+    projectContextRuntime,
     scheduledTasksRuntime,
     scheduledTaskService,
     openChamberSessionService,

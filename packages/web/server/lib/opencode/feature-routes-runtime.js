@@ -7,6 +7,7 @@ import { registerGitHubRoutes } from '../github/routes.js';
 import { registerGitRoutes } from '../git/routes.js';
 import { registerMagicPromptRoutes } from '../magic-prompts/routes.js';
 import { registerSessionFoldersRoutes } from '../session-folders/routes.js';
+import { registerProjectContextRoutes } from '../project-context/routes.js';
 import { registerPermissionAutoAcceptRoutes } from '../permission-auto-accept/runtime.js';
 import { registerConfigEntityRoutes } from './config-entity-routes.js';
 import { registerSettingsUtilityRoutes } from './core-routes.js';
@@ -112,6 +113,7 @@ export const createFeatureRoutesRuntime = (dependencies) => {
       getOpenCodePort,
       buildAugmentedPath,
       projectConfigRuntime,
+      projectContextRuntime,
       scheduledTasksRuntime,
       scheduledTaskService,
       openChamberSessionService,
@@ -289,6 +291,8 @@ export const createFeatureRoutesRuntime = (dependencies) => {
       path,
       openchamberDataDir,
     });
+    registerProjectContextRoutes(app, { projectContextRuntime });
+
     registerSessionFoldersRoutes(app, {
       fsPromises,
       path,

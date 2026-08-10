@@ -212,6 +212,43 @@ export const createSettingsRuntime = (deps) => {
     }
   };
 
+  /**
+   * Merge the server-owned `context.json` (notes/todos/plans) across a project
+   * id change.
+   *
+   * `moveDirectoryContents` only renames a file when the destination is free,
+   * so without this step an existing `<newId>/context.json` would silently
+   * discard everything stored under `<oldId>`. Notes follow the same
+   * newer-wins rule as `mergeProjectConfigData`; todos and plans are merged by
+   * identity so neither side loses entries.
+   */
+  const mergeProjectContextFiles = async (oldStorageDir, newStorageDir) => {
+    const oldContextPath = path.join(oldStorageDir, 'context.json');
+    const newContextPath = path.join(newStorageDir, 'context.json');
+
+    const [oldContext, newContext] = await Promise.all([
+      readJsonFile(oldContextPath).catch(() => null),
+      readJsonFile(newContextPath).catch(() => null),
+    ]);
+
+    if (!oldContext || !newContext) {
+      // Nothing to reconcile: the plain directory move handles a single side.
+      return;
+    }
+
+    const oldNotes = typeof oldContext.notes === 'string' ? oldContext.notes : '';
+    const newNotes = typeof newContext.notes === 'string' ? newContext.notes : '';
+
+    await writeJsonFile(newContextPath, {
+      ...oldContext,
+      ...newContext,
+      notes: newNotes || oldNotes,
+      todos: mergeByKey(oldContext.todos, newContext.todos, (item) => item.id),
+      plans: mergeByKey(oldContext.plans, newContext.plans, (item) => item.id || item.file),
+    });
+    await fsPromises.rm(oldContextPath, { force: true });
+  };
+
   const migrateProjectScopedStorage = async ({ oldId, newId, projectPath }) => {
     if (!oldId || !newId || oldId === newId) {
       return;
@@ -232,6 +269,7 @@ export const createSettingsRuntime = (deps) => {
       await writeJsonFile(newConfigPath, merged);
     }
 
+    await mergeProjectContextFiles(oldStorageDir, newStorageDir);
     await moveDirectoryContents(oldStorageDir, newStorageDir);
     await fsPromises.rm(oldConfigPath, { force: true });
   };
