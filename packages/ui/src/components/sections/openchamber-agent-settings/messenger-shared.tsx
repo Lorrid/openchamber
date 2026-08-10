@@ -275,9 +275,6 @@ export function AccessControlRow({
   );
 }
 
-/** @deprecated Prefer AccessControlRow — Danger zone was renamed to Access control. */
-export const DangerZoneRow = AccessControlRow;
-
 type DiscordHistoryMessage = ReturnType<
   typeof useMessengerStore.getState
 >['discordHistory'][number];

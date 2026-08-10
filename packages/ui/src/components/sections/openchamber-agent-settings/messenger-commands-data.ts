@@ -314,10 +314,3 @@ export const TELEGRAM_COMMANDS: TelegramCommandEntry[] = MESSENGER_COMMANDS.filt
   suggested: cmd.suggested,
   example: exampleFor(cmd, 'telegram'),
 }));
-
-export const DISCORD_COMMAND_CATEGORY_ORDER = MESSENGER_COMMAND_CATEGORY_ORDER;
-export const TELEGRAM_COMMAND_CATEGORY_ORDER = MESSENGER_COMMAND_CATEGORY_ORDER;
-
-export function commandsForPlatform(platform: MessengerCommandPlatform): DiscordCommandEntry[] | TelegramCommandEntry[] {
-  return platform === 'discord' ? DISCORD_COMMANDS : TELEGRAM_COMMANDS;
-}

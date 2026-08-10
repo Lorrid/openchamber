@@ -14,9 +14,8 @@ import { toast } from '@/components/ui/toast';
 import { cn } from '@/lib/utils';
 import {
   DISCORD_COMMANDS,
-  DISCORD_COMMAND_CATEGORY_ORDER,
+  MESSENGER_COMMAND_CATEGORY_ORDER,
   TELEGRAM_COMMANDS,
-  TELEGRAM_COMMAND_CATEGORY_ORDER,
   type MessengerCommandCategory,
   type MessengerCommandPlatform,
   type DiscordCommandEntry,
@@ -63,10 +62,6 @@ function commandsFor(platform: MessengerCommandPlatform): PaletteCommand[] {
   return platform === 'discord' ? DISCORD_COMMANDS : TELEGRAM_COMMANDS;
 }
 
-function categoryOrderFor(platform: MessengerCommandPlatform): MessengerCommandCategory[] {
-  return platform === 'discord' ? DISCORD_COMMAND_CATEGORY_ORDER : TELEGRAM_COMMAND_CATEGORY_ORDER;
-}
-
 type MessengerCommandPaletteProps = {
   platform: MessengerCommandPlatform;
   open: boolean;
@@ -82,7 +77,7 @@ export function MessengerCommandPalette({
   const [query, setQuery] = useState('');
   const copy = PLATFORM_COPY[platform];
   const allCommands = commandsFor(platform);
-  const categoryOrder = categoryOrderFor(platform);
+  const categoryOrder = MESSENGER_COMMAND_CATEGORY_ORDER;
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
@@ -226,14 +221,4 @@ export function MessengerCommandsButton({ platform, className }: MessengerComman
       <MessengerCommandPalette platform={platform} open={open} onOpenChange={setOpen} />
     </>
   );
-}
-
-/** @deprecated Prefer MessengerCommandsButton with platform="discord". */
-export function DiscordCommandsButton({ className }: { className?: string }) {
-  return <MessengerCommandsButton platform="discord" className={className} />;
-}
-
-/** @deprecated Prefer MessengerCommandsButton with platform="telegram". */
-export function TelegramCommandsButton({ className }: { className?: string }) {
-  return <MessengerCommandsButton platform="telegram" className={className} />;
 }

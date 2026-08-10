@@ -806,11 +806,6 @@ function TelegramAdvancedSettings({ conn }: { conn: MessengerConnection }) {
         <AdvancedSectionCard
           icon="refresh"
           title={t('settings.integrations.advanced.syncLog.title')}
-          meta={
-            hasSyncResults
-              ? t('settings.integrations.telegram.groups.syncResults')
-              : undefined
-          }
           open={sectionOpen.syncLog}
           onOpenChange={(next) => setSectionOpen((s) => ({ ...s, syncLog: next }))}
         >
@@ -818,7 +813,7 @@ function TelegramAdvancedSettings({ conn }: { conn: MessengerConnection }) {
             <TelegramLastSyncResults conn={conn} />
           ) : (
             <div className="text-xs text-muted-foreground">
-              {t('settings.integrations.telegram.groups.empty')}
+              {t('settings.integrations.advanced.syncLog.empty')}
             </div>
           )}
         </AdvancedSectionCard>
