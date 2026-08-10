@@ -126,9 +126,17 @@ describe('managed agent tool runtime', () => {
       expect(source).toContain(JSON.stringify({ const: action, description }));
     }
 
-    const result = await runtime.execute({ tool: 'browser', input: { action: 'navigate', url: 'https://example.com' } });
+    const result = await runtime.execute({
+      tool: 'browser',
+      sessionId: 'ses_browser',
+      input: { action: 'navigate', url: 'https://example.com' },
+    });
     expect(result).toEqual({ schemaVersion: 1, ok: true, action: 'navigate', data: { tab: { id: 'tab-1' } } });
-    expect(executeBrowserAction).toHaveBeenCalledWith('navigate', { url: 'https://example.com' });
+    expect(executeBrowserAction).toHaveBeenCalledWith(
+      'navigate',
+      { url: 'https://example.com' },
+      { actor: 'agent', sessionId: 'ses_browser' },
+    );
   });
 
   it('rejects unknown browser actions and unavailable browser surface', async () => {

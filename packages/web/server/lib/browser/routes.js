@@ -4,6 +4,7 @@ import {
   installManagedBrowser,
   shouldDefaultNoSandbox,
 } from './install.js';
+import { BROWSER_AGENT_CONTROLLING_CODE, BrowserAgentControllingError } from './control.js';
 
 const BROWSER_ACTION_PATHS = Object.freeze({
   '/api/browser/tab/create': 'tab.create',
@@ -22,6 +23,11 @@ const BROWSER_ACTION_PATHS = Object.freeze({
   '/api/browser/recording/start': 'recording.start',
   '/api/browser/recording/stop': 'recording.stop',
 });
+
+const isAgentControllingError = (error) => (
+  error instanceof BrowserAgentControllingError
+  || error?.code === BROWSER_AGENT_CONTROLLING_CODE
+);
 
 // Actions that mutate state require a running browser; everything is routed
 // through the runtime's single dispatch surface so validation stays in one place.
@@ -115,12 +121,37 @@ export const registerBrowserRoutes = (app, { browserRuntime, dataDir, persistSet
     res.send(artifact.buffer);
   });
 
+  app.post('/api/browser/takeover', jsonParser, async (_req, res) => {
+    try {
+      if (typeof browserRuntime.takeover !== 'function') {
+        res.status(500).json({ error: 'Browser takeover is unavailable' });
+        return;
+      }
+      res.json(browserRuntime.takeover());
+    } catch (error) {
+      res.status(500).json({ error: error?.message || 'Failed to take over the browser' });
+    }
+  });
+
   for (const [routePath, action] of Object.entries(BROWSER_ACTION_PATHS)) {
     app.post(routePath, jsonParser, async (req, res) => {
       try {
-        const result = await browserRuntime.executeAction(action, req.body ?? {});
+        const body = req.body && typeof req.body === 'object' ? req.body : {};
+        const { takeover, ...params } = body;
+        const result = await browserRuntime.executeAction(action, params, {
+          actor: 'user',
+          takeover: takeover === true,
+        });
         res.json(result);
       } catch (error) {
+        if (isAgentControllingError(error)) {
+          res.status(409).json({
+            error: error.message || 'An agent is controlling the browser',
+            code: BROWSER_AGENT_CONTROLLING_CODE,
+            sessionId: error.sessionId ?? null,
+          });
+          return;
+        }
         res.status(400).json({ error: error?.message || `Failed to execute ${action}` });
       }
     });

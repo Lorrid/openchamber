@@ -38,6 +38,21 @@ tool share one validation and state-mutation path. `GET /api/browser/state`
 and `GET /api/browser/artifacts[/:id]` are read paths; artifacts are fetched
 with the bearer token via `runtimeFetch` and rendered as object URLs.
 
+## Control ownership
+
+`state().control` reports who currently drives the shared browser:
+
+- `actor: "agent"` with `sessionId` after an `openchamber_browser` tool call
+- `actor: "user"` after the user takes over or sends an allowed user action
+- `actor: null` before anyone has claimed the surface
+
+User HTTP/WS mutations while an agent holds control require an explicit
+`takeover: true` body field (or `POST /api/browser/takeover`). Otherwise the
+server returns `409` with `code: "BROWSER_AGENT_CONTROLLING"` and the owning
+`sessionId`. The Agent Browser UI confirms before takeover when that session is
+busy/retrying, aborts the owning session, then claims user control and retries
+the pending input.
+
 ## Safety
 
 - Only `http`/`https` targets are navigable. `file:`, `chrome:`, `javascript:`,

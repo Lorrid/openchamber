@@ -99,7 +99,7 @@ const createBrowserToolSource = () => String.raw`
             const response = await fetch(endpoint, {
               method: "POST",
               headers: { authorization: "Bearer " + token, "content-type": "application/json" },
-              body: JSON.stringify({ tool: "browser", input: args }),
+              body: JSON.stringify({ tool: "browser", input: args, sessionId: context.sessionID }),
               signal: context.abort,
             })
             const output = await response.text()
@@ -256,7 +256,11 @@ export const createAgentToolRuntime = (dependencies) => {
     }
     try {
       const { action: _action, ...params } = payload.input;
-      const data = await executeBrowserAction(action, params);
+      const sessionId = asNonEmptyString(payload.sessionId);
+      const data = await executeBrowserAction(action, params, {
+        actor: 'agent',
+        sessionId,
+      });
       return createResult({ ok: true, action, data });
     } catch (error) {
       return createResult({

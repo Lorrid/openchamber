@@ -28,12 +28,19 @@ export type BrowserTab = {
 
 export type BrowserRecording = { tabId: string; active: boolean; startedAt: number; frameCount: number } | null;
 
+export type BrowserControl = {
+  actor: 'agent' | 'user' | null;
+  sessionId: string | null;
+  claimedAt: number | null;
+};
+
 export type BrowserState = {
   supported: boolean;
   running: boolean;
   activeTabId: string | null;
   tabs: BrowserTab[];
   recording: BrowserRecording;
+  control: BrowserControl;
 };
 
 export type BrowserArtifact = {
@@ -83,8 +90,20 @@ const ACTION_PATHS: Record<BrowserAction, string> = {
 };
 
 const responseError = async (response: Response, fallback: string): Promise<Error> => {
-  const body = (await response.json().catch(() => null)) as { error?: unknown } | null;
-  return new Error(typeof body?.error === 'string' ? body.error : fallback);
+  const body = (await response.json().catch(() => null)) as {
+    error?: unknown;
+    code?: unknown;
+    sessionId?: unknown;
+  } | null;
+  const error = new Error(typeof body?.error === 'string' ? body.error : fallback) as Error & {
+    code?: string;
+    sessionId?: string | null;
+    status?: number;
+  };
+  if (typeof body?.code === 'string') error.code = body.code;
+  if (typeof body?.sessionId === 'string' || body?.sessionId === null) error.sessionId = body.sessionId;
+  error.status = response.status;
+  return error;
 };
 
 export const fetchBrowserState = async (): Promise<BrowserState> => {
@@ -93,11 +112,22 @@ export const fetchBrowserState = async (): Promise<BrowserState> => {
   return response.json() as Promise<BrowserState>;
 };
 
-export const runBrowserAction = async <T = unknown>(action: BrowserAction, params: Record<string, unknown> = {}): Promise<T> => {
+export const takeoverBrowser = async (): Promise<{ previous: BrowserControl; control: BrowserControl }> => {
+  const response = await runtimeFetch('/api/browser/takeover', { method: 'POST' });
+  if (!response.ok) throw await responseError(response, 'Failed to take over the browser');
+  return response.json() as Promise<{ previous: BrowserControl; control: BrowserControl }>;
+};
+
+export const runBrowserAction = async <T = unknown>(
+  action: BrowserAction,
+  params: Record<string, unknown> = {},
+  options: { takeover?: boolean } = {},
+): Promise<T> => {
+  const body = options.takeover === true ? { ...params, takeover: true } : params;
   const response = await runtimeFetch(ACTION_PATHS[action], {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(params),
+    body: JSON.stringify(body),
   });
   if (!response.ok) throw await responseError(response, `Failed to run ${action}`);
   return response.json() as Promise<T>;

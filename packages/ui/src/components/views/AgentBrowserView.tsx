@@ -4,11 +4,21 @@ import { Button } from '@/components/ui/button';
 import { Icon } from '@/components/icon/Icon';
 import type { IconName } from '@/components/icon/icons';
 import { SortableTabsStrip } from '@/components/ui/sortable-tabs-strip';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
 import { cn } from '@/lib/utils';
 import { useI18n } from '@/lib/i18n';
 import { useAgentBrowserStore } from '@/stores/useAgentBrowserStore';
-import type { BrowserViewportPreset } from '@/lib/browser/agentBrowserApi';
+import type { BrowserAction, BrowserViewportPreset } from '@/lib/browser/agentBrowserApi';
 import { fetchBrowserArtifactObjectUrl } from '@/lib/browser/agentBrowserApi';
+import { useGlobalSessionStatus } from '@/sync/sync-context';
+import { abortCurrentOperation } from '@/sync/session-actions';
 
 type AgentBrowserViewProps = {
   visible?: boolean;
@@ -79,6 +89,7 @@ export const AgentBrowserView: React.FC<AgentBrowserViewProps> = ({ visible = tr
   const tabs = useAgentBrowserStore((s) => s.tabs);
   const activeTabId = useAgentBrowserStore((s) => s.activeTabId);
   const recording = useAgentBrowserStore((s) => s.recording);
+  const control = useAgentBrowserStore((s) => s.control);
   const artifacts = useAgentBrowserStore((s) => s.artifacts);
   const error = useAgentBrowserStore((s) => s.error);
   const connection = useAgentBrowserStore((s) => s.connection);
@@ -86,14 +97,26 @@ export const AgentBrowserView: React.FC<AgentBrowserViewProps> = ({ visible = tr
   const unmount = useAgentBrowserStore((s) => s.unmount);
   const watch = useAgentBrowserStore((s) => s.watch);
   const run = useAgentBrowserStore((s) => s.run);
+  const takeover = useAgentBrowserStore((s) => s.takeover);
 
   const activeTab = React.useMemo(() => tabs.find((tab) => tab.id === activeTabId) ?? null, [tabs, activeTabId]);
   const frame = useAgentBrowserStore((s) => (activeTabId ? s.frameByTab[activeTabId] : undefined));
   const cursor = useAgentBrowserStore((s) => (activeTabId ? s.cursorByTab[activeTabId] : undefined));
 
+  const agentSessionId = control.actor === 'agent' && control.sessionId ? control.sessionId : null;
+  const agentSessionStatus = useGlobalSessionStatus(agentSessionId ?? '');
+  const agentBusy = Boolean(
+    agentSessionId
+    && (agentSessionStatus?.type === 'busy' || agentSessionStatus?.type === 'retry'),
+  );
+
   const [urlInput, setUrlInput] = React.useState('');
   const [busy, setBusy] = React.useState(false);
   const [preview, setPreview] = React.useState<string | null>(null);
+  const [takeoverOpen, setTakeoverOpen] = React.useState(false);
+  const [takeoverConfirming, setTakeoverConfirming] = React.useState(false);
+  const pendingActionRef = React.useRef<(() => Promise<unknown>) | null>(null);
+  const pendingSessionIdRef = React.useRef<string | null>(null);
   const imageRef = React.useRef<HTMLImageElement | null>(null);
 
   React.useEffect(() => {
@@ -120,28 +143,83 @@ export const AgentBrowserView: React.FC<AgentBrowserViewProps> = ({ visible = tr
     }
   }, []);
 
+  const ensureUserControl = React.useCallback(async () => {
+    const current = useAgentBrowserStore.getState().control;
+    if (current.actor === 'agent') {
+      await takeover();
+    }
+  }, [takeover]);
+
+  const runAsUser = React.useCallback(async (
+    action: BrowserAction,
+    params: Record<string, unknown> = {},
+  ) => {
+    await ensureUserControl();
+    return run(action, params, { takeover: true });
+  }, [ensureUserControl, run]);
+
+  const requestUserAction = React.useCallback((fn: () => Promise<unknown>) => {
+    const current = useAgentBrowserStore.getState().control;
+    if (current.actor === 'agent' && current.sessionId && agentBusy) {
+      pendingActionRef.current = fn;
+      pendingSessionIdRef.current = current.sessionId;
+      setTakeoverOpen(true);
+      return;
+    }
+    void guard(fn);
+  }, [agentBusy, guard]);
+
+  const handleTakeoverOpenChange = React.useCallback((open: boolean) => {
+    if (takeoverConfirming) return;
+    setTakeoverOpen(open);
+    if (!open) {
+      pendingActionRef.current = null;
+      pendingSessionIdRef.current = null;
+    }
+  }, [takeoverConfirming]);
+
+  const handleConfirmTakeover = React.useCallback(async () => {
+    const sessionId = pendingSessionIdRef.current;
+    const pending = pendingActionRef.current;
+    setTakeoverConfirming(true);
+    try {
+      if (sessionId) {
+        await abortCurrentOperation(sessionId);
+      }
+      await takeover();
+      setTakeoverOpen(false);
+      pendingActionRef.current = null;
+      pendingSessionIdRef.current = null;
+      if (pending) await guard(pending);
+    } catch {
+      // store error slice / abort logging already cover failures
+    } finally {
+      setTakeoverConfirming(false);
+    }
+  }, [guard, takeover]);
+
   const handleNavigate = React.useCallback(() => {
     const url = urlInput.trim();
     if (!url) return;
-    void guard(() => run('navigate', { tabId: activeTabId ?? undefined, url }));
-  }, [urlInput, guard, run, activeTabId]);
+    requestUserAction(() => runAsUser('navigate', { tabId: activeTabId ?? undefined, url }));
+  }, [urlInput, requestUserAction, runAsUser, activeTabId]);
 
   const handleReload = React.useCallback(() => {
     if (!activeTab?.url) return;
-    void guard(() => run('navigate', { tabId: activeTab.id, url: activeTab.url }));
-  }, [activeTab, guard, run]);
+    requestUserAction(() => runAsUser('navigate', { tabId: activeTab.id, url: activeTab.url }));
+  }, [activeTab, requestUserAction, runAsUser]);
 
   const handleNewTab = React.useCallback(() => {
-    void guard(() => run('tab.create', {}));
-  }, [guard, run]);
+    requestUserAction(() => runAsUser('tab.create', {}));
+  }, [requestUserAction, runAsUser]);
 
   const handleSelectTab = React.useCallback((tabId: string) => {
-    void run('tab.select', { tabId });
-  }, [run]);
+    requestUserAction(() => runAsUser('tab.select', { tabId }));
+  }, [requestUserAction, runAsUser]);
 
   const handleCloseTab = React.useCallback((tabId: string) => {
-    void run('tab.close', { tabId });
-  }, [run]);
+    requestUserAction(() => runAsUser('tab.close', { tabId }));
+  }, [requestUserAction, runAsUser]);
 
   const mapPoint = React.useCallback((event: React.PointerEvent | React.WheelEvent): { x: number; y: number } | null => {
     const image = imageRef.current;
@@ -159,45 +237,51 @@ export const AgentBrowserView: React.FC<AgentBrowserViewProps> = ({ visible = tr
   const handleSurfaceClick = React.useCallback((event: React.PointerEvent) => {
     const point = mapPoint(event);
     if (!point || !activeTabId) return;
-    void run('click', { tabId: activeTabId, ...point });
-  }, [mapPoint, run, activeTabId]);
+    requestUserAction(() => runAsUser('click', { tabId: activeTabId, ...point }));
+  }, [mapPoint, requestUserAction, runAsUser, activeTabId]);
 
   const handleSurfaceWheel = React.useCallback((event: React.WheelEvent) => {
     const point = mapPoint(event);
     if (!point || !activeTabId) return;
-    void run('scroll', { tabId: activeTabId, x: point.x, y: point.y, deltaX: event.deltaX, deltaY: event.deltaY });
-  }, [mapPoint, run, activeTabId]);
+    requestUserAction(() => runAsUser('scroll', {
+      tabId: activeTabId,
+      x: point.x,
+      y: point.y,
+      deltaX: event.deltaX,
+      deltaY: event.deltaY,
+    }));
+  }, [mapPoint, requestUserAction, runAsUser, activeTabId]);
 
   const handleSurfaceKeyDown = React.useCallback((event: React.KeyboardEvent) => {
     if (!activeTabId) return;
     const combo = specialKeyFor(event);
     if (combo) {
       event.preventDefault();
-      void run('key', { tabId: activeTabId, key: combo });
+      requestUserAction(() => runAsUser('key', { tabId: activeTabId, key: combo }));
       return;
     }
     if (event.key.length === 1 && !event.ctrlKey && !event.metaKey) {
       event.preventDefault();
-      void run('type', { tabId: activeTabId, text: event.key });
+      requestUserAction(() => runAsUser('type', { tabId: activeTabId, text: event.key }));
     }
-  }, [activeTabId, run]);
+  }, [activeTabId, requestUserAction, runAsUser]);
 
   const handleScreenshot = React.useCallback(() => {
-    void guard(() => run('screenshot', { tabId: activeTabId ?? undefined }));
-  }, [guard, run, activeTabId]);
+    requestUserAction(() => runAsUser('screenshot', { tabId: activeTabId ?? undefined }));
+  }, [requestUserAction, runAsUser, activeTabId]);
 
   const handleToggleRecording = React.useCallback(() => {
     if (recording?.active) {
-      void guard(() => run('recording.stop', {}));
+      requestUserAction(() => runAsUser('recording.stop', {}));
     } else {
-      void guard(() => run('recording.start', { tabId: activeTabId ?? undefined }));
+      requestUserAction(() => runAsUser('recording.start', { tabId: activeTabId ?? undefined }));
     }
-  }, [recording, guard, run, activeTabId]);
+  }, [recording, requestUserAction, runAsUser, activeTabId]);
 
   const handleViewport = React.useCallback((preset: BrowserViewportPreset) => {
     if (!activeTabId) return;
-    void guard(() => run('viewport', { tabId: activeTabId, preset }));
-  }, [guard, run, activeTabId]);
+    requestUserAction(() => runAsUser('viewport', { tabId: activeTabId, preset }));
+  }, [requestUserAction, runAsUser, activeTabId]);
 
   const tabItems = React.useMemo(() => tabs.map((tab) => ({
     id: tab.id,
@@ -284,6 +368,11 @@ export const AgentBrowserView: React.FC<AgentBrowserViewProps> = ({ visible = tr
           </Button>
         ))}
         <div className="ml-auto flex items-center gap-1">
+          {agentBusy ? (
+            <span className="typography-micro text-[var(--status-warning)]">
+              {t('agentBrowser.control.agentActive')}
+            </span>
+          ) : null}
           <Button type="button" size="xs" variant="ghost" onClick={handleScreenshot} disabled={busy || !activeTab} className="gap-1" title={t('agentBrowser.actions.screenshot')}>
             <Icon name="camera" className="size-3.5" />
           </Button>
@@ -372,6 +461,35 @@ export const AgentBrowserView: React.FC<AgentBrowserViewProps> = ({ visible = tr
           <img src={preview} alt={t('agentBrowser.artifacts.screenshot')} className="max-h-full max-w-full rounded-lg shadow-2xl" />
         </div>
       ) : null}
+
+      <Dialog open={takeoverOpen} onOpenChange={handleTakeoverOpenChange}>
+        <DialogContent showCloseButton={false} className="max-w-sm gap-5">
+          <DialogHeader>
+            <DialogTitle>{t('agentBrowser.takeover.title')}</DialogTitle>
+            <DialogDescription>{t('agentBrowser.takeover.description')}</DialogDescription>
+          </DialogHeader>
+          <DialogFooter className="w-full sm:justify-end">
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              disabled={takeoverConfirming}
+              onClick={() => handleTakeoverOpenChange(false)}
+            >
+              {t('agentBrowser.takeover.cancel')}
+            </Button>
+            <Button
+              type="button"
+              variant="destructive"
+              size="sm"
+              disabled={takeoverConfirming}
+              onClick={() => void handleConfirmTakeover()}
+            >
+              {t('agentBrowser.takeover.confirm')}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 };

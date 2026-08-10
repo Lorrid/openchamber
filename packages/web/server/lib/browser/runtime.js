@@ -14,6 +14,13 @@ import {
   launchChrome as defaultLaunchChrome,
   resolveBrowserExecutableSource,
 } from './chrome.js';
+import {
+  BROWSER_AGENT_CONTROLLING_CODE,
+  BrowserAgentControllingError,
+  createEmptyBrowserControl,
+  resolveBrowserControlForAction,
+  serializeBrowserControl,
+} from './control.js';
 import { keyEventsForCombo, parseKeyCombo } from './input.js';
 import { normalizeBrowserUrl } from './urls.js';
 
@@ -86,6 +93,7 @@ export const createBrowserRuntime = ({
   let browserPromise = null;
   let activeTabId = null;
   let recording = null;
+  let control = createEmptyBrowserControl();
   let wsServer = new WebSocketServer({ noServer: true, maxPayload: BROWSER_WS_MAX_PAYLOAD_BYTES });
   let idleTimer = null;
 
@@ -139,7 +147,29 @@ export const createBrowserRuntime = ({
     activeTabId,
     tabs: [...tabs.values()].map(serializeTab),
     recording: serializeRecording(),
+    control: serializeBrowserControl(control),
   });
+
+  const applyControl = (next) => {
+    const serialized = serializeBrowserControl(next);
+    const previous = serializeBrowserControl(control);
+    if (
+      previous.actor === serialized.actor
+      && previous.sessionId === serialized.sessionId
+      && previous.claimedAt === serialized.claimedAt
+    ) {
+      return previous;
+    }
+    control = serialized;
+    broadcastState();
+    return previous;
+  };
+
+  const takeover = () => {
+    const resolved = resolveBrowserControlForAction(control, { actor: 'user', takeover: true }, now);
+    const previous = applyControl(resolved.control);
+    return { previous, control: serializeBrowserControl(control) };
+  };
 
   const send = (socket, message) => {
     if (socket?.readyState !== 1) return;
@@ -603,8 +633,10 @@ export const createBrowserRuntime = ({
   };
 
   // Single dispatch surface shared by HTTP routes, the WebSocket input channel,
-  // and the agent tool, so every entrypoint honors the same validation.
-  const executeAction = async (action, params = {}) => {
+  // and the agent tool, so every entrypoint honors the same validation and
+  // control-ownership rules (agent vs user takeover).
+  const executeAction = async (action, params = {}, options = {}) => {
+    applyControl(resolveBrowserControlForAction(control, options, now).control);
     switch (action) {
       case 'state':
         return state();
@@ -722,9 +754,20 @@ export const createBrowserRuntime = ({
     }
     if (message.t === 'input' && nonEmptyString(message.action)) {
       try {
-        await executeAction(message.action, message.params || {});
+        const params = message.params && typeof message.params === 'object' ? { ...message.params } : {};
+        const takeoverFlag = params.takeover === true || message.takeover === true;
+        delete params.takeover;
+        await executeAction(message.action, params, { actor: 'user', takeover: takeoverFlag });
       } catch (error) {
-        send(connection.socket, { t: 'error', message: error instanceof Error ? error.message : String(error) });
+        const payload = {
+          t: 'error',
+          message: error instanceof Error ? error.message : String(error),
+        };
+        if (error instanceof BrowserAgentControllingError || error?.code === BROWSER_AGENT_CONTROLLING_CODE) {
+          payload.code = BROWSER_AGENT_CONTROLLING_CODE;
+          payload.sessionId = error.sessionId ?? null;
+        }
+        send(connection.socket, payload);
       }
     }
   };
@@ -810,6 +853,7 @@ export const createBrowserRuntime = ({
       return statusSnapshot();
     },
     executeAction,
+    takeover,
     listArtifacts,
     readArtifact,
     attachWebSocket,
@@ -818,3 +862,5 @@ export const createBrowserRuntime = ({
     _internal: { resolveViewport, createTab, buildChromeLaunchArgs },
   };
 };
+
+export { BROWSER_AGENT_CONTROLLING_CODE, BrowserAgentControllingError };

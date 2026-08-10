@@ -138,3 +138,42 @@ describeBrowser('createBrowserRuntime (real Chrome)', () => {
     expect(runtime.state().tabs).toHaveLength(0);
   }, 10_000);
 });
+
+describe('createBrowserRuntime control ownership', () => {
+  let dataDir;
+  let runtime;
+
+  beforeAll(() => {
+    dataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'oc-browser-control-'));
+    runtime = createBrowserRuntime({
+      fs,
+      fsPromises: fs.promises,
+      path,
+      spawn,
+      crypto,
+      dataDir,
+      searchPathFor,
+      idleShutdownMs: 5 * 60 * 1000,
+      findBrowserExecutable: () => '/usr/bin/false',
+    });
+  });
+
+  afterAll(async () => {
+    await runtime?.shutdown();
+    fs.rmSync(dataDir, { recursive: true, force: true });
+  });
+
+  it('blocks user actions while an agent holds control until takeover', async () => {
+    await runtime.executeAction('state', {}, { actor: 'agent', sessionId: 'ses_busy' });
+    expect(runtime.state().control).toMatchObject({ actor: 'agent', sessionId: 'ses_busy' });
+    await expect(runtime.executeAction('state', {}, { actor: 'user' })).rejects.toMatchObject({
+      code: 'BROWSER_AGENT_CONTROLLING',
+      sessionId: 'ses_busy',
+    });
+    const claimed = runtime.takeover();
+    expect(claimed.previous.sessionId).toBe('ses_busy');
+    expect(claimed.control.actor).toBe('user');
+    await runtime.executeAction('state', {}, { actor: 'user', takeover: true });
+    expect(runtime.state().control.actor).toBe('user');
+  });
+});

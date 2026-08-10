@@ -1334,9 +1334,12 @@ async function main(options = {}) {
     dataDir: OPENCHAMBER_DATA_DIR,
     env: process.env,
     executeAction: (...args) => openChamberControlService.execute(...args),
-    executeBrowserAction: (action, params) => {
+    executeBrowserAction: (action, params, options = {}) => {
       if (!browserRuntime) throw new Error('OpenChamber browser surface is not initialized');
-      return browserRuntime.executeAction(action, params);
+      return browserRuntime.executeAction(action, params, {
+        ...options,
+        actor: 'agent',
+      });
     },
     getActivePort: () => {
       const address = server?.address?.();

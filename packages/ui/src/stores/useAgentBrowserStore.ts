@@ -4,8 +4,10 @@ import {
   fetchBrowserArtifacts,
   fetchBrowserState,
   runBrowserAction,
+  takeoverBrowser,
   type BrowserAction,
   type BrowserArtifact,
+  type BrowserControl,
   type BrowserCursor,
   type BrowserRecording,
   type BrowserSocketMessage,
@@ -15,6 +17,8 @@ import {
 
 type BrowserConnectionStatus = 'idle' | 'connecting' | 'open' | 'closed';
 
+const EMPTY_CONTROL: BrowserControl = { actor: null, sessionId: null, claimedAt: null };
+
 type AgentBrowserStoreState = {
   supported: boolean;
   running: boolean;
@@ -22,6 +26,7 @@ type AgentBrowserStoreState = {
   activeTabId: string | null;
   tabs: BrowserTab[];
   recording: BrowserRecording;
+  control: BrowserControl;
   artifacts: BrowserArtifact[];
   connection: BrowserConnectionStatus;
   /** JPEG data URL of the latest screencast frame for the watched tab. */
@@ -35,7 +40,12 @@ type AgentBrowserStoreActions = {
   mount: () => void;
   unmount: () => void;
   watch: (tabId: string | null) => void;
-  run: <T = unknown>(action: BrowserAction, params?: Record<string, unknown>) => Promise<T>;
+  run: <T = unknown>(
+    action: BrowserAction,
+    params?: Record<string, unknown>,
+    options?: { takeover?: boolean },
+  ) => Promise<T>;
+  takeover: () => Promise<BrowserControl>;
   refreshArtifacts: () => Promise<void>;
   setError: (message: string | null) => void;
 };
@@ -49,6 +59,7 @@ const applyState = (set: (partial: Partial<AgentBrowserStoreState>) => void, sta
     activeTabId: state.activeTabId,
     tabs: state.tabs,
     recording: state.recording,
+    control: state.control ?? EMPTY_CONTROL,
     hydrated: true,
   });
 };
@@ -60,6 +71,7 @@ export const useAgentBrowserStore = create<AgentBrowserStoreState & AgentBrowser
   activeTabId: null,
   tabs: [],
   recording: null,
+  control: EMPTY_CONTROL,
   artifacts: [],
   connection: 'idle',
   frameByTab: {},
@@ -137,15 +149,21 @@ export const useAgentBrowserStore = create<AgentBrowserStoreState & AgentBrowser
     socket?.watch(tabId);
   },
 
-  run: async (action, params = {}) => {
+  run: async (action, params = {}, options = {}) => {
     try {
-      const result = await runBrowserAction(action, params);
+      const result = await runBrowserAction(action, params, options);
       set({ error: null });
       return result as never;
     } catch (error) {
       set({ error: error instanceof Error ? error.message : String(error) });
       throw error;
     }
+  },
+
+  takeover: async () => {
+    const result = await takeoverBrowser();
+    set({ control: result.control, error: null });
+    return result.control;
   },
 
   refreshArtifacts: async () => {
