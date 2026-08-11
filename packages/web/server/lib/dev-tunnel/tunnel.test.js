@@ -42,18 +42,20 @@ const startDevServer = async (handler) => {
   return port;
 };
 
-const startHost = async ({ allowedPorts }) => {
+const startHost = async ({ allowedPorts, auth = null, discoveryOk = true }) => {
   const server = http.createServer((_req, res) => res.end('host'));
   const sockets = trackSockets(server);
   const port = await listen(server);
   const runtime = createDevTunnelRuntime({
     server,
-    discoverDevServers: async () => ({
-      ok: true,
-      servers: allowedPorts.map((value) => ({ port: value, url: `http://localhost:${value}/`, command: 'node', pid: 1 })),
-    }),
-    uiAuthController: { enabled: false },
-    isRequestOriginAllowed: async () => true,
+    discoverDevServers: async () => (discoveryOk
+      ? {
+        ok: true,
+        servers: allowedPorts.map((value) => ({ port: value, url: `http://localhost:${value}/`, command: 'node', pid: 1 })),
+      }
+      : { ok: false, reason: 'no-listener-source' }),
+    uiAuthController: auth ?? { enabled: false },
+    isRequestOriginAllowed: async (req) => req.headers.origin === 'http://allowed.example',
     rejectWebSocketUpgrade: (socket, status, message) => {
       socket.write(`HTTP/1.1 ${status} ${message}\r\n\r\n`);
       socket.destroy();
@@ -64,7 +66,7 @@ const startHost = async ({ allowedPorts }) => {
     runtime.dispose();
     await stopServer(server, sockets)();
   });
-  return { port, baseUrl: `http://127.0.0.1:${port}`, runtime };
+  return { port, baseUrl: `http://127.0.0.1:${port}`, runtime, sockets };
 };
 
 const httpGet = (port, path = '/') => new Promise((resolve, reject) => {
@@ -164,4 +166,83 @@ describe('dev tunnel end to end', () => {
   // abandoned socket makes this harness's teardown unreliable, and a flaky test
   // is worse than a documented gap. Verify it by hand against a restarting dev
   // server.
+});
+
+/**
+ * The desktop shell dials this from the main process, where there is no browser
+ * and therefore no Origin header. Requiring one — as the browser-facing sockets
+ * rightly do — silently rejected every tunnel and surfaced as an empty response
+ * in the panel, with nothing to connect it back to authentication.
+ */
+describe('dev tunnel authentication', () => {
+  const clientAuth = {
+    enabled: true,
+    resolveAuthContext: async (req) => (
+      req.headers.authorization === 'Bearer good' ? { type: 'client' } : null
+    ),
+  };
+  const sessionAuth = {
+    enabled: true,
+    resolveAuthContext: async () => ({ type: 'session' }),
+  };
+
+  test('accepts a bearer-authenticated client that sends no origin', async () => {
+    const devPort = await startDevServer((_req, res) => res.end('ok'));
+    const host = await startHost({ allowedPorts: [devPort], auth: clientAuth });
+    const client = createDevTunnelClient({ logger: { warn: () => {} } });
+    started.push(() => client.closeAll());
+
+    const { localPort } = await client.open({
+      baseUrl: host.baseUrl,
+      port: devPort,
+      headers: { Authorization: 'Bearer good' },
+    });
+    expect((await httpGet(localPort, '/')).body).toBe('ok');
+  });
+
+  test('rejects a client with no credentials', async () => {
+    const devPort = await startDevServer((_req, res) => res.end('ok'));
+    const host = await startHost({ allowedPorts: [devPort], auth: clientAuth });
+    const client = createDevTunnelClient({ logger: { warn: () => {} } });
+    started.push(() => client.closeAll());
+
+    const { localPort } = await client.open({ baseUrl: host.baseUrl, port: devPort });
+    await expect(httpGet(localPort, '/')).rejects.toThrow();
+  });
+
+  test('still refuses a session-authenticated request that sends no origin', async () => {
+    // Only an explicit bearer may skip the origin check; ambient session
+    // credentials are exactly what the origin check exists to protect.
+    const devPort = await startDevServer((_req, res) => res.end('ok'));
+    const host = await startHost({ allowedPorts: [devPort], auth: sessionAuth });
+    const client = createDevTunnelClient({ logger: { warn: () => {} } });
+    started.push(() => client.closeAll());
+
+    const { localPort } = await client.open({ baseUrl: host.baseUrl, port: devPort });
+    await expect(httpGet(localPort, '/')).rejects.toThrow();
+  });
+
+  test('rejects a disallowed origin even with valid credentials', async () => {
+    const devPort = await startDevServer((_req, res) => res.end('ok'));
+    const host = await startHost({ allowedPorts: [devPort], auth: clientAuth });
+    const client = createDevTunnelClient({ logger: { warn: () => {} } });
+    started.push(() => client.closeAll());
+
+    const { localPort } = await client.open({
+      baseUrl: host.baseUrl,
+      port: devPort,
+      headers: { Authorization: 'Bearer good', Origin: 'http://evil.example' },
+    });
+    await expect(httpGet(localPort, '/')).rejects.toThrow();
+  });
+
+  test('refuses every port when discovery itself is unavailable', async () => {
+    const devPort = await startDevServer((_req, res) => res.end('ok'));
+    const host = await startHost({ allowedPorts: [devPort], discoveryOk: false });
+    const client = createDevTunnelClient({ logger: { warn: () => {} } });
+    started.push(() => client.closeAll());
+
+    const { localPort } = await client.open({ baseUrl: host.baseUrl, port: devPort });
+    await expect(httpGet(localPort, '/')).rejects.toThrow();
+  });
 });

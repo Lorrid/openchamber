@@ -10,7 +10,14 @@
  * empty list, because a caller cannot tell "nothing is running" from "the scan
  * broke" and would render the wrong empty state.
  */
-import { parseLsofListeners, parseNetstatListeners, selectDevServerCandidates } from './parse.js';
+import fsPromises from 'node:fs/promises';
+
+import {
+  parseLsofListeners,
+  parseNetstatListeners,
+  parseProcNetTcpListeners,
+  selectDevServerCandidates,
+} from './parse.js';
 
 const SCAN_TIMEOUT_MS = 2_500;
 /** Enumeration is cheap but not free; a short cache absorbs panel re-renders. */
@@ -41,21 +48,44 @@ const runCommand = (spawn, command, args, timeoutMs) => new Promise((resolve) =>
   child.on('close', (code) => finish(code === 0 || stdout ? stdout : null));
 });
 
-export const createDevServerScanner = ({ spawn, platform }) => {
+/**
+ * Reads the kernel's socket tables. Containers routinely ship without `lsof`,
+ * and a deployed OpenChamber is precisely where discovery has to work, so this
+ * is tried whenever the command is unavailable.
+ */
+const readProcListeners = async (readFile) => {
+  const tables = await Promise.all(['/proc/net/tcp', '/proc/net/tcp6'].map(
+    (path) => readFile(path, 'utf8').catch(() => null),
+  ));
+  if (tables.every((table) => table === null)) return null;
+  const byPort = new Map();
+  for (const table of tables) {
+    if (table === null) continue;
+    for (const entry of parseProcNetTcpListeners(table)) {
+      if (!byPort.has(entry.port)) byPort.set(entry.port, entry);
+    }
+  }
+  return [...byPort.values()].sort((left, right) => left.port - right.port);
+};
+
+export const createDevServerScanner = ({ spawn, platform, readFile = fsPromises.readFile }) => {
   let cache = null;
 
   const scan = async () => {
     const isWindows = platform === 'win32';
-    const output = isWindows
-      ? await runCommand(spawn, 'netstat', ['-ano', '-p', 'TCP'], SCAN_TIMEOUT_MS)
-      : await runCommand(spawn, 'lsof', ['-iTCP', '-sTCP:LISTEN', '-P', '-n', '-F', 'pcn'], SCAN_TIMEOUT_MS);
-
-    if (output === null) {
-      return { ok: false, reason: isWindows ? 'netstat-unavailable' : 'lsof-unavailable' };
+    if (isWindows) {
+      const output = await runCommand(spawn, 'netstat', ['-ano', '-p', 'TCP'], SCAN_TIMEOUT_MS);
+      if (output === null) return { ok: false, reason: 'netstat-unavailable' };
+      return { ok: true, listeners: parseNetstatListeners(output) };
     }
 
-    const listeners = isWindows ? parseNetstatListeners(output) : parseLsofListeners(output);
-    return { ok: true, listeners };
+    const output = await runCommand(spawn, 'lsof', ['-iTCP', '-sTCP:LISTEN', '-P', '-n', '-F', 'pcn'], SCAN_TIMEOUT_MS);
+    if (output !== null) return { ok: true, listeners: parseLsofListeners(output) };
+
+    const procListeners = await readProcListeners(readFile);
+    if (procListeners !== null) return { ok: true, listeners: procListeners };
+
+    return { ok: false, reason: 'no-listener-source' };
   };
 
   return {

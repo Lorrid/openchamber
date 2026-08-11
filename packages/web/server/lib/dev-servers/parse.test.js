@@ -3,6 +3,7 @@ import { describe, expect, test } from 'bun:test';
 import {
   isLocallyReachableHost,
   parseLsofListeners,
+  parseProcNetTcpListeners,
   parseNetstatListeners,
   selectDevServerCandidates,
 } from './parse.js';
@@ -121,5 +122,53 @@ describe('candidate selection', () => {
   test('keeps everything else, including unusual ports', () => {
     const ports = selectDevServerCandidates([{ port: 12345, pid: 1, command: 'bun' }]).map((entry) => entry.port);
     expect(ports).toEqual([12345]);
+  });
+});
+
+describe('proc net tcp parsing', () => {
+  const header = '  sl  local_address rem_address   st tx_queue rx_queue tr tm->when retrnsmt   uid  timeout inode';
+
+  test('takes listening sockets on loopback and wildcard binds', () => {
+    const output = [
+      header,
+      '   0: 00000000:1F90 00000000:0000 0A 00000000:00000000 00:00000000 00000000  1000        0 12345 1 0000 100 0',
+      '   1: 0100007F:0BB8 00000000:0000 0A 00000000:00000000 00:00000000 00000000  1000        0 12346 1 0000 100 0',
+    ].join('\n');
+
+    expect(parseProcNetTcpListeners(output)).toEqual([
+      { port: 3000, pid: null, command: '' },
+      { port: 8080, pid: null, command: '' },
+    ]);
+  });
+
+  test('ignores sockets that are not listening', () => {
+    const output = [
+      header,
+      '   0: 0100007F:1F90 0100007F:C350 01 00000000:00000000 00:00000000 00000000  1000        0 12345 1 0000 100 0',
+    ].join('\n');
+    expect(parseProcNetTcpListeners(output)).toEqual([]);
+  });
+
+  test('ignores a bind to a specific LAN address', () => {
+    const output = [
+      header,
+      '   0: 0A00020F:1F90 00000000:0000 0A 00000000:00000000 00:00000000 00000000  1000        0 12345 1 0000 100 0',
+    ].join('\n');
+    expect(parseProcNetTcpListeners(output)).toEqual([]);
+  });
+
+  test('reads the IPv6 table, including ::1 and ::', () => {
+    const output = [
+      header,
+      '   0: 00000000000000000000000001000000:1F90 00000000000000000000000000000000:0000 0A 00000000:00000000 00:00000000 00000000  1000 0 1 1 0 0 0',
+      '   1: 00000000000000000000000000000000:0BB8 00000000000000000000000000000000:0000 0A 00000000:00000000 00:00000000 00000000  1000 0 1 1 0 0 0',
+    ].join('\n');
+    expect(parseProcNetTcpListeners(output).map((entry) => entry.port)).toEqual([3000, 8080]);
+  });
+
+  test('tolerates an empty or malformed table', () => {
+    expect(parseProcNetTcpListeners('')).toEqual([]);
+    expect(parseProcNetTcpListeners(header)).toEqual([]);
+    expect(parseProcNetTcpListeners('garbage')).toEqual([]);
   });
 });

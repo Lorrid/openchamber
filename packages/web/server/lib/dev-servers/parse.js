@@ -157,3 +157,47 @@ export const selectDevServerCandidates = (listeners, { ownPorts = [], ownPids = 
     return true;
   });
 };
+
+/** Linux reports LISTEN as state 0A in /proc/net/tcp. */
+const PROC_STATE_LISTEN = '0A';
+/** Wildcard binds, as /proc writes them: IPv4 0.0.0.0 and IPv6 :: */
+const PROC_WILDCARD_ADDRESSES = new Set(['00000000', '00000000000000000000000000000000']);
+/** Loopback: 127.0.0.1 (little-endian per word) and ::1 */
+const PROC_LOOPBACK_ADDRESSES = new Set(['0100007F', '00000000000000000000000001000000']);
+
+/**
+ * Parses `/proc/net/tcp` and `/proc/net/tcp6`.
+ *
+ * The fallback for hosts without `lsof`, which is most containers — and a
+ * deployed OpenChamber is exactly where a dev server needs discovering. Reads a
+ * kernel file rather than shelling out, so it cannot be defeated by a missing
+ * binary or a stripped PATH.
+ *
+ * No process name or pid: mapping a socket to its owner means walking every
+ * /proc/<pid>/fd, which is far more work than the label is worth.
+ */
+export const parseProcNetTcpListeners = (output) => {
+  const byPort = new Map();
+
+  for (const line of String(output || '').split('\n')) {
+    const parts = line.trim().split(/\s+/);
+    // sl, local_address, rem_address, st, ...
+    if (parts.length < 4) continue;
+    if (parts[3] !== PROC_STATE_LISTEN) continue;
+
+    const [address, portHex] = String(parts[1] || '').split(':');
+    if (!address || !portHex) continue;
+
+    const normalizedAddress = address.toUpperCase();
+    if (!PROC_WILDCARD_ADDRESSES.has(normalizedAddress) && !PROC_LOOPBACK_ADDRESSES.has(normalizedAddress)) {
+      continue;
+    }
+
+    const port = Number.parseInt(portHex, 16);
+    if (!Number.isInteger(port) || port <= 0 || port > 65535) continue;
+    if (byPort.has(port)) continue;
+    byPort.set(port, { port, pid: null, command: '' });
+  }
+
+  return [...byPort.values()].sort((left, right) => left.port - right.port);
+};

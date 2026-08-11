@@ -11,6 +11,18 @@
  * offers the user, not "any loopback port". Without that restriction an
  * authenticated client could dial arbitrary local services on the host —
  * databases, admin panels, the OpenCode API — through this socket.
+ *
+ * Authentication differs from the browser-facing sockets on purpose. Those
+ * demand an allowed `Origin`, which is a CSRF defence: a hostile page can make
+ * a browser open a WebSocket carrying the user's ambient cookies, and the
+ * origin is what exposes it. This tunnel's client is the desktop shell, not a
+ * browser, and it authenticates with an explicit bearer token. So:
+ *
+ * - With an `Origin` header, the request came from a browser context and the
+ *   usual origin check applies unchanged.
+ * - With no `Origin`, the request must carry client-token auth. A browser
+ *   cannot reach this path: the WebSocket API always sends an origin and never
+ *   lets a page set an `Authorization` header.
  */
 import net from 'node:net';
 import { WebSocketServer } from 'ws';
@@ -121,12 +133,19 @@ export function createDevTunnelRuntime({
     void (async () => {
       try {
         if (uiAuthController?.enabled) {
-          if (!await uiAuthController.ensureSessionToken(req, null)) {
+          const auth = await uiAuthController.resolveAuthContext(req, null, { allowUrlToken: false });
+          if (!auth) {
             rejectWebSocketUpgrade(socket, 401, 'UI authentication required');
             return;
           }
-          if (!await isRequestOriginAllowed(req)) {
-            rejectWebSocketUpgrade(socket, 403, 'Invalid origin');
+          const hasOrigin = typeof req.headers?.origin === 'string' && req.headers.origin.trim() !== '';
+          if (hasOrigin) {
+            if (!await isRequestOriginAllowed(req)) {
+              rejectWebSocketUpgrade(socket, 403, 'Invalid origin');
+              return;
+            }
+          } else if (auth.type !== 'client') {
+            rejectWebSocketUpgrade(socket, 403, 'Client authentication required');
             return;
           }
         }
@@ -141,6 +160,9 @@ export function createDevTunnelRuntime({
           return;
         }
         if (!await isAllowedPort(port)) {
+          // Says which port, because the alternative is an empty response in
+          // the panel with nothing anywhere explaining why.
+          logger.warn?.(`[dev-tunnel] refused port ${port}: not reported by dev-server discovery`);
           rejectWebSocketUpgrade(socket, 403, 'That port is not an available dev server');
           return;
         }
