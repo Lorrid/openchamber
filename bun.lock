@@ -104,7 +104,7 @@
       },
       "devDependencies": {
         "@electron/rebuild": "^3.7.0",
-        "@openchamber/opencode-container-workspace": "github:openchamber/opencode-container-workspace#5dc9ef84de826e4404cfe610aa8460834dcfb8d3",
+        "@openchamber/opencode-container-workspace": "github:openchamber/opencode-container-workspace#69c125d024583696ff096f6e5b84416cdefbabab",
         "electron": "^41.2.1",
         "electron-builder": "^26.0.0",
       },
@@ -267,7 +267,7 @@
       "dependencies": {
         "@clack/prompts": "^1.1.0",
         "@octokit/rest": "^22.0.1",
-        "@openchamber/opencode-container-workspace": "github:openchamber/opencode-container-workspace#5dc9ef84de826e4404cfe610aa8460834dcfb8d3",
+        "@openchamber/opencode-container-workspace": "github:openchamber/opencode-container-workspace#69c125d024583696ff096f6e5b84416cdefbabab",
         "@opencode-ai/sdk": "1.18.12",
         "@simplewebauthn/server": "13.3.1",
         "adm-zip": "^0.6.0",
@@ -996,7 +996,7 @@
 
     "@openchamber/mobile": ["@openchamber/mobile@workspace:packages/mobile"],
 
-    "@openchamber/opencode-container-workspace": ["@openchamber/opencode-container-workspace@github:openchamber/opencode-container-workspace#5dc9ef8", {}, "openchamber-opencode-container-workspace-5dc9ef8", "sha512-SdWuIwbiM3aqu6qi6LuinOi2xCui4RmJJ0utKVJo0O7aazxL9FnA+Cq+3pSut14gjd1m5Kt8S7NmSt8oEr5ISw=="],
+    "@openchamber/opencode-container-workspace": ["@openchamber/opencode-container-workspace@github:openchamber/opencode-container-workspace#69c125d", {}, "openchamber-opencode-container-workspace-69c125d"],
 
     "@openchamber/ui": ["@openchamber/ui@workspace:packages/ui"],
 

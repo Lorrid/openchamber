@@ -29,7 +29,7 @@ old workspace after an app restart is best-effort, never something a flow depend
 
 | Thing | Value |
 | --- | --- |
-| Plugin pin (`packages/web/package.json`, `packages/electron/package.json`, `bun.lock`) | `5dc9ef84de826e4404cfe610aa8460834dcfb8d3` (plugin PR #12) |
+| Plugin pin (`packages/web/package.json`, `packages/electron/package.json`, `bun.lock`) | `69c125d024583696ff096f6e5b84416cdefbabab` |
 | Runtime image | `ghcr.io/openchamber/opencode-workspace@sha256:40266ce54560149396cdc89395fa26df08f8924e4f377acbf12a88da08b2c141` |
 | Gateway image | `ghcr.io/openchamber/workspace-egress-gateway@sha256:37c1452849212c5e9b2b62257792ca092c44c5ebba6d165667f235164e571555` |
 | OpenCode / SDK / plugin API | `1.18.12` |
