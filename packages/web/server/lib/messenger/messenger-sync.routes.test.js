@@ -195,4 +195,70 @@ describe('messenger /discord/save-config always bridges', () => {
     expect(res.status).toBe(200);
     expect(persistSettings.mock.calls.at(-1)[0].discord.bridgeEnabled).toBe(true);
   });
+
+  it('preserves sticky listenerEnabled:false across save-config', async () => {
+    const persistSettings = vi.fn(async () => {});
+    const readSettings = vi.fn(async () => ({
+      discord: {
+        botToken: SETTINGS_TOKEN,
+        listenerEnabled: false,
+        guildPolicies: { [GUILD]: { enabled: true } },
+      },
+    }));
+
+    const res = await request(createApp({ readSettings, persistSettings }))
+      .post('/api/messenger/discord/save-config')
+      .send({
+        guildPolicies: { [GUILD]: { enabled: true, replyMode: 'mention' } },
+      });
+
+    expect(res.status).toBe(200);
+    expect(persistSettings.mock.calls.at(-1)[0].discord.listenerEnabled).toBe(false);
+  });
+});
+
+describe('messenger /discord/listener sticky stop', () => {
+  it('listener/stop persists listenerEnabled:false', async () => {
+    const persistSettings = vi.fn(async () => {});
+    const readSettings = vi.fn(async () => ({ discord: { botToken: SETTINGS_TOKEN } }));
+
+    const res = await request(createApp({ readSettings, persistSettings }))
+      .post('/api/messenger/discord/listener/stop')
+      .send({});
+
+    expect(res.status).toBe(200);
+    const saved = persistSettings.mock.calls.at(-1)[0].discord;
+    expect(saved.listenerEnabled).toBe(false);
+    expect(saved.botToken).toBe(SETTINGS_TOKEN);
+  });
+
+  it('runtime-status reports listenerEnabled:false after sticky stop', async () => {
+    const readSettings = vi.fn(async () => ({
+      discord: { botToken: SETTINGS_TOKEN, listenerEnabled: false },
+    }));
+
+    const res = await request(createApp({ readSettings })).get(
+      '/api/messenger/discord/runtime-status',
+    );
+
+    expect(res.status).toBe(200);
+    expect(res.body).toMatchObject({
+      ok: true,
+      configured: true,
+      listenerEnabled: false,
+    });
+  });
+
+  it('auto-start refuses when listenerEnabled is false', async () => {
+    const readSettings = vi.fn(async () => ({
+      discord: { botToken: SETTINGS_TOKEN, listenerEnabled: false },
+    }));
+
+    const res = await request(createApp({ readSettings }))
+      .post('/api/messenger/discord/auto-start')
+      .send({});
+
+    expect(res.status).toBe(200);
+    expect(res.body).toMatchObject({ ok: false, reason: 'listener-disabled' });
+  });
 });

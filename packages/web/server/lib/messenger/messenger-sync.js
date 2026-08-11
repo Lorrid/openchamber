@@ -499,6 +499,9 @@ export function createMessengerSyncRouter({
     const discord = settings?.discord;
     const token = discord?.botToken;
     if (!token) return null;
+    // Sticky stop from the Discord integration toggle — do not mirror web
+    // sessions into Discord while listening is explicitly disabled.
+    if (discord.listenerEnabled === false) return null;
 
     // The configured Discord owner is auto-added to web-created threads so the
     // thread shows up under the channel for them (a bot-only thread is hidden).

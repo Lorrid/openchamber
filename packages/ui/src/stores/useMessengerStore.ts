@@ -2193,10 +2193,16 @@ export const useMessengerStore = create<MessengerState>()(
         // server is set to respond, stop it when none are (there is no manual
         // Start/Stop in the primary UI anymore). Tokenless clients use the
         // server-saved token fallback on the start/stop endpoints.
+        // Respect the integration sticky stop — never restart after the user
+        // flipped the Discord toggle off (discordListenerEnabled === false).
         const latest = get().connections.find((c) => c.type === 'discord');
         if (!latest?.botToken && !latest?.discordServerConfigured) return;
         const shouldListen = anyDiscordGuildResponds(latest);
-        if (shouldListen && !latest.discordListenerRunning) {
+        if (
+          shouldListen &&
+          latest.discordListenerEnabled !== false &&
+          !latest.discordListenerRunning
+        ) {
           setTimeout(() => void get().startDiscordListener(), 0);
         } else if (!shouldListen && latest.discordListenerRunning) {
           setTimeout(() => void get().stopDiscordListener(), 0);

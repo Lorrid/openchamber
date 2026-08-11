@@ -1855,6 +1855,24 @@ export function createMessengerOpencodeBridge({
     }
   }
 
+  /**
+   * Whether outbound posts to a messenger are allowed. Matches the sticky
+   * stop contract used by boot auto-start / health checks: absent means
+   * enabled; only an explicit `listenerEnabled: false` (Discord/Telegram
+   * integration toggle) mutes the surface.
+   */
+  async function isMessengerOutboundEnabled(type) {
+    if (type !== 'discord' && type !== 'telegram') return true;
+    if (typeof readSettings !== 'function') return true;
+    try {
+      const settings = await readSettings();
+      const block = type === 'telegram' ? settings?.telegram : settings?.discord;
+      return block?.listenerEnabled !== false;
+    } catch {
+      return true;
+    }
+  }
+
   // --- Mention-only mode ------------------------------------------------------
   function mentionModeKey({ type, token, channelId }) {
     return `mention-mode:${type}:${tokenHash(token)}:${channelId}`;
@@ -2296,6 +2314,7 @@ export function createMessengerOpencodeBridge({
     const content = renderTodoListForMessenger(todos);
     if (!content || content === entry.lastContent) return;
     if (!ctx.token || (ctx.type !== 'discord' && ctx.type !== 'telegram')) return;
+    if (!(await isMessengerOutboundEnabled(ctx.type))) return;
     const ch = ctx.threadId ?? ctx.channelId;
 
     if (ctx.type === 'telegram') {
@@ -2791,6 +2810,9 @@ export function createMessengerOpencodeBridge({
    *  Discord's 2000-char limit (long /help output etc.). */
   async function postMessengerSurface({ type, token, channelId, threadId }, content) {
     if (!content) return { ok: false, error: 'empty content' };
+    if (!(await isMessengerOutboundEnabled(type))) {
+      return { ok: false, error: `${type} integration disabled` };
+    }
     if (type === 'discord') {
       const ch = threadId ?? channelId;
       const chunks = splitForDiscord(content);
@@ -2890,6 +2912,9 @@ export function createMessengerOpencodeBridge({
         return null;
       }
       if (!target?.type || !target?.token || !target?.channelId) return null;
+      // Integration toggle sticky-stop — never spawn a mirror thread while
+      // Discord/Telegram listening is explicitly disabled.
+      if (!(await isMessengerOutboundEnabled(target.type))) return null;
 
       const type = target.type;
       const token = target.token;
@@ -5207,6 +5232,12 @@ export function createMessengerOpencodeBridge({
     agentOverride: pinnedAgent = null,
     fromQueue = false,
   }) {
+    // Integration toggle sticky-stop: refuse inbound bridging while the
+    // Discord/Telegram listener is explicitly disabled in settings.
+    if (!(await isMessengerOutboundEnabled(type))) {
+      return { ok: false, error: `${type} integration disabled` };
+    }
+
     // Attachments: text files inline as <attachment> blocks,
     // images/PDFs forwarded as file parts, voice messages transcribed via the
     // configured STT server. An attachment-only message is allowed — the
@@ -5612,7 +5643,7 @@ export function createMessengerOpencodeBridge({
     // question.reply so the blocked turn resumes; never as a second prompt
     // (which would abort the waiting turn as a supersede).
     if (await answerPendingQuestionWithText(sessionId, text, { directory: effectiveProjectPath })) {
-      void postToSurface(ctx, '✅ _Reply sent as the answer to the question above._');
+      await postToSurface(ctx, '✅ _Reply sent as the answer to the question above._').catch(() => {});
       broadcastEvent?.('messenger.bridge.question_answered', {
         type,
         channelId,

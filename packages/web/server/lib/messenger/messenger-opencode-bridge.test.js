@@ -716,6 +716,62 @@ describe('web session mirroring', () => {
 
     expect(globalThis.fetch).not.toHaveBeenCalled();
   });
+
+  it('does not mirror web sessions when Discord integration is sticky-stopped', async () => {
+    // Regression: toggling Discord off stopped the gateway but web UI sessions
+    // kept posting into Discord via REST. Outbound must respect listenerEnabled.
+    const bridge = makeWebBridge({
+      readSettings: async () => ({
+        discord: { botToken: 'bot-token', listenerEnabled: false },
+      }),
+    });
+
+    await emitUserMessage(bridge, {
+      sessionId: 'web-ses-disabled',
+      messageId: 'm-user-off',
+      partId: 'usr-off',
+      text: 'should not reach discord',
+    });
+    await emitAssistantMessage(bridge, {
+      sessionId: 'web-ses-disabled',
+      messageId: 'm-ast-off',
+      partId: 'ast-off',
+      text: 'assistant should stay quiet too',
+    });
+
+    expect(globalThis.fetch).not.toHaveBeenCalled();
+  });
+
+  it('stops posting to an already-bound Discord session after sticky stop', async () => {
+    let enabled = true;
+    const bridge = makeWebBridge({
+      readSettings: async () => ({
+        discord: { botToken: 'bot-token', listenerEnabled: enabled },
+      }),
+    });
+
+    await emitUserMessage(bridge, {
+      sessionId: 'web-ses-then-off',
+      messageId: 'm-user-1',
+      partId: 'usr-1',
+      text: 'before disable',
+    });
+    expect(
+      globalThis.fetch.mock.calls.some(([url]) => String(url).includes('/messages')),
+    ).toBe(true);
+
+    const callsBefore = globalThis.fetch.mock.calls.length;
+    enabled = false;
+
+    await emitAssistantMessage(bridge, {
+      sessionId: 'web-ses-then-off',
+      messageId: 'm-ast-1',
+      partId: 'ast-1',
+      text: 'after disable — must not post',
+    });
+
+    expect(globalThis.fetch.mock.calls.length).toBe(callsBefore);
+  });
 });
 
 describe('discord inbound mirroring', () => {
