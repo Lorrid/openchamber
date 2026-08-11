@@ -6,7 +6,8 @@ import { invokeDesktopCommand } from '@/lib/desktopNative';
 import { useI18n } from '@/lib/i18n';
 import { openExternalUrl } from '@/lib/url';
 import { useUIStore } from '@/stores/useUIStore';
-import { BLANK_URL, isStartingServerFailure, normalizeBrowserUrl } from '@/lib/browser/url';
+import { BLANK_URL, isLoopbackUrl, isStartingServerFailure, normalizeBrowserUrl } from '@/lib/browser/url';
+import { probeLoopbackStatus } from '@/lib/browser/devServers';
 import {
   cancelAnnotationSession,
   runAnnotationSession,
@@ -46,6 +47,14 @@ const isChromiumHost = (): boolean => (
 /** How long to keep waiting for a dev server that is still coming up. */
 const DEV_SERVER_WAIT_MS = 40_000;
 const DEV_SERVER_RETRY_DELAY_MS = 600;
+/**
+ * A shorter budget for a server that *answers* but with a 5xx, which is what a
+ * dev gateway does while the app behind it is still starting. Kept short and
+ * applied only before the first good load, so a genuine server error — a build
+ * failure page, say — is shown promptly instead of being hidden behind a
+ * spinner.
+ */
+const GATEWAY_WAIT_MS = 20_000;
 
 const WebviewBrowser: React.FC<BrowserPaneProps> = ({ initialUrl, directory, tabID }) => {
   const { t } = useI18n();
@@ -77,6 +86,9 @@ const WebviewBrowser: React.FC<BrowserPaneProps> = ({ initialUrl, directory, tab
   const [isWaitingForServer, setIsWaitingForServer] = React.useState(false);
   /** When the current run of retries began, per URL. */
   const retryRef = React.useRef<{ url: string; startedAt: number } | null>(null);
+  /** Set once this tab has seen a page that was not a startup error. */
+  const servedOkRef = React.useRef(false);
+  const openedAtRef = React.useRef(Date.now());
 
   const persistUrl = React.useCallback((url: string) => {
     if (!url || url === BLANK_URL || !directory || !tabID) return;
@@ -316,41 +328,78 @@ const WebviewBrowser: React.FC<BrowserPaneProps> = ({ initialUrl, directory, tab
     }
   }, [isLoading]);
 
-  // A page opened the moment its dev server was launched will fail its first
-  // load; the server is simply not listening yet. Retry quietly for a while
-  // instead of showing an error the user can only answer by pressing reload.
+  // A page opened the moment its dev server launched is not ready twice over:
+  // first nothing is listening at all, then a gateway answers while the app
+  // behind it is still starting. Neither is an error the user can act on, and
+  // both used to leave them pressing reload. Both are waited out here.
   const status = navigation.status;
   React.useEffect(() => {
-    if (status.kind !== 'failed') {
-      retryRef.current = null;
-      setIsWaitingForServer(false);
-      return;
-    }
-    if (!isStartingServerFailure(status.code, status.url)) {
-      setIsWaitingForServer(false);
-      return;
-    }
+    const reloadSoon = (): (() => void) => {
+      setIsWaitingForServer(true);
+      const timer = setTimeout(() => {
+        try {
+          webviewRef.current?.reload();
+        } catch {
+          // View went away; the next mount starts over.
+        }
+      }, DEV_SERVER_RETRY_DELAY_MS);
+      return () => clearTimeout(timer);
+    };
 
-    const now = Date.now();
-    const run = retryRef.current?.url === status.url
-      ? retryRef.current
-      : { url: status.url, startedAt: now };
-    retryRef.current = run;
-
-    if (now - run.startedAt > DEV_SERVER_WAIT_MS) {
-      setIsWaitingForServer(false);
-      return;
-    }
-
-    setIsWaitingForServer(true);
-    const timer = setTimeout(() => {
-      try {
-        webviewRef.current?.reload();
-      } catch {
-        // View went away; the next mount starts over.
+    // Nothing is listening yet.
+    if (status.kind === 'failed') {
+      if (!isStartingServerFailure(status.code, status.url)) {
+        setIsWaitingForServer(false);
+        return;
       }
-    }, DEV_SERVER_RETRY_DELAY_MS);
-    return () => clearTimeout(timer);
+      const now = Date.now();
+      const run = retryRef.current?.url === status.url
+        ? retryRef.current
+        : { url: status.url, startedAt: now };
+      retryRef.current = run;
+      if (now - run.startedAt > DEV_SERVER_WAIT_MS) {
+        setIsWaitingForServer(false);
+        return;
+      }
+      return reloadSoon();
+    }
+
+    // Mid-navigation: leave whatever state the previous decision set, so a
+    // retry does not flash the page behind the waiting screen and back.
+    if (status.kind === 'loading') return;
+
+    retryRef.current = null;
+
+    if (status.kind !== 'ready' || !status.url || !isLoopbackUrl(status.url)) {
+      servedOkRef.current = true;
+      setIsWaitingForServer(false);
+      return;
+    }
+    if (servedOkRef.current || Date.now() - openedAtRef.current > GATEWAY_WAIT_MS) {
+      servedOkRef.current = true;
+      setIsWaitingForServer(false);
+      return;
+    }
+
+    // The page loaded, but a 5xx here means the server answered on behalf of an
+    // app that is not up yet. Checked by status rather than by reading the page:
+    // guessing from its contents would mean encoding what each dev server's
+    // error page looks like, which is exactly the trap this panel came out of.
+    let cancelled = false;
+    let cancelReload: (() => void) | null = null;
+    void probeLoopbackStatus(status.url).then((httpStatus) => {
+      if (cancelled) return;
+      if (httpStatus === null || httpStatus < 500) {
+        servedOkRef.current = true;
+        setIsWaitingForServer(false);
+        return;
+      }
+      cancelReload = reloadSoon();
+    });
+    return () => {
+      cancelled = true;
+      cancelReload?.();
+    };
   }, [status]);
 
   const failed = navigation.status.kind === 'failed' && !isWaitingForServer ? navigation.status : null;

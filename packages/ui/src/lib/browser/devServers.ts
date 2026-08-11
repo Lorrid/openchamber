@@ -44,3 +44,30 @@ export const fetchDevServers = async (signal?: AbortSignal): Promise<DevServerDi
     return { kind: 'unavailable' };
   }
 };
+
+/**
+ * Asks the server for the HTTP status a loopback URL currently returns.
+ *
+ * A dev server fronted by a gateway answers requests before the app behind it
+ * is up, returning a 5xx page. That is a successful load as far as the browser
+ * is concerned, so it produces no navigation failure — the status is the only
+ * honest signal, short of reading the page and guessing from its contents.
+ *
+ * Returns null when the status could not be established.
+ */
+export const probeLoopbackStatus = async (url: string): Promise<number | null> => {
+  try {
+    const response = await runtimeFetch('/api/system/probe-url', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ url }),
+    });
+    if (!response.ok) return null;
+    const body: unknown = await response.json();
+    if (!body || typeof body !== 'object') return null;
+    const status = (body as { status?: unknown }).status;
+    return typeof status === 'number' && Number.isFinite(status) ? status : null;
+  } catch {
+    return null;
+  }
+};

@@ -92,7 +92,6 @@ export const buildAnnotationOverlayScript = (
   var LABELS = CONFIG.labels;
   var OVERLAY_ATTR = 'data-openchamber-annotation';
   var Z_OVERLAY = 2147483646;
-  var MAX_MARQUEE_ELEMENTS = 20;
   var MAX_TEXT = 400;
   var MIN_RECT = 3;
 
@@ -108,7 +107,10 @@ export const buildAnnotationOverlayScript = (
   var counter = 0;
   var nextId = function (prefix) { counter += 1; return prefix + '-' + counter; };
 
-  var selected = new Map();
+  // Exactly one element at a time. Clicking another replaces it, clicking the
+  // same one clears it. Several things at once belong to the region tool, which
+  // marks an area rather than a list of elements to restyle individually.
+  var selected = null;
   var regions = [];
   var strokes = [];
   var styleChanges = new Map();
@@ -124,9 +126,6 @@ export const buildAnnotationOverlayScript = (
     return { x: Math.min(ax, bx), y: Math.min(ay, by), width: Math.abs(bx - ax), height: Math.abs(by - ay) };
   };
   var usableRect = function (rect) { return rect.width >= MIN_RECT && rect.height >= MIN_RECT; };
-  var intersects = function (a, b) {
-    return a.x < b.x + b.width && a.x + a.width > b.x && a.y < b.y + b.height && a.y + a.height > b.y;
-  };
 
   // ------------------------------------------------------------- description
 
@@ -360,28 +359,28 @@ export const buildAnnotationOverlayScript = (
   };
 
   var applyStyle = function (property, value) {
-    selected.forEach(function (target) {
-      if (!target.baseline.has(property)) {
-        target.baseline.set(property, target.element.style.getPropertyValue(property));
-      }
-      var key = target.id + '|' + property;
-      var previous = styleChanges.has(key)
-        ? styleChanges.get(key).previousValue
-        : String(window.getComputedStyle(target.element).getPropertyValue(property) || '');
-      target.element.style.setProperty(property, value, 'important');
-      styleChanges.set(key, { targetId: target.id, property: property, previousValue: previous, value: value });
-    });
+    var target = selected;
+    if (!target) return;
+    if (!target.baseline.has(property)) {
+      target.baseline.set(property, target.element.style.getPropertyValue(property));
+    }
+    var key = target.id + '|' + property;
+    var previous = styleChanges.has(key)
+      ? styleChanges.get(key).previousValue
+      : String(window.getComputedStyle(target.element).getPropertyValue(property) || '');
+    target.element.style.setProperty(property, value, 'important');
+    styleChanges.set(key, { targetId: target.id, property: property, previousValue: previous, value: value });
     syncSelectionVisuals();
   };
 
   var revertStyles = function () {
-    selected.forEach(function (target) {
-      target.baseline.forEach(function (baselineValue, property) {
-        if (baselineValue) target.element.style.setProperty(property, baselineValue);
-        else target.element.style.removeProperty(property);
+    if (selected) {
+      selected.baseline.forEach(function (baselineValue, property) {
+        if (baselineValue) selected.element.style.setProperty(property, baselineValue);
+        else selected.element.style.removeProperty(property);
       });
-      target.baseline.clear();
-    });
+      selected.baseline.clear();
+    }
     styleChanges.clear();
   };
 
@@ -459,34 +458,48 @@ export const buildAnnotationOverlayScript = (
   // -------------------------------------------------------------- selection
 
   var syncSelectionVisuals = function () {
-    selected.forEach(function (target) {
-      var box = target.element.getBoundingClientRect();
-      var rect = rectFrom(box);
-      if (!usableRect(rect)) {
-        target.outline.style.display = 'none';
-        target.badge.style.display = 'none';
-        return;
-      }
-      positionBox(target.outline, rect);
-      target.badge.style.display = 'block';
-      target.badge.style.transform = 'translate(' + Math.max(2, rect.x) + 'px,' + Math.max(2, rect.y - 17) + 'px)';
-    });
+    var target = selected;
+    if (!target) return;
+    var rect = rectFrom(target.element.getBoundingClientRect());
+    if (!usableRect(rect)) {
+      target.outline.style.display = 'none';
+      target.badge.style.display = 'none';
+      return;
+    }
+    positionBox(target.outline, rect);
+    target.badge.style.display = 'block';
+    target.badge.style.transform = 'translate(' + Math.max(2, rect.x) + 'px,' + Math.max(2, rect.y - 17) + 'px)';
   };
 
   var syncChrome = function () {
-    var total = selected.size + regions.length + strokes.length;
+    var total = (selected ? 1 : 0) + regions.length + strokes.length;
     countLabel.textContent = total > 0 ? String(total) : '';
     submitButton.disabled = total === 0;
-    panel.style.display = panelOpen && selected.size > 0 ? 'grid' : 'none';
-    stylesButton.setAttribute('aria-pressed', panelOpen && selected.size > 0 ? 'true' : 'false');
+    panel.style.display = panelOpen && selected ? 'grid' : 'none';
+    stylesButton.setAttribute('aria-pressed', panelOpen && selected ? 'true' : 'false');
     selectButton.setAttribute('aria-pressed', tool === 'select' ? 'true' : 'false');
     marqueeButton.setAttribute('aria-pressed', tool === 'marquee' ? 'true' : 'false');
     drawButton.setAttribute('aria-pressed', tool === 'draw' ? 'true' : 'false');
   };
 
-  var addSelection = function (element) {
-    for (var entry of selected.values()) {
-      if (entry.element === element) return;
+  var dropSelection = function () {
+    if (!selected) return;
+    // Reverting first: the element is about to stop being tracked, and a style
+    // edit left on it could never be undone afterwards.
+    revertStyles();
+    selected.outline.remove();
+    selected.badge.remove();
+    selected = null;
+  };
+
+  var selectElement = function (element) {
+    var wasSelected = selected && selected.element === element;
+    dropSelection();
+    if (wasSelected) {
+      // Clicking the chosen element again clears it, so a misclick is one
+      // click to undo rather than a trip through Clear.
+      syncChrome();
+      return;
     }
     var outline = document.createElement('div');
     outline.className = 'box';
@@ -495,19 +508,13 @@ export const buildAnnotationOverlayScript = (
     badge.textContent = selectorPart(element);
     shadow.appendChild(outline);
     shadow.appendChild(badge);
-    var target = { id: nextId('element'), element: element, outline: outline, badge: badge, baseline: new Map() };
-    selected.set(target.id, target);
+    selected = { id: nextId('element'), element: element, outline: outline, badge: badge, baseline: new Map() };
     syncSelectionVisuals();
     syncChrome();
   };
 
   var clearAll = function () {
-    revertStyles();
-    selected.forEach(function (target) {
-      target.outline.remove();
-      target.badge.remove();
-    });
-    selected.clear();
+    dropSelection();
     regions.length = 0;
     strokes.length = 0;
     while (svg.firstChild) svg.removeChild(svg.firstChild);
@@ -570,7 +577,7 @@ export const buildAnnotationOverlayScript = (
 
     if (tool === 'select') {
       var element = elementFromPoint(event.clientX, event.clientY);
-      if (element) addSelection(element);
+      if (element) selectElement(element);
       return;
     }
 
@@ -598,33 +605,23 @@ export const buildAnnotationOverlayScript = (
       marqueeBox.style.display = 'none';
       var rect = finished.rect;
       if (!rect || !usableRect(rect)) return;
-      var matched = 0;
-      var all = document.body ? document.body.querySelectorAll('*') : [];
-      for (var i = 0; i < all.length && matched < MAX_MARQUEE_ELEMENTS; i += 1) {
-        var candidate = all[i];
-        if (isOverlayNode(candidate)) continue;
-        var box = rectFrom(candidate.getBoundingClientRect());
-        if (!usableRect(box) || !intersects(box, rect)) continue;
-        // Only take elements fully inside the marquee; otherwise every ancestor
-        // up to <html> matches and the selection is meaningless.
-        if (box.x < rect.x || box.y < rect.y || box.x + box.width > rect.x + rect.width || box.y + box.height > rect.y + rect.height) continue;
-        addSelection(candidate);
-        matched += 1;
-      }
-      if (matched === 0) {
-        regions.push({ id: nextId('region'), rect: rect });
-        var outline = document.createElementNS(svgNS, 'rect');
-        outline.setAttribute('x', String(rect.x));
-        outline.setAttribute('y', String(rect.y));
-        outline.setAttribute('width', String(rect.width));
-        outline.setAttribute('height', String(rect.height));
-        outline.style.fill = THEME.primarySoft;
-        outline.setAttribute('stroke', THEME.primary);
-        outline.setAttribute('stroke-width', '1.5');
-        outline.setAttribute('rx', '2');
-        svg.appendChild(outline);
-        syncChrome();
-      }
+      // A region marks an area of the page, not the elements inside it. It used
+      // to expand into a selection of every element it fully contained, which
+      // silently turned one drag into twenty targets and made the tool
+      // unpredictable: what you got depended on the page's markup, not on what
+      // you drew.
+      regions.push({ id: nextId('region'), rect: rect });
+      var outline = document.createElementNS(svgNS, 'rect');
+      outline.setAttribute('x', String(rect.x));
+      outline.setAttribute('y', String(rect.y));
+      outline.setAttribute('width', String(rect.width));
+      outline.setAttribute('height', String(rect.height));
+      outline.style.fill = THEME.primarySoft;
+      outline.setAttribute('stroke', THEME.primary);
+      outline.setAttribute('stroke-width', '1.5');
+      outline.setAttribute('rx', '2');
+      svg.appendChild(outline);
+      syncChrome();
       return;
     }
 
@@ -706,11 +703,10 @@ export const buildAnnotationOverlayScript = (
   };
 
   submitButton.addEventListener('click', function () {
-    if (selected.size + regions.length + strokes.length === 0) return;
-    var elements = [];
-    selected.forEach(function (target) {
-      elements.push({ id: target.id, element: describe(target.element) });
-    });
+    if (!selected && regions.length === 0 && strokes.length === 0) return;
+    // Zero or one, never more. Kept as a list so regions, strokes and elements
+    // stay one uniform shape for everything downstream.
+    var elements = selected ? [{ id: selected.id, element: describe(selected.element) }] : [];
     var changes = [];
     styleChanges.forEach(function (change) { changes.push(change); });
 
