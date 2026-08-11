@@ -47,20 +47,26 @@ const WebviewBrowser: React.FC<BrowserPaneProps> = ({ initialUrl, directory, tab
   const { t } = useI18n();
   const { currentTheme } = useThemeSystem();
   const webviewRef = React.useRef<WebviewElement | null>(null);
+  // Tracked in state as well as a ref: effects that attach listeners must re-run
+  // when the view appears, which a stable ref cannot tell them.
+  const [webviewElement, setWebviewElement] = React.useState<WebviewElement | null>(null);
+  const attachWebview = React.useCallback((node: WebviewElement | null) => {
+    webviewRef.current = node;
+    setWebviewElement(node);
+  }, []);
   const setContextPanelTabTargetPath = useUIStore((state) => state.setContextPanelTabTargetPath);
 
-  // The webview keeps its own history; `src` is only the starting point and must
-  // not be re-driven by React, or every state update would reload the page.
+  // Captured once: the webview owns its history from here on, and re-deriving
+  // this from props would drag the view back to where the tab started.
   const initialUrlRef = React.useRef(normalizeBrowserUrl(initialUrl));
   const startUrl = initialUrlRef.current !== BLANK_URL ? initialUrlRef.current : '';
 
-  // The first navigation goes through `src`, not `loadURL`. A tab opened in the
-  // background renders inside a hidden container, where the webview is not yet
-  // attached and an imperative navigation is simply lost — leaving a panel that
-  // never loads anything. Setting the attribute lets Chromium navigate whenever
-  // it does attach. Only the initial value is ever set here; everything after
-  // that is imperative.
-  const [initialSrc, setInitialSrc] = React.useState(BLANK_URL);
+  // The view is created with its final URL already in `src`, never navigated
+  // into place afterwards. A tab opened in the background renders hidden, where
+  // an imperative navigation is lost, and mutating `src` after the element
+  // exists is not reliably honoured either — both leave a panel that never
+  // loads. `null` means "still resolving", and the view is not rendered yet.
+  const [initialSrc, setInitialSrc] = React.useState<string | null>(startUrl ? null : BLANK_URL);
 
   const [address, setAddress] = React.useState(startUrl);
   const [isAnnotating, setIsAnnotating] = React.useState(false);
@@ -70,7 +76,7 @@ const WebviewBrowser: React.FC<BrowserPaneProps> = ({ initialUrl, directory, tab
     setContextPanelTabTargetPath(directory, tabID, url);
   }, [directory, tabID, setContextPanelTabTargetPath]);
 
-  const navigation = useWebviewNavigation(webviewRef, {
+  const navigation = useWebviewNavigation(webviewElement, {
     initialUrl: startUrl,
     onUrlChange: React.useCallback((url: string) => {
       const display = toDisplayUrl(url);
@@ -111,9 +117,11 @@ const WebviewBrowser: React.FC<BrowserPaneProps> = ({ initialUrl, directory, tab
   React.useEffect(() => {
     if (!startUrl) return;
     let active = true;
-    void resolveBrowsableUrl(startUrl).then((target) => {
-      if (active) setInitialSrc(target);
-    });
+    void resolveBrowsableUrl(startUrl)
+      .then((target) => { if (active) setInitialSrc(target); })
+      // Never leave the view unrendered: without a src the panel would stay
+      // permanently blank, which is worse than loading the untunneled URL.
+      .catch(() => { if (active) setInitialSrc(startUrl); });
     return () => { active = false; };
     // Only ever the initial navigation; later changes come from the user.
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -283,16 +291,15 @@ const WebviewBrowser: React.FC<BrowserPaneProps> = ({ initialUrl, directory, tab
 
   // Popups open in place; a detached window would escape the panel entirely.
   React.useEffect(() => {
-    const webview = webviewRef.current;
-    if (!webview) return;
+    if (!webviewElement) return;
     const onNewWindow = (event: Event) => {
       const detail = (event as CustomEvent<{ url?: string }>).detail;
       event.preventDefault();
       if (detail?.url) loadUrl(detail.url);
     };
-    webview.addEventListener('new-window', onNewWindow);
-    return () => webview.removeEventListener('new-window', onNewWindow);
-  }, [loadUrl]);
+    webviewElement.addEventListener('new-window', onNewWindow);
+    return () => webviewElement.removeEventListener('new-window', onNewWindow);
+  }, [loadUrl, webviewElement]);
 
   const handleReload = React.useCallback(() => {
     try {
@@ -323,14 +330,16 @@ const WebviewBrowser: React.FC<BrowserPaneProps> = ({ initialUrl, directory, tab
         onOpenDevTools={() => { try { webviewRef.current?.openDevTools(); } catch { /* not attached */ } }}
       />
       <div className="relative min-h-0 flex-1 bg-background">
-        <webview
-          ref={webviewRef}
-          src={initialSrc}
-          partition="persist:openchamber-browser"
-          allowpopups
-          style={{ width: '100%', height: '100%', border: 'none' }}
-        />
-        {!navigation.url && !isLoading ? (
+        {initialSrc !== null ? (
+          <webview
+            ref={attachWebview}
+            src={initialSrc}
+            partition="persist:openchamber-browser"
+            allowpopups
+            style={{ width: '100%', height: '100%', border: 'none' }}
+          />
+        ) : null}
+        {initialSrc !== null && !startUrl && !navigation.url && !isLoading ? (
           <BrowserEmptyState onOpen={loadUrl} />
         ) : null}
         {failed ? (

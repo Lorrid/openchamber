@@ -14,6 +14,10 @@ import { IDLE_NAV_STATUS, type BrowserNavStatus } from '@/lib/browser/contract';
  * - `ERR_ABORTED` is not a failure. It is what Chromium reports when a
  *   navigation is superseded by the next one, and treating it as an error puts
  *   an error screen over a page that is loading perfectly well.
+ *
+ * Takes the element rather than a ref so the listeners attach when the view
+ * actually appears. A ref is stable, so an effect keyed on it runs once — and
+ * silently attaches nothing at all when the view mounts a render later.
  */
 
 /** Chromium's code for "this navigation was replaced by another one". */
@@ -35,7 +39,7 @@ export type WebviewNavigation = {
 };
 
 export const useWebviewNavigation = (
-  webviewRef: React.RefObject<WebviewElement | null>,
+  webview: WebviewElement | null,
   { initialUrl, onUrlChange }: { initialUrl: string; onUrlChange: (url: string) => void },
 ): WebviewNavigation => {
   const [status, setStatus] = React.useState<BrowserNavStatus>(
@@ -50,7 +54,6 @@ export const useWebviewNavigation = (
   urlChangeRef.current = onUrlChange;
 
   React.useEffect(() => {
-    const webview = webviewRef.current;
     if (!webview) return;
 
     const readCurrentUrl = (): string => {
@@ -135,9 +138,13 @@ export const useWebviewNavigation = (
     webview.addEventListener('page-title-updated', onTitleUpdated);
     webview.addEventListener('did-fail-load', onFailLoad);
 
-    // The webview may already be settled by the time this effect runs.
+    // The webview may already be settled by the time this effect runs. Only
+    // treat it as settled when a page is actually loaded: a freshly created
+    // view reports "not loading" before its guest attaches, and settling on
+    // that would declare an empty page ready and hide the real one behind an
+    // empty state.
     try {
-      if (!webview.isLoading()) onStopLoading();
+      if (!webview.isLoading() && readCurrentUrl()) onStopLoading();
     } catch {
       // Not attached yet.
     }
@@ -150,7 +157,7 @@ export const useWebviewNavigation = (
       webview.removeEventListener('page-title-updated', onTitleUpdated);
       webview.removeEventListener('did-fail-load', onFailLoad);
     };
-  }, [webviewRef]);
+  }, [webview]);
 
   return { status, url, title, canGoBack, canGoForward };
 };
