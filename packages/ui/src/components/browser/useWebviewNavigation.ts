@@ -18,6 +18,10 @@ import { IDLE_NAV_STATUS, type BrowserNavStatus } from '@/lib/browser/contract';
  * Takes the element rather than a ref so the listeners attach when the view
  * actually appears. A ref is stable, so an effect keyed on it runs once — and
  * silently attaches nothing at all when the view mounts a render later.
+ *
+ * `<webview>` puts its event payload directly on the event object rather than
+ * under `detail`, so reading `detail` yields a failure with no code and no
+ * description — an error screen that says nothing. Both shapes are read here.
  */
 
 /** Chromium's code for "this navigation was replaced by another one". */
@@ -28,6 +32,13 @@ type FailLoadDetail = {
   errorDescription?: string;
   validatedURL?: string;
   isMainFrame?: boolean;
+};
+
+/** Reads a webview event payload, whichever shape this Electron version uses. */
+const readEventPayload = <T extends object>(event: Event): Partial<T> => {
+  const record = event as unknown as { detail?: unknown };
+  if (record.detail && typeof record.detail === 'object') return record.detail as Partial<T>;
+  return event as unknown as Partial<T>;
 };
 
 export type WebviewNavigation = {
@@ -106,20 +117,20 @@ export const useWebviewNavigation = (
     };
 
     const onNavigate = (event: Event) => {
-      const detail = (event as CustomEvent<{ url?: string }>).detail;
-      if (typeof detail?.url === 'string' && detail.url) {
+      const detail = readEventPayload<{ url?: string }>(event);
+      if (typeof detail.url === 'string' && detail.url) {
         commitUrl(detail.url);
         syncHistory();
       }
     };
 
     const onTitleUpdated = (event: Event) => {
-      const detail = (event as CustomEvent<{ title?: string }>).detail;
-      if (typeof detail?.title === 'string') setTitle(detail.title);
+      const detail = readEventPayload<{ title?: string }>(event);
+      if (typeof detail.title === 'string') setTitle(detail.title);
     };
 
     const onFailLoad = (event: Event) => {
-      const detail = (event as CustomEvent<FailLoadDetail>).detail ?? {};
+      const detail = readEventPayload<FailLoadDetail>(event);
       if (detail.isMainFrame === false) return;
       const code = typeof detail.errorCode === 'number' ? detail.errorCode : 0;
       if (code === ERR_ABORTED) return;

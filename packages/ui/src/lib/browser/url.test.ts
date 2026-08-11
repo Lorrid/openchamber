@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'bun:test';
 
-import { BLANK_URL, browserUrlLabel, isLoopbackUrl, normalizeBrowserUrl } from './url';
+import { BLANK_URL, browserUrlLabel, isLoopbackUrl, isStartingServerFailure, normalizeBrowserUrl } from './url';
 
 describe('normalizeBrowserUrl', () => {
   test('keeps an explicit scheme', () => {
@@ -55,5 +55,26 @@ describe('browserUrlLabel', () => {
   test('is empty for a blank page', () => {
     expect(browserUrlLabel(BLANK_URL)).toBe('');
     expect(browserUrlLabel('')).toBe('');
+  });
+});
+
+describe('isStartingServerFailure', () => {
+  test('retries a loopback connection refusal, the usual "server not up yet"', () => {
+    expect(isStartingServerFailure(-102, 'http://localhost:3000/')).toBe(true);
+    expect(isStartingServerFailure(-104, 'http://127.0.0.1:5173/')).toBe(true);
+  });
+
+  test('does not retry a public host that refused the connection', () => {
+    expect(isStartingServerFailure(-102, 'https://example.com/')).toBe(false);
+  });
+
+  test('does not retry a real page-level failure', () => {
+    // ERR_ABORTED and certificate errors are not "not up yet".
+    expect(isStartingServerFailure(-3, 'http://localhost:3000/')).toBe(false);
+    expect(isStartingServerFailure(-201, 'http://localhost:3000/')).toBe(false);
+  });
+
+  test('does not retry an unparseable url', () => {
+    expect(isStartingServerFailure(-102, 'not-a-url')).toBe(false);
   });
 });

@@ -6,7 +6,7 @@ import { invokeDesktopCommand } from '@/lib/desktopNative';
 import { useI18n } from '@/lib/i18n';
 import { openExternalUrl } from '@/lib/url';
 import { useUIStore } from '@/stores/useUIStore';
-import { BLANK_URL, normalizeBrowserUrl } from '@/lib/browser/url';
+import { BLANK_URL, isStartingServerFailure, normalizeBrowserUrl } from '@/lib/browser/url';
 import {
   cancelAnnotationSession,
   runAnnotationSession,
@@ -43,6 +43,10 @@ const isChromiumHost = (): boolean => (
   typeof window !== 'undefined' && Boolean(window.__OPENCHAMBER_ELECTRON__)
 );
 
+/** How long to keep waiting for a dev server that is still coming up. */
+const DEV_SERVER_WAIT_MS = 40_000;
+const DEV_SERVER_RETRY_DELAY_MS = 600;
+
 const WebviewBrowser: React.FC<BrowserPaneProps> = ({ initialUrl, directory, tabID }) => {
   const { t } = useI18n();
   const { currentTheme } = useThemeSystem();
@@ -70,6 +74,9 @@ const WebviewBrowser: React.FC<BrowserPaneProps> = ({ initialUrl, directory, tab
 
   const [address, setAddress] = React.useState(startUrl);
   const [isAnnotating, setIsAnnotating] = React.useState(false);
+  const [isWaitingForServer, setIsWaitingForServer] = React.useState(false);
+  /** When the current run of retries began, per URL. */
+  const retryRef = React.useRef<{ url: string; startedAt: number } | null>(null);
 
   const persistUrl = React.useCallback((url: string) => {
     if (!url || url === BLANK_URL || !directory || !tabID) return;
@@ -162,7 +169,6 @@ const WebviewBrowser: React.FC<BrowserPaneProps> = ({ initialUrl, directory, tab
       host: annotationHost,
       theme,
       labels: overlayLabels,
-      accentColor: theme.primary,
     })
       .then(async (result) => {
         setIsAnnotating(false);
@@ -310,7 +316,44 @@ const WebviewBrowser: React.FC<BrowserPaneProps> = ({ initialUrl, directory, tab
     }
   }, [isLoading]);
 
-  const failed = navigation.status.kind === 'failed' ? navigation.status : null;
+  // A page opened the moment its dev server was launched will fail its first
+  // load; the server is simply not listening yet. Retry quietly for a while
+  // instead of showing an error the user can only answer by pressing reload.
+  const status = navigation.status;
+  React.useEffect(() => {
+    if (status.kind !== 'failed') {
+      retryRef.current = null;
+      setIsWaitingForServer(false);
+      return;
+    }
+    if (!isStartingServerFailure(status.code, status.url)) {
+      setIsWaitingForServer(false);
+      return;
+    }
+
+    const now = Date.now();
+    const run = retryRef.current?.url === status.url
+      ? retryRef.current
+      : { url: status.url, startedAt: now };
+    retryRef.current = run;
+
+    if (now - run.startedAt > DEV_SERVER_WAIT_MS) {
+      setIsWaitingForServer(false);
+      return;
+    }
+
+    setIsWaitingForServer(true);
+    const timer = setTimeout(() => {
+      try {
+        webviewRef.current?.reload();
+      } catch {
+        // View went away; the next mount starts over.
+      }
+    }, DEV_SERVER_RETRY_DELAY_MS);
+    return () => clearTimeout(timer);
+  }, [status]);
+
+  const failed = navigation.status.kind === 'failed' && !isWaitingForServer ? navigation.status : null;
 
   return (
     <div className="absolute inset-0 flex flex-col bg-background">
@@ -342,11 +385,17 @@ const WebviewBrowser: React.FC<BrowserPaneProps> = ({ initialUrl, directory, tab
         {initialSrc !== null && !startUrl && !navigation.url && !isLoading ? (
           <BrowserEmptyState onOpen={loadUrl} />
         ) : null}
+        {isWaitingForServer ? (
+          <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 bg-background p-6 text-center">
+            <span className="typography-ui-header text-foreground">{t('contextPanel.browser.waitingForServer')}</span>
+            <span className="typography-micro text-muted-foreground">{t('contextPanel.browser.waitingForServerHint')}</span>
+          </div>
+        ) : null}
         {failed ? (
           <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 bg-background p-6 text-center">
             <span className="typography-ui-header text-foreground">{t('contextPanel.browser.loadFailed')}</span>
             <span className="typography-micro text-muted-foreground">
-              {failed.description || String(failed.code)}
+              {failed.description || t('contextPanel.browser.loadFailedUnknown')}
             </span>
           </div>
         ) : null}

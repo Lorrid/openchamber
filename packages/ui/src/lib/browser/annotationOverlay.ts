@@ -696,7 +696,13 @@ export const buildAnnotationOverlayScript = (
       if (typeof revert === 'function') revert();
     }
     teardown();
-    resolve(payload);
+    // Removing the chrome is not enough: the host screenshots this page right
+    // after we resolve, and the compositor can still be holding a frame that
+    // contains our outlines and labels. Yield two frames so the page has
+    // actually repainted without them.
+    requestAnimationFrame(function () {
+      requestAnimationFrame(function () { resolve(payload); });
+    });
   };
 
   submitButton.addEventListener('click', function () {

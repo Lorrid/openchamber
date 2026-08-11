@@ -81,25 +81,25 @@ const revertCalls = (calls: Call[]): number => (
 describe('annotation session', () => {
   test('returns null when the user cancels inside the page', async () => {
     const { host } = createHost({ overlayResult: null });
-    expect(await runAnnotationSession({ host, theme, labels, accentColor: 'rgb(1,2,3)' })).toBeNull();
+    expect(await runAnnotationSession({ host, theme, labels })).toBeNull();
   });
 
   test('does not re-run the revert hook when the overlay cancelled itself', async () => {
     const { host, calls } = createHost({ overlayResult: null });
-    await runAnnotationSession({ host, theme, labels, accentColor: 'rgb(1,2,3)' });
+    await runAnnotationSession({ host, theme, labels });
     expect(revertCalls(calls)).toBe(0);
   });
 
   test('discards a malformed payload and tears the overlay down', async () => {
     const { host, calls } = createHost({ overlayResult: { id: 'x', elements: 'not-an-array' } });
-    const result = await runAnnotationSession({ host, theme, labels, accentColor: 'rgb(1,2,3)' });
+    const result = await runAnnotationSession({ host, theme, labels });
     expect(result).toBeNull();
     expect(calls.some((call) => call.code.includes('data-openchamber-annotation'))).toBe(true);
   });
 
   test('reverts live style edits after a successful capture', async () => {
     const { host, calls } = createHost({ overlayResult: validPayload });
-    const result = await runAnnotationSession({ host, theme, labels, accentColor: 'rgb(1,2,3)' });
+    const result = await runAnnotationSession({ host, theme, labels });
 
     expect(result?.payload.id).toBe('annotation-1');
     expect(revertCalls(calls)).toBe(1);
@@ -111,7 +111,7 @@ describe('annotation session', () => {
       capturePage: async () => { throw new Error('capture failed'); },
     });
 
-    const result = await runAnnotationSession({ host, theme, labels, accentColor: 'rgb(1,2,3)' });
+    const result = await runAnnotationSession({ host, theme, labels });
 
     expect(result?.payload.id).toBe('annotation-1');
     expect(result?.screenshot).toBeNull();
@@ -120,14 +120,14 @@ describe('annotation session', () => {
 
   test('keeps the annotation when capture returns nothing', async () => {
     const { host } = createHost({ overlayResult: validPayload, capturePage: async () => null });
-    const result = await runAnnotationSession({ host, theme, labels, accentColor: 'rgb(1,2,3)' });
+    const result = await runAnnotationSession({ host, theme, labels });
     expect(result?.payload.comment).toBe('tighten this');
     expect(result?.screenshot).toBeNull();
   });
 
   test('runs the overlay with a user gesture so the page treats it as interactive', async () => {
     const { host, calls } = createHost({ overlayResult: null });
-    await runAnnotationSession({ host, theme, labels, accentColor: 'rgb(1,2,3)' });
+    await runAnnotationSession({ host, theme, labels });
     expect(calls[0]?.gesture).toBe(true);
   });
 

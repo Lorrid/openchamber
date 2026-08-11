@@ -40,6 +40,7 @@ export const renderAnnotationScreenshot = async ({
   cssHeight,
   payload,
   accentColor,
+  accentFill,
 }: {
   base64: string;
   mime: string;
@@ -48,7 +49,15 @@ export const renderAnnotationScreenshot = async ({
   cssWidth: number;
   cssHeight: number;
   payload: BrowserAnnotationPayload;
+  /** Solid outline color. */
   accentColor: string;
+  /**
+   * Translucent fill, resolved by the caller. Never derive this by appending an
+   * alpha suffix to `accentColor`: theme colors are not necessarily hex, and an
+   * invalid value leaves canvas on its default opaque black, which paints over
+   * the very element the screenshot is meant to show.
+   */
+  accentFill: string;
 }): Promise<File | null> => {
   if (!base64) return null;
 
@@ -94,7 +103,7 @@ export const renderAnnotationScreenshot = async ({
 
     context.lineWidth = Math.max(2, 2 * scaleX);
     context.strokeStyle = accentColor;
-    context.fillStyle = `${accentColor}24`;
+    context.fillStyle = accentFill;
 
     for (const entry of payload.elements) {
       const rect = toCanvas(entry.element.bounds);

@@ -73,12 +73,10 @@ export const runAnnotationSession = async ({
   host,
   theme,
   labels,
-  accentColor,
 }: {
   host: AnnotationHost;
   theme: BrowserAnnotationOverlayTheme;
   labels: BrowserAnnotationOverlayLabels;
-  accentColor: string;
 }): Promise<AnnotationSessionResult | null> => {
   const script = buildAnnotationOverlayScript(theme, labels);
   const raw = await host.executeJavaScript(script, true);
@@ -107,7 +105,8 @@ export const runAnnotationSession = async ({
       cssWidth: viewport.width,
       cssHeight: viewport.height,
       payload,
-      accentColor,
+      accentColor: theme.primary,
+      accentFill: theme.primarySoft,
     });
     return { payload, screenshot };
   } catch {
