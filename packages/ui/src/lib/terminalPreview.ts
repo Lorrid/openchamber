@@ -115,3 +115,48 @@ export const isTerminalPreviewUrlAvailable = async (url: string, timeoutMs = 150
     window.clearTimeout(timeout);
   }
 };
+
+const ANY_URL_PATTERN = /https?:\/\/[^\s<>'"`]+/gi;
+
+/**
+ * Finds the URL a project action wants opened.
+ *
+ * Prefers the announcement line — `Local`, `ready on`, `serving` — because that
+ * is the address the server is telling you to visit. Only when nothing is
+ * announced does it fall back to scoring every URL in the output, which is the
+ * weaker signal: a dev gateway logging its own routing table prints perfectly
+ * good-looking URLs for backends the user should never open directly.
+ *
+ * The path is part of the answer. An app served under a base path announces it,
+ * and dropping it lands the user on that app's 404.
+ */
+export const extractProjectActionUrl = (text: string): string | null => {
+  const announced = extractTerminalPreviewUrl(text);
+  if (announced) return announced;
+
+  const cleaned = String(text || '').replace(ANSI_ESCAPE_PATTERN, '');
+  const candidates: URL[] = [];
+  for (const raw of cleaned.match(ANY_URL_PATTERN) ?? []) {
+    try {
+      const parsed = new URL(trimUrlTrailingPunctuation(raw));
+      if (parsed.port) candidates.push(parsed);
+    } catch {
+      // Not a URL after trimming; nothing to score.
+    }
+  }
+  if (candidates.length === 0) return null;
+
+  const score = (parsed: URL): number => {
+    const host = parsed.hostname.toLowerCase();
+    const isLoopback = host === 'localhost' || host === '127.0.0.1' || host === '0.0.0.0' || host === '::1';
+    // Only the host is scored. Path depth used to count against a candidate,
+    // which is backwards: a printed path is information the server gave us.
+    return (isLoopback ? 50 : 0) - (parsed.search || parsed.hash ? 10 : 0);
+  };
+
+  let best = candidates[0];
+  for (const candidate of candidates.slice(1)) {
+    if (score(candidate) > score(best)) best = candidate;
+  }
+  return normalizeLoopbackUrl(best.toString());
+};
