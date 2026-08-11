@@ -1269,21 +1269,13 @@ export const useUIStore = create<UIStore>()(
             return;
           }
 
-          let label: string | null = null;
-          try {
-            const parsed = new URL(normalizedUrl);
-            if (parsed.protocol === 'http:' || parsed.protocol === 'https:') {
-              label = parsed.host || parsed.hostname || 'Preview';
-            }
-          } catch {
-            // ignore invalid URL
-          }
-
+          // No stored label: a browser tab is named after wherever it has
+          // navigated to, which the panel derives from targetPath.
           get().openContextPanelTab(normalizedDirectory, {
             mode: 'browser',
             targetPath: normalizedUrl,
             dedupeKey: normalizedUrl,
-            label,
+            label: null,
           });
         },
         openContextBrowser: (directory, url = '') => {

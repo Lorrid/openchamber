@@ -159,16 +159,20 @@ const getTabLabel = (
     return t('contextPanel.mode.chat');
   }
 
+  // Ahead of the stored label on purpose: a browser tab is named after the page
+  // it is showing, and the stored label is only ever the address it opened at.
+  // Keeping that would leave the tab claiming one host while the address bar
+  // shows another.
+  if (tab.mode === 'browser') {
+    return browserUrlLabel(tab.targetPath ?? '') || tab.label || t('contextPanel.mode.browser');
+  }
+
   if (tab.label) {
     return tab.label;
   }
 
   if (tab.mode === 'file') {
     return getFileNameFromPath(tab.targetPath) || t('contextPanel.mode.files');
-  }
-
-  if (tab.mode === 'browser') {
-    return browserUrlLabel(tab.targetPath ?? '') || t('contextPanel.mode.browser');
   }
 
   if (tab.mode === 'diff') {

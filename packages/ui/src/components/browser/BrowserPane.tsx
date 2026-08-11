@@ -387,7 +387,11 @@ const WebviewBrowser: React.FC<BrowserPaneProps> = ({ initialUrl, directory, tab
     // error page looks like, which is exactly the trap this panel came out of.
     let cancelled = false;
     let cancelReload: (() => void) | null = null;
-    void probeLoopbackStatus(status.url).then((httpStatus) => {
+    // Probe the address on the host, not the local tunnel port: the check runs
+    // on the server, where our ephemeral port means nothing. Asking about it
+    // failed every time, which read as "settled" and left the page on the error
+    // until a manual reload.
+    void probeLoopbackStatus(toDisplayUrl(status.url)).then((httpStatus) => {
       if (cancelled) return;
       if (httpStatus === null || httpStatus < 500) {
         servedOkRef.current = true;
