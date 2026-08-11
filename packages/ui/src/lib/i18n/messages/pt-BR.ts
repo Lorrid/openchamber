@@ -1364,6 +1364,7 @@ export const dict: Record<I18nKey, string> = {
   "planView.file.defaultName": "plano",
   "planView.title.default": "Plano",
   "planView.error.saveFailed": "Não foi possível salvar",
+  "planView.error.loadFailed": "Não foi possível carregar este plano",
   "planView.error.previewUnavailable": "Pré-visualização indisponível",
   "planView.error.switchToEditMode": "Alterne para o modo de edição para resolver o problema.",
   "planView.error.writeFailed": "Não foi possível gravar",

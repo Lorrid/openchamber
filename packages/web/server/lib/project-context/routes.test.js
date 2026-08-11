@@ -55,6 +55,13 @@ const createRuntimeStub = (overrides = {}) => ({
   saveNotesAndTodos: async () => emptyContext,
   readPlan: async () => null,
   createPlan: async () => ({ plan: { id: 'p1', file: 'a.md', title: 'A', createdAt: 1 }, context: emptyContext }),
+  updatePlan: async () => ({
+    plan: { id: 'p1', file: 'a.md', title: 'A', createdAt: 1 },
+    context: emptyContext,
+    title: 'A',
+    body: 'x',
+    raw: '# A\n\nx',
+  }),
   deletePlan: async () => ({ deleted: true, context: emptyContext }),
   ...overrides,
 });
@@ -163,6 +170,44 @@ describe('project context routes', () => {
       body: { title: 'A' },
     });
     expect(res.statusCode).toBe(400);
+  });
+
+  it('saves an edited plan and returns the new content', async () => {
+    let received = null;
+    const registry = setup({
+      updatePlan: async (_projectId, _planId, value) => {
+        received = value;
+        return { plan: { id: 'p1', file: 'a.md', title: 'B', createdAt: 1 }, context: emptyContext, title: 'B', body: 'y', raw: '# B' };
+      },
+    });
+
+    const res = await registry.call('PUT', '/api/project-context/:projectId/plans/:planId', {
+      params: { projectId: 'path_x', planId: 'p1' },
+      body: { raw: '# B' },
+    });
+    expect(res.statusCode).toBe(200);
+    expect(res.body.plan.title).toBe('B');
+    expect(received).toEqual({ raw: '# B' });
+  });
+
+  it('rejects a plan save without raw content', async () => {
+    const registry = setup();
+
+    const res = await registry.call('PUT', '/api/project-context/:projectId/plans/:planId', {
+      params: { projectId: 'path_x', planId: 'p1' },
+      body: { body: 'wrong field' },
+    });
+    expect(res.statusCode).toBe(400);
+  });
+
+  it('returns 404 when saving a plan whose markdown is gone', async () => {
+    const registry = setup({ updatePlan: async () => null });
+
+    const res = await registry.call('PUT', '/api/project-context/:projectId/plans/:planId', {
+      params: { projectId: 'path_x', planId: 'p1' },
+      body: { raw: '# B' },
+    });
+    expect(res.statusCode).toBe(404);
   });
 
   it('returns 404 when deleting a plan that does not exist', async () => {

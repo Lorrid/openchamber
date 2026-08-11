@@ -2470,6 +2470,7 @@ export const dict: Record<I18nKey, string> = {
   'planView.actions.sendToNewWorktreeSession': 'Wyślij do nowej sesji drzewa pracy',
   'planView.error.previewUnavailable': 'Podgląd jest niedostępny',
   'planView.error.saveFailed': 'Nie udało się zapisać',
+  'planView.error.loadFailed': 'Nie udało się wczytać tego planu',
   'planView.error.switchToEditMode': 'Przełącz do trybu edycji, aby naprawić problem.',
   'planView.error.writeFailed': 'Nie udało się zapisać',
   'planView.error.writePlanFileFailed': 'Nie udało się zapisać pliku planu ({status})',

@@ -268,6 +268,59 @@ describe('plans', () => {
     expect(context.plans).toHaveLength(2);
   });
 
+  test('update rewrites the markdown verbatim and re-derives the manifest title', async () => {
+    const { plan } = await runtime.createPlan(PROJECT_ID, { title: 'Old', body: 'first' });
+
+    const result = await runtime.updatePlan(PROJECT_ID, plan.id, { raw: '# New title\n\n- step\n- step two\n' });
+    expect(result.plan.title).toBe('New title');
+    expect(result.plan.file).toBe(plan.file);
+
+    expect(await fsPromises.readFile(path.join(plansDir(), plan.file), 'utf8')).toBe('# New title\n\n- step\n- step two\n');
+    expect((await runtime.readContext(PROJECT_ID)).plans[0].title).toBe('New title');
+  });
+
+  test('update keeps the file name when the title changes', async () => {
+    const { plan } = await runtime.createPlan(PROJECT_ID, { title: 'Original', body: 'x' });
+
+    await runtime.updatePlan(PROJECT_ID, plan.id, { raw: '# Totally different\n\nx' });
+
+    const context = await runtime.readContext(PROJECT_ID);
+    expect(context.plans[0].file).toBe(plan.file);
+    expect(context.plans).toHaveLength(1);
+  });
+
+  test('update returns null for an unknown plan without writing anything', async () => {
+    expect(await runtime.updatePlan(PROJECT_ID, 'missing', { raw: '# X' })).toBeNull();
+    await expect(fsPromises.readdir(plansDir())).rejects.toThrow();
+  });
+
+  test('update refuses to recreate markdown deleted underneath it', async () => {
+    const { plan } = await runtime.createPlan(PROJECT_ID, { title: 'Gone', body: 'x' });
+    await fsPromises.rm(path.join(plansDir(), plan.file));
+
+    expect(await runtime.updatePlan(PROJECT_ID, plan.id, { raw: '# Resurrected' })).toBeNull();
+    await expect(fsPromises.access(path.join(plansDir(), plan.file))).rejects.toThrow();
+  });
+
+  test('update rejects a non-string payload', async () => {
+    const { plan } = await runtime.createPlan(PROJECT_ID, { title: 'A', body: 'x' });
+    await expect(runtime.updatePlan(PROJECT_ID, plan.id, {})).rejects.toThrow('raw is required');
+  });
+
+  test('update does not disturb notes or todos', async () => {
+    await runtime.saveNotesAndTodos(PROJECT_ID, {
+      notes: 'keep me',
+      todos: [{ id: 't1', text: 'keep', completed: false, createdAt: 1 }],
+    });
+    const { plan } = await runtime.createPlan(PROJECT_ID, { title: 'A', body: 'x' });
+
+    await runtime.updatePlan(PROJECT_ID, plan.id, { raw: '# B\n\ny' });
+
+    const context = await runtime.readContext(PROJECT_ID);
+    expect(context.notes).toBe('keep me');
+    expect(context.todos).toHaveLength(1);
+  });
+
   test('an untitled body still produces a titled markdown file', async () => {
     const { plan } = await runtime.createPlan(PROJECT_ID, { title: '', body: '' });
     const read = await runtime.readPlan(PROJECT_ID, plan.id);

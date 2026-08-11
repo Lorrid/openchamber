@@ -1364,6 +1364,7 @@ export const dict: Record<I18nKey, string> = {
   'planView.file.defaultName': 'plan',
   'planView.title.default': '计划',
   'planView.error.saveFailed': '保存失败',
+  'planView.error.loadFailed': '无法加载此计划',
   'planView.error.previewUnavailable': '预览不可用',
   'planView.error.switchToEditMode': '请切换到编辑模式修复问题。',
   'planView.error.writeFailed': '写入失败',

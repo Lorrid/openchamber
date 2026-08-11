@@ -45,6 +45,7 @@ the two ever disagree.
 | PUT | `/api/project-context/:projectId/notes-todos` | replaces both; returns committed context |
 | GET | `/api/project-context/:projectId/plans/:planId` | `404` when the link or its markdown is gone |
 | POST | `/api/project-context/:projectId/plans` | `201`; takes `{title, body}`, never a path |
+| PUT | `/api/project-context/:projectId/plans/:planId` | takes the whole `{raw}` document; `404` when the link or its markdown is gone |
 | DELETE | `/api/project-context/:projectId/plans/:planId` | `404` when unknown |
 
 `projectId` is validated against `/^[a-zA-Z0-9._:-]+$/`, which rejects
@@ -66,6 +67,14 @@ and I/O failures are `500`.
   manifest entry before the file. Either partial failure leaves an unreferenced
   markdown file, which is inert. The reverse order would leave a manifest entry
   that renders as a plan and fails to open.
+- **Plan update takes the raw document, not title + body.** The editor owns
+  the file verbatim; reassembling it from parsed parts would rewrite the
+  heading and reformat what the user typed. The manifest title is re-derived
+  from the saved content, and the file name never changes with the title — it
+  is the stable identity behind the link.
+- **Plan update refuses to recreate a deleted file.** If the markdown vanished
+  underneath an open editor the link is already dead; writing would resurrect
+  content the user believes was discarded, so it returns `404` instead.
 - **Per-entry sanitization never fails the whole read.** A malformed todo or
   plan link is dropped; the rest of the context still loads.
 

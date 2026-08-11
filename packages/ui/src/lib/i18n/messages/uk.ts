@@ -1364,6 +1364,7 @@ export const dict: Record<I18nKey, string> = {
   "planView.file.defaultName": "план",
   "planView.title.default": "План",
   "planView.error.saveFailed": "Не вдалося зберегти",
+  "planView.error.loadFailed": "Не вдалося завантажити цей план",
   "planView.error.previewUnavailable": "Попередній перегляд недоступний",
   "planView.error.switchToEditMode": "Перейдіть у режим редагування, щоб усунути проблему.",
   "planView.error.writeFailed": "Помилка запису",

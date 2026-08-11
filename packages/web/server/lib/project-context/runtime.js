@@ -368,6 +368,60 @@ export const createProjectContextRuntime = (deps) => {
   };
 
   /**
+   * Overwrite a plan's markdown in place.
+   *
+   * Takes the whole raw document, because the editor surface owns the file
+   * verbatim — round-tripping through title + body would rewrite the heading
+   * and silently reformat what the user typed. The manifest title is
+   * re-derived from the saved content so the list never drifts from the file.
+   *
+   * The file name is deliberately not regenerated on a title change: it is the
+   * stable identity behind the link, and renaming it would strand the markdown
+   * if the manifest write failed afterwards.
+   */
+  const updatePlan = async (projectId, planId, value) => {
+    const id = asNonEmptyString(planId);
+    if (!id) {
+      throw new Error('planId is required');
+    }
+    if (typeof value?.raw !== 'string') {
+      throw new Error('raw is required');
+    }
+    const raw = clampLength(value.raw, PROJECT_PLAN_BODY_MAX_LENGTH);
+
+    return withWriteLock(projectId, async () => {
+      const current = await readContext(projectId);
+      const link = current.plans.find((entry) => entry.id === id);
+      if (!link) {
+        return null;
+      }
+
+      const filePath = path.join(plansDirFor(projectId), link.file);
+      // Refuse to recreate a file that was deleted underneath us: the link is
+      // already dead, and writing here would resurrect it with editor content
+      // the user believed was discarded.
+      try {
+        await fsPromises.access(filePath);
+      } catch (error) {
+        if (error && error.code === 'ENOENT') return null;
+        throw error;
+      }
+
+      await fsPromises.writeFile(filePath, raw, 'utf8');
+
+      const parsed = parsePlanMarkdown(raw);
+      const nextLink = { ...link, title: parsed.title };
+      const next = {
+        ...current,
+        plans: current.plans.map((entry) => (entry.id === id ? nextLink : entry)),
+      };
+      await writeContext(projectId, next);
+
+      return { plan: nextLink, context: next, title: parsed.title, body: parsed.body, raw };
+    });
+  };
+
+  /**
    * Create a plan from title + body.
    *
    * The markdown file is written before the manifest entry. A failure after
@@ -433,6 +487,7 @@ export const createProjectContextRuntime = (deps) => {
     readContext,
     saveNotesAndTodos,
     readPlan,
+    updatePlan,
     createPlan,
     deletePlan,
     contextPathFor,

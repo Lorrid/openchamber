@@ -1245,6 +1245,7 @@ export const dict = {
   'planView.file.defaultName': 'plan',
   'planView.title.default': 'Plan',
   'planView.error.saveFailed': 'Speichern fehlgeschlagen',
+  'planView.error.loadFailed': 'Plan konnte nicht geladen werden',
   'planView.error.previewUnavailable': 'Vorschau nicht verfügbar',
   'planView.error.switchToEditMode': 'Wechseln Sie zum Bearbeitungsmodus, um das Problem zu beheben.',
   'planView.error.writeFailed': 'Schreiben fehlgeschlagen',

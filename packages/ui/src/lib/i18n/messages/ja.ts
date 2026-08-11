@@ -1394,6 +1394,7 @@ export const dict: Record<I18nKey, string> = {
   'planView.file.defaultName': '計画',
   'planView.title.default': '計画',
   'planView.error.saveFailed': '保存に失敗しました',
+  'planView.error.loadFailed': 'この計画を読み込めませんでした',
   'planView.error.previewUnavailable': 'プレビューは利用できません',
   'planView.error.switchToEditMode': '編集モードに切り替えて問題を修正してください。',
   'planView.error.writeFailed': '書き込みに失敗しました',

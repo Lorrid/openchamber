@@ -79,6 +79,30 @@ export const registerProjectContextRoutes = (app, dependencies) => {
     }
   });
 
+  app.put('/api/project-context/:projectId/plans/:planId', async (req, res) => {
+    const body = req.body;
+    if (!isObjectRecord(body)) {
+      return res.status(400).json({ error: 'Body must be an object' });
+    }
+    if (typeof body.raw !== 'string') {
+      return res.status(400).json({ error: 'raw must be a string' });
+    }
+
+    try {
+      const result = await projectContextRuntime.updatePlan(
+        req.params.projectId,
+        req.params.planId,
+        { raw: body.raw },
+      );
+      if (!result) {
+        return res.status(404).json({ error: 'Plan not found' });
+      }
+      return res.json(result);
+    } catch (error) {
+      return respondWithError(res, error, 'Failed to save plan');
+    }
+  });
+
   app.post('/api/project-context/:projectId/plans', async (req, res) => {
     const body = req.body;
     if (!isObjectRecord(body)) {

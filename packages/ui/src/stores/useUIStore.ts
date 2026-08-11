@@ -34,6 +34,10 @@ type ContextPanelTab = {
   id: string;
   mode: ContextPanelMode;
   targetPath: string | null;
+  /** Saved project plan this tab shows, for `plan` tabs opened from the notes
+      panel. Project plans are addressed by id because their markdown is
+      server-owned and has no client-visible path. */
+  projectPlanId: string | null;
   dedupeKey: string;
   label: string | null;
   sessionTitleFallback: string | null;
@@ -46,6 +50,7 @@ type ContextPanelTab = {
 type ContextPanelTabDescriptor = {
   mode: ContextPanelMode;
   targetPath?: string | null;
+  projectPlanId?: string | null;
   dedupeKey?: string | null;
   label?: string | null;
   sessionTitleFallback?: string | null;
@@ -237,6 +242,9 @@ const createContextPanelTab = (descriptor: ContextPanelTabDescriptor): ContextPa
     id: buildContextPanelTabID(descriptor.mode, dedupeKey),
     mode: descriptor.mode,
     targetPath: normalizedTargetPath,
+    projectPlanId: typeof descriptor.projectPlanId === 'string' && descriptor.projectPlanId.trim()
+      ? descriptor.projectPlanId.trim()
+      : null,
     dedupeKey,
     label: normalizeContextTabLabel(descriptor.label),
     sessionTitleFallback: normalizeContextTabLabel(descriptor.sessionTitleFallback),
@@ -279,6 +287,7 @@ const sanitizeContextPanelTabs = (tabs: unknown): ContextPanelTab[] => {
     const candidate = entry as {
       mode?: unknown;
       targetPath?: unknown;
+      projectPlanId?: unknown;
       dedupeKey?: unknown;
       label?: unknown;
       sessionTitleFallback?: unknown;
@@ -308,6 +317,9 @@ const sanitizeContextPanelTabs = (tabs: unknown): ContextPanelTab[] => {
       id,
       mode: candidate.mode,
       targetPath,
+      projectPlanId: typeof candidate.projectPlanId === 'string' && candidate.projectPlanId.trim()
+        ? candidate.projectPlanId.trim()
+        : null,
       dedupeKey,
       label: normalizeContextTabLabel(typeof candidate.label === 'string' ? candidate.label : null),
       sessionTitleFallback: normalizeContextTabLabel(typeof candidate.sessionTitleFallback === 'string' ? candidate.sessionTitleFallback : null),

@@ -1400,6 +1400,7 @@ export const dict: Record<I18nKey, string> = {
   'planView.file.defaultName': 'plan',
   'planView.title.default': '플랜',
   'planView.error.saveFailed': '저장 실패',
+  'planView.error.loadFailed': '이 계획을 불러오지 못했습니다',
   'planView.error.previewUnavailable': '미리보기를 사용할 수 없음',
   'planView.error.switchToEditMode': '문제를 수정하려면 편집 모드로 전환하세요.',
   'planView.error.writeFailed': '쓰기 실패',
