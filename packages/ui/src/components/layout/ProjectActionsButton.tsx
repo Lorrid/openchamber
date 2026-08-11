@@ -277,7 +277,12 @@ export const ProjectActionsButton = ({
 
         const combined = nextChunks.map((chunk) => chunk.data).join('');
         const textForScan = `${watch.tail}${combined}`;
-        const maybeUrl = !watch.openedUrl && action.autoOpenUrl === true ? extractProjectActionUrl(textForScan) : null;
+        // Auto-discovery inferred the command; it must not also infer the
+        // address. It waits for a server to announce one, and gives up through
+        // the existing preview timeout rather than opening a guess.
+        const maybeUrl = !watch.openedUrl && action.autoOpenUrl === true
+          ? extractProjectActionUrl(textForScan, { requireAnnounced: watch.openInPreview })
+          : null;
         const lastChunkId = nextChunks[nextChunks.length - 1]?.id ?? watch.lastSeenChunkId;
 
         watch.lastSeenChunkId = lastChunkId;

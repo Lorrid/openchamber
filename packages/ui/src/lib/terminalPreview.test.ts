@@ -71,3 +71,25 @@ describe('project action url', () => {
       .toBe('http://127.0.0.1:4000/app');
   });
 });
+
+describe('auto-discovery url', () => {
+  const ROUTING_TABLE_CHUNK = [
+    '[gateway] - site -> http://127.0.0.1:4321',
+    '[gateway] - docs -> http://127.0.0.1:4322',
+    '[gateway] - analytics -> http://127.0.0.1:4323',
+  ].join('\n');
+
+  test('waits rather than opening a backend from a routing table', () => {
+    // Whether this chunk or the announcement arrives first depends on where the
+    // terminal split its output, so guessing here is guessing differently each run.
+    expect(extractProjectActionUrl(ROUTING_TABLE_CHUNK, { requireAnnounced: true })).toBeNull();
+  });
+
+  test('opens the gateway once it announces itself', () => {
+    expect(extractProjectActionUrl(GATEWAY_LOG, { requireAnnounced: true })).toBe('http://localhost:3000');
+  });
+
+  test('a configured action may still open a bare url it printed, taking the first', () => {
+    expect(extractProjectActionUrl(ROUTING_TABLE_CHUNK)).toBe('http://127.0.0.1:4321/');
+  });
+});

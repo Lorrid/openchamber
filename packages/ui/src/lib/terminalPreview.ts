@@ -122,17 +122,25 @@ const ANY_URL_PATTERN = /https?:\/\/[^\s<>'"`]+/gi;
  * Finds the URL a project action wants opened.
  *
  * Prefers the announcement line — `Local`, `ready on`, `serving` — because that
- * is the address the server is telling you to visit. Only when nothing is
- * announced does it fall back to scoring every URL in the output, which is the
- * weaker signal: a dev gateway logging its own routing table prints perfectly
- * good-looking URLs for backends the user should never open directly.
+ * is the address the server is telling you to visit. The path is part of that
+ * answer: an app served under a base path announces it, and dropping it lands
+ * the user on that app's own 404.
  *
- * The path is part of the answer. An app served under a base path announces it,
- * and dropping it lands the user on that app's 404.
+ * `requireAnnounced` refuses to guess at all. Output is scanned in whatever
+ * chunks the terminal emits and the first match wins, so scoring loose URLs
+ * makes the result depend on where those chunk boundaries happened to fall — a
+ * dev gateway logging its routing table offers several backends that all look
+ * openable. Where the command itself was inferred rather than configured,
+ * waiting for a server to announce itself is the only answer that is the same
+ * every time.
  */
-export const extractProjectActionUrl = (text: string): string | null => {
+export const extractProjectActionUrl = (
+  text: string,
+  { requireAnnounced = false }: { requireAnnounced?: boolean } = {},
+): string | null => {
   const announced = extractTerminalPreviewUrl(text);
   if (announced) return announced;
+  if (requireAnnounced) return null;
 
   const cleaned = String(text || '').replace(ANSI_ESCAPE_PATTERN, '');
   const candidates: URL[] = [];
