@@ -1,4 +1,4 @@
-import React, { useEffect } from 'react';
+import { useEffect, useState, type ReactNode } from 'react';
 import {
   MESSENGER_INTERRUPT_TIMEOUT_DEFAULT_MS,
   MESSENGER_INTERRUPT_TIMEOUT_MAX_MS,
@@ -17,6 +17,14 @@ import {
 import { Checkbox } from '@/components/ui/checkbox';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { Button } from '@/components/ui/button';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
 import { cn } from '@/lib/utils';
 import { useI18n, type I18nKey } from '@/lib/i18n';
 import { Icon } from '@/components/icon/Icon';
@@ -99,18 +107,14 @@ export function isMessengerIntegrationEnabled(conn: {
   return listenerEnabled !== false;
 }
 
-export type MessengerStatusLabels = Record<
-  MessengerConnection['status'],
-  string
->;
-
 export function StatusBadge({
+  type,
   status,
-  labels,
 }: {
+  type: MessengerType;
   status: MessengerConnection['status'];
-  labels: MessengerStatusLabels;
 }) {
+  const { t } = useI18n();
   const styles: Record<string, string> = {
     connected:
       'bg-[var(--status-success)]/15 text-[var(--status-success)]',
@@ -119,7 +123,7 @@ export function StatusBadge({
     error: 'bg-[var(--status-error)]/15 text-[var(--status-error)]',
     disconnected: 'bg-muted text-muted-foreground',
   };
-  const label = labels[status];
+  const label = t(messengerKey(type, `status.${status}`));
   // Connected: checkmark only (label stays for accessibility). Other states keep text.
   if (status === 'connected') {
     return (
@@ -148,6 +152,319 @@ export function StatusBadge({
       ) : null}
       {label}
     </span>
+  );
+}
+
+export function MessengerDisconnectDialog({
+  type,
+  open,
+  onOpenChange,
+  onDisconnect,
+}: {
+  type: MessengerType;
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  onDisconnect: () => Promise<unknown>;
+}) {
+  const { t } = useI18n();
+  const [disconnecting, setDisconnecting] = useState(false);
+  const k = (suffix: string) => messengerKey(type, `disconnect.dialog.${suffix}`);
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="max-w-md">
+        <DialogHeader>
+          <DialogTitle>{t(k('title'))}</DialogTitle>
+          <DialogDescription>{t(k('description'))}</DialogDescription>
+        </DialogHeader>
+        <DialogFooter>
+          <Button type="button" variant="ghost" size="sm" onClick={() => onOpenChange(false)}>
+            {t('settings.common.actions.cancel')}
+          </Button>
+          <Button
+            type="button"
+            variant="destructive"
+            size="sm"
+            disabled={disconnecting}
+            onClick={() => {
+              setDisconnecting(true);
+              void onDisconnect().finally(() => {
+                setDisconnecting(false);
+                onOpenChange(false);
+              });
+            }}
+          >
+            {t(k('confirm'))}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+export function MessengerConnectTile({
+  type,
+  onConnect,
+}: {
+  type: MessengerType;
+  onConnect: () => void;
+}) {
+  const { t } = useI18n();
+  const brandClass = type === 'discord' ? 'text-[#5865F2]' : 'text-[#2AABEE]';
+  return (
+    <button
+      type="button"
+      onClick={onConnect}
+      data-settings-item={`integrations.${type}.connect`}
+      className="flex size-40 flex-col items-center justify-center gap-2 rounded-xl border border-dashed border-border p-4 text-center text-muted-foreground transition-colors hover:border-primary/40 hover:text-foreground"
+    >
+      <Icon name={type === 'discord' ? 'discord-fill' : 'telegram-fill'} className={cn('size-9', brandClass)} />
+      <span className="flex items-center gap-1 text-xs font-medium">
+        <Icon name="add" className="size-3.5" />
+        {t(messengerKey(type, 'connect'))}
+      </span>
+      <span className="text-[10px] font-normal leading-snug text-muted-foreground/80">
+        {t(messengerKey(type, 'connectHint'))}
+      </span>
+    </button>
+  );
+}
+
+const MESSENGER_REPLY_MODES = ['always', 'mention'] as const;
+
+export function MessengerReplyModeControl({
+  type,
+  value,
+  onChange,
+}: {
+  type: MessengerType;
+  value: (typeof MESSENGER_REPLY_MODES)[number];
+  onChange: (value: (typeof MESSENGER_REPLY_MODES)[number]) => void;
+}) {
+  const { t } = useI18n();
+  const keyPrefix = type === 'discord' ? 'servers.replyMode' : 'groups.replyMode';
+  return (
+    <div
+      className="inline-flex shrink-0 items-stretch overflow-hidden rounded-md border border-[var(--interactive-border)]"
+      role="group"
+      aria-label={t(messengerKey(type, `${keyPrefix}.always`))}
+    >
+      {MESSENGER_REPLY_MODES.map((mode, index) => (
+        <button
+          key={mode}
+          type="button"
+          onClick={() => onChange(mode)}
+          className={cn(
+            'px-2.5 py-1.5 text-[11px] font-medium whitespace-nowrap transition-colors',
+            index === 0 && 'border-r border-[var(--interactive-border)]',
+            value === mode
+              ? 'bg-[var(--interactive-selection)] text-[var(--interactive-selection-foreground)]'
+              : 'text-muted-foreground hover:bg-interactive-hover hover:text-foreground',
+          )}
+        >
+          {t(messengerKey(type, `${keyPrefix}.${mode}`))}
+        </button>
+      ))}
+    </div>
+  );
+}
+
+export function MessengerLabeledCheckbox({
+  checked,
+  onChange,
+  label,
+  description,
+}: {
+  checked: boolean;
+  onChange: (checked: boolean) => void;
+  label: string;
+  description: string;
+}) {
+  return (
+    <label className="flex min-w-0 flex-1 cursor-pointer items-start gap-2.5">
+      <Checkbox checked={checked} onChange={onChange} ariaLabel={label} />
+      <span className="min-w-0">
+        <span className="block text-xs font-semibold text-foreground">{label}</span>
+        <span className="mt-0.5 block text-[11px] leading-snug text-muted-foreground">
+          {description}
+        </span>
+      </span>
+    </label>
+  );
+}
+
+type MessengerSyncProject = { id: string; path: string; label?: string };
+
+// eslint-disable-next-line react-refresh/only-export-components
+export function buildMessengerProjectSyncPayloads(
+  projects: MessengerSyncProject[],
+): { id: string; path: string; label: string; body: string }[] {
+  const now = new Date().toLocaleString();
+  return projects.map((project) => {
+    const label = project.label || project.path.split('/').pop() || project.path;
+    return {
+      id: project.id,
+      path: project.path,
+      label,
+      body: [`🤖 OpenChamber agent sync — ${label}`, '', `Last synced ${now}`].join('\n'),
+    };
+  });
+}
+
+// eslint-disable-next-line react-refresh/only-export-components
+export function buildMessengerProjectSyncSummary(
+  type: MessengerType,
+  projects: Pick<MessengerSyncProject, 'id'>[],
+): string {
+  const lines = [
+    '🤖 OpenChamber agent sync summary',
+    '',
+    `• Projects: ${projects.length}`,
+    '',
+    `Sent ${new Date().toLocaleString()}`,
+  ];
+  return type === 'discord'
+    ? [`**${lines[0]}**`, ...lines.slice(1, -1), `_${lines.at(-1)}_`].join('\n')
+    : lines.join('\n');
+}
+
+export function MessengerOnboardingFrame({
+  type,
+  step,
+  totalSteps,
+  canAdvance,
+  onSkip,
+  onBack,
+  onNext,
+  children,
+}: {
+  type: MessengerType;
+  step: number;
+  totalSteps: number;
+  canAdvance: boolean;
+  onSkip: () => void;
+  onBack: () => void;
+  onNext: () => void;
+  children: ReactNode;
+}) {
+  const { t } = useI18n();
+  const k = (suffix: string) => messengerKey(type, `wizard.${suffix}`);
+  return (
+    <div
+      className="rounded-lg border border-[color-mix(in_srgb,var(--primary-base)_20%,transparent)] bg-[color-mix(in_srgb,var(--primary-base)_5%,var(--background))] p-4 space-y-4"
+      data-settings-item={`integrations.${type}.wizard`}
+    >
+      <div className="flex items-start justify-between gap-3">
+        <div>
+          <h4 className="typography-ui-header font-medium text-foreground">{t(k('title'))}</h4>
+          <p className="mt-0.5 text-[11px] text-muted-foreground">
+            {t(k('stepOf'), { current: step + 1, total: totalSteps })}
+          </p>
+        </div>
+        <button
+          type="button"
+          onClick={onSkip}
+          className="text-[10px] text-muted-foreground hover:text-foreground"
+        >
+          {t(k('skipToAdvanced'))}
+        </button>
+      </div>
+
+      <div className="flex gap-1">
+        {Array.from({ length: totalSteps }, (_, index) => (
+          <div
+            key={index}
+            className={cn(
+              'h-1 flex-1 rounded-full transition-colors',
+              index <= step ? 'bg-[var(--primary-base)]' : 'bg-[var(--surface-muted)]',
+            )}
+          />
+        ))}
+      </div>
+
+      {children}
+
+      <div className="flex items-center justify-between gap-2 border-t border-border/60 pt-3">
+        <Button
+          type="button"
+          variant="ghost"
+          size="xs"
+          className="!font-normal"
+          disabled={step === 0}
+          onClick={onBack}
+        >
+          {t(k('back'))}
+        </Button>
+        <Button type="button" size="sm" disabled={!canAdvance} onClick={onNext}>
+          {t(k(step >= totalSteps - 1 ? 'finish' : 'next'))}
+        </Button>
+      </div>
+    </div>
+  );
+}
+
+export function MessengerListenerStep({
+  type,
+  running,
+  live,
+  starting,
+  canAdvance,
+  error,
+  statusText,
+  onStart,
+}: {
+  type: MessengerType;
+  running: boolean;
+  live: boolean;
+  starting: boolean;
+  canAdvance: boolean;
+  error?: string | null;
+  statusText?: string | null;
+  onStart: () => void;
+}) {
+  const { t } = useI18n();
+  const stepKey = type === 'discord' ? 'wizard.step4' : 'wizard.step3';
+  const k = (suffix: string) => messengerKey(type, `${stepKey}.${suffix}`);
+  const stuck = running && !live && !starting;
+  return (
+    <div className="space-y-3">
+      <div>
+        <div className="text-xs font-medium text-foreground">{t(k('title'))}</div>
+        <p className="mt-1 text-[11px] text-muted-foreground leading-snug">
+          {t(k('description'))}
+        </p>
+      </div>
+      <div className="flex items-center gap-2">
+        <Button
+          type="button"
+          variant="outline"
+          size="xs"
+          className="!font-normal"
+          disabled={starting || (running && live)}
+          onClick={onStart}
+        >
+          <Icon name={starting ? 'loader-4' : 'play'} className={cn('size-3.5', starting && 'animate-spin')} />
+          {t(k(stuck ? 'retryListener' : 'startListener'))}
+        </Button>
+        <span
+          className={cn(
+            'text-[10px]',
+            live
+              ? 'text-[var(--status-success)]'
+              : running
+                ? 'text-[var(--status-warning)]'
+                : 'text-muted-foreground',
+          )}
+        >
+          {t(k(live ? 'listenerLive' : running ? 'listenerConnecting' : 'listenerStopped'))}
+        </span>
+      </div>
+      {error ? <p className="text-[11px] text-[var(--status-error)]">{error}</p> : null}
+      {statusText ? <p className="text-[11px] text-muted-foreground">{statusText}</p> : null}
+      {canAdvance ? (
+        <p className="text-[11px] text-[var(--status-success)]">{t(k('complete'))}</p>
+      ) : null}
+    </div>
   );
 }
 
@@ -221,11 +538,11 @@ export function AdvancedSectionCard({
 }: {
   icon: IconName;
   title: string;
-  meta?: React.ReactNode;
-  badge?: React.ReactNode;
+  meta?: ReactNode;
+  badge?: ReactNode;
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  children: React.ReactNode;
+  children: ReactNode;
 }) {
   return (
     <Collapsible open={open} onOpenChange={onOpenChange}>
@@ -297,7 +614,7 @@ export function AccessControlRow({
   label: string;
   open: boolean;
   onToggle: () => void;
-  children: React.ReactNode;
+  children: ReactNode;
 }) {
   return (
     <div>
@@ -561,8 +878,8 @@ export function BehaviorPanel({
   type: MessengerType;
   bridgeStatus: ReturnType<typeof useMessengerStore.getState>['bridgeStatus'];
   /** Optional platform-specific extra controls (Discord worktree sync). */
-  worktreesSlot?: React.ReactNode;
-  footerNotes?: React.ReactNode;
+  worktreesSlot?: ReactNode;
+  footerNotes?: ReactNode;
 }) {
   const { t } = useI18n();
   const k = (suffix: string) => messengerBridgeKey(type, suffix);

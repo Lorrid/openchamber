@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import { useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Icon } from '@/components/icon/Icon';
 import { useI18n } from '@/lib/i18n';
@@ -8,6 +8,8 @@ import {
   type MessengerConnection,
 } from '@/stores/useMessengerStore';
 import {
+  MessengerListenerStep,
+  MessengerOnboardingFrame,
   TelegramUserInfoBotHint,
   parseMessengerIdList,
 } from './messenger-shared';
@@ -107,46 +109,15 @@ export function TelegramOnboardingWizard({ conn }: TelegramOnboardingWizardProps
   };
 
   return (
-    <div
-      className="rounded-lg border border-[color-mix(in_srgb,var(--primary-base)_20%,transparent)] bg-[color-mix(in_srgb,var(--primary-base)_5%,var(--background))] p-4 space-y-4"
-      data-settings-item="integrations.telegram.wizard"
+    <MessengerOnboardingFrame
+      type="telegram"
+      step={step}
+      totalSteps={TOTAL_STEPS}
+      canAdvance={canAdvance}
+      onSkip={handleFinish}
+      onBack={prevOnboardingStep}
+      onNext={handleNext}
     >
-      <div className="flex items-start justify-between gap-3">
-        <div>
-          <h4 className="typography-ui-header font-medium text-foreground">
-            {t('settings.integrations.telegram.wizard.title')}
-          </h4>
-          <p className="mt-0.5 text-[11px] text-muted-foreground">
-            {t('settings.integrations.telegram.wizard.stepOf', {
-              current: step + 1,
-              total: TOTAL_STEPS,
-            })}
-          </p>
-        </div>
-        <button
-          type="button"
-          onClick={handleFinish}
-          className="text-[10px] text-muted-foreground hover:text-foreground"
-        >
-          {t('settings.integrations.telegram.wizard.skipToAdvanced')}
-        </button>
-      </div>
-
-      {/* Step indicators */}
-      <div className="flex gap-1">
-        {Array.from({ length: TOTAL_STEPS }, (_, i) => (
-          <div
-            key={i}
-            className={cn(
-              'h-1 flex-1 rounded-full transition-colors',
-              i <= step
-                ? 'bg-[var(--primary-base)]'
-                : 'bg-[var(--surface-muted)]',
-            )}
-          />
-        ))}
-      </div>
-
       {/* Step 0: Create bot + token */}
       {step === 0 && (
         <div className="space-y-3">
@@ -358,87 +329,17 @@ export function TelegramOnboardingWizard({ conn }: TelegramOnboardingWizardProps
 
       {/* Step 2: Start listener */}
       {step === 2 && (
-        <div className="space-y-3">
-          <div>
-            <div className="text-xs font-medium text-foreground">
-              {t('settings.integrations.telegram.wizard.step3.title')}
-            </div>
-            <p className="mt-1 text-[11px] text-muted-foreground leading-snug">
-              {t('settings.integrations.telegram.wizard.step3.description')}
-            </p>
-          </div>
-          <div className="flex items-center gap-2">
-            <Button
-              type="button"
-              variant="outline"
-              size="xs"
-              className="!font-normal"
-              disabled={startingListener || (listenerRunning && listenerLive)}
-              onClick={() => void handleStartListener()}
-            >
-              {startingListener ? (
-                <Icon name="loader-4" className="size-3.5 animate-spin" />
-              ) : (
-                <Icon name="play" className="size-3.5" />
-              )}
-              {listenerStuck
-                ? t('settings.integrations.telegram.wizard.step3.retryListener')
-                : t('settings.integrations.telegram.wizard.step3.startListener')}
-            </Button>
-            <span
-              className={cn(
-                'text-[10px]',
-                listenerLive
-                  ? 'text-[var(--status-success)]'
-                  : listenerRunning
-                    ? 'text-[var(--status-warning)]'
-                    : 'text-muted-foreground',
-              )}
-            >
-              {listenerLive
-                ? t('settings.integrations.telegram.wizard.step3.listenerLive')
-                : listenerRunning
-                  ? t('settings.integrations.telegram.wizard.step3.listenerConnecting')
-                  : t('settings.integrations.telegram.wizard.step3.listenerStopped')}
-            </span>
-          </div>
-          {conn.telegramListenerError && (
-            <p className="text-[11px] text-[var(--status-error)]">{conn.telegramListenerError}</p>
-          )}
-          {listenerStatusText && (
-            <p className="text-[11px] text-muted-foreground">{listenerStatusText}</p>
-          )}
-          {canAdvance && (
-            <p className="text-[11px] text-[var(--status-success)]">
-              {t('settings.integrations.telegram.wizard.step3.complete')}
-            </p>
-          )}
-        </div>
+        <MessengerListenerStep
+          type="telegram"
+          running={listenerRunning}
+          live={listenerLive}
+          starting={startingListener}
+          canAdvance={canAdvance}
+          error={conn.telegramListenerError}
+          statusText={listenerStatusText}
+          onStart={() => void handleStartListener()}
+        />
       )}
-
-      {/* Navigation */}
-      <div className="flex items-center justify-between gap-2 border-t border-border/60 pt-3">
-        <Button
-          type="button"
-          variant="ghost"
-          size="xs"
-          className="!font-normal"
-          disabled={step === 0}
-          onClick={prevOnboardingStep}
-        >
-          {t('settings.integrations.telegram.wizard.back')}
-        </Button>
-        <Button
-          type="button"
-          size="sm"
-          disabled={!canAdvance}
-          onClick={handleNext}
-        >
-          {step >= TOTAL_STEPS - 1
-            ? t('settings.integrations.telegram.wizard.finish')
-            : t('settings.integrations.telegram.wizard.next')}
-        </Button>
-      </div>
-    </div>
+    </MessengerOnboardingFrame>
   );
 }

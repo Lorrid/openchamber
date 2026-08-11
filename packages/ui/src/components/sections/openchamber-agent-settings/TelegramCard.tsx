@@ -7,21 +7,12 @@ import {
   telegramChatOpenUrl,
   useMessengerStore,
   type MessengerConnection,
-  type TelegramReplyMode,
+  type TelegramViewState,
 } from '@/stores/useMessengerStore';
 import { useProjectsStore } from '@/stores/useProjectsStore';
-import { Checkbox } from '@/components/ui/checkbox';
 import { Switch } from '@/components/ui/switch';
 import { Button } from '@/components/ui/button';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from '@/components/ui/dialog';
 import { cn } from '@/lib/utils';
 import { useI18n } from '@/lib/i18n';
 import { Icon } from '@/components/icon/Icon';
@@ -29,12 +20,17 @@ import {
   AccessControlRow,
   AdvancedSectionCard,
   BehaviorPanel,
+  MessengerDisconnectDialog,
+  MessengerLabeledCheckbox,
   MessengerListenerBadge,
   MessengerListenerPanel,
+  MessengerReplyModeControl,
   MessengerSegmentedControl,
   SessionBindingsPanel,
   StatusBadge,
   TelegramUserInfoBotHint,
+  buildMessengerProjectSyncPayloads,
+  buildMessengerProjectSyncSummary,
   isMessengerIntegrationEnabled,
   parseMessengerIdList,
 } from './messenger-shared';
@@ -44,44 +40,7 @@ import { MessengerCommandsButton } from './MessengerCommandPalette';
 /** Telegram brand mark — intentional product color, not a theme token. */
 const TELEGRAM_BRAND_CLASS = 'text-[#2AABEE]';
 
-function useTelegramStatusLabels(): Record<MessengerConnection['status'], string> {
-  const { t } = useI18n();
-  return {
-    connected: t('settings.integrations.telegram.status.connected'),
-    connecting: t('settings.integrations.telegram.status.connecting'),
-    error: t('settings.integrations.telegram.status.error'),
-    disconnected: t('settings.integrations.telegram.status.disconnected'),
-  };
-}
-
 type TelegramAccessControlKey = 'fallback' | 'allowed' | 'owners';
-
-const TELEGRAM_CHAT_REPLY_MODES: Array<'always' | 'mention'> = ['always', 'mention'];
-
-function buildTelegramProjectSyncPayloads(
-  projects: { id: string; path: string; label?: string }[],
-): { id: string; path: string; label: string; body: string }[] {
-  const now = new Date().toLocaleString();
-  return projects.map((p) => {
-    const label = p.label || p.path.split('/').pop() || p.path;
-    return {
-      id: p.id,
-      path: p.path,
-      label,
-      body: [`🤖 OpenChamber agent sync — ${label}`, '', `Last synced ${now}`].join('\n'),
-    };
-  });
-}
-
-function buildTelegramProjectSyncSummary(projects: { id: string }[]): string {
-  return [
-    '🤖 OpenChamber agent sync summary',
-    '',
-    `• Projects: ${projects.length}`,
-    '',
-    `Sent ${new Date().toLocaleString()}`,
-  ].join('\n');
-}
 
 function TelegramChatRow({
   conn,
@@ -102,7 +61,7 @@ function TelegramChatRow({
 
   const policy = conn.telegramChatPolicies?.[chat.id];
   const respond = policy?.enabled !== false;
-  const storedReplyMode: TelegramReplyMode = policy?.replyMode ?? 'inherit';
+  const storedReplyMode = policy?.replyMode ?? 'inherit';
   const replyMode: 'always' | 'mention' =
     storedReplyMode === 'mention' || storedReplyMode === 'always'
       ? storedReplyMode
@@ -160,33 +119,11 @@ function TelegramChatRow({
         </label>
 
         {respond && (
-          <div
-            className="inline-flex shrink-0 items-stretch overflow-hidden rounded-md border border-[var(--interactive-border)]"
-            role="group"
-            aria-label={t('settings.integrations.telegram.groups.replyMode.always')}
-          >
-            {TELEGRAM_CHAT_REPLY_MODES.map((mode, index) => {
-              const selected = replyMode === mode;
-              return (
-                <button
-                  key={mode}
-                  type="button"
-                  onClick={() => setTelegramChatPolicy(chat.id, { replyMode: mode })}
-                  className={cn(
-                    'px-2.5 py-1.5 text-[11px] font-medium whitespace-nowrap transition-colors',
-                    index === 0 && 'border-r border-[var(--interactive-border)]',
-                    selected
-                      ? 'bg-[var(--interactive-selection)] text-[var(--interactive-selection-foreground)]'
-                      : 'text-muted-foreground hover:bg-interactive-hover hover:text-foreground',
-                  )}
-                >
-                  {mode === 'always'
-                    ? t('settings.integrations.telegram.groups.replyMode.always')
-                    : t('settings.integrations.telegram.groups.replyMode.mention')}
-                </button>
-              );
-            })}
-          </div>
+          <MessengerReplyModeControl
+            type="telegram"
+            value={replyMode}
+            onChange={(mode) => setTelegramChatPolicy(chat.id, { replyMode: mode })}
+          />
         )}
 
         <Button
@@ -219,39 +156,21 @@ function TelegramChatRow({
 
           <div className="flex flex-wrap items-start gap-3 pr-8">
             {syncable && (
-              <label className="flex min-w-0 flex-1 cursor-pointer items-start gap-2.5">
-                <Checkbox
-                  checked={syncing}
-                  onChange={(checked) => setTelegramChatPolicy(chat.id, { syncProjects: checked })}
-                  ariaLabel={t('settings.integrations.telegram.groups.syncProjects.label')}
-                />
-                <span className="min-w-0">
-                  <span className="block text-xs font-semibold text-foreground">
-                    {t('settings.integrations.telegram.groups.syncProjects.label')}
-                  </span>
-                  <span className="mt-0.5 block text-[11px] leading-snug text-muted-foreground">
-                    {t('settings.integrations.telegram.groups.syncProjects.hint')}
-                  </span>
-                </span>
-              </label>
+              <MessengerLabeledCheckbox
+                checked={syncing}
+                onChange={(checked) => setTelegramChatPolicy(chat.id, { syncProjects: checked })}
+                label={t('settings.integrations.telegram.groups.syncProjects.label')}
+                description={t('settings.integrations.telegram.groups.syncProjects.hint')}
+              />
             )}
 
             {syncable && (
-              <label className="flex min-w-0 flex-1 cursor-pointer items-start gap-2.5">
-                <Checkbox
-                  checked={critiqueEnabled}
-                  onChange={(checked) => void setBridgeCritiqueEnabled('telegram', checked)}
-                  ariaLabel={t('settings.integrations.telegram.bridge.critique.title')}
-                />
-                <span className="min-w-0">
-                  <span className="block text-xs font-semibold text-foreground">
-                    {t('settings.integrations.telegram.bridge.critique.title')}
-                  </span>
-                  <span className="mt-0.5 block text-[11px] leading-snug text-muted-foreground">
-                    {t('settings.integrations.telegram.bridge.critique.description')}
-                  </span>
-                </span>
-              </label>
+              <MessengerLabeledCheckbox
+                checked={critiqueEnabled}
+                onChange={(checked) => void setBridgeCritiqueEnabled('telegram', checked)}
+                label={t('settings.integrations.telegram.bridge.critique.title')}
+                description={t('settings.integrations.telegram.bridge.critique.description')}
+              />
             )}
 
             <div className="flex shrink-0 flex-wrap items-center gap-1.5">
@@ -265,8 +184,8 @@ function TelegramChatRow({
                   onClick={() => {
                     setRowAction('sync');
                     void syncTelegramChatProjects(
-                      buildTelegramProjectSyncPayloads(projects),
-                      buildTelegramProjectSyncSummary(projects),
+                      buildMessengerProjectSyncPayloads(projects),
+                      buildMessengerProjectSyncSummary('telegram', projects),
                       { chatId: chat.id },
                     ).finally(() => setRowAction(null));
                   }}
@@ -448,6 +367,8 @@ function TelegramAdvancedSettings({ conn }: { conn: MessengerConnection }) {
     syncLog: false,
   });
   const [accessOpen, setAccessOpen] = useState<TelegramAccessControlKey | null>(null);
+  const setOpen = (key: keyof typeof sectionOpen) => (open: boolean) =>
+    setSectionOpen((current) => ({ ...current, [key]: open }));
 
   useEffect(() => {
     void refreshBridgeStatus('telegram');
@@ -487,7 +408,7 @@ function TelegramAdvancedSettings({ conn }: { conn: MessengerConnection }) {
           icon="settings-3"
           title={t('settings.integrations.telegram.advanced.behavior.title')}
           open={sectionOpen.behavior}
-          onOpenChange={(next) => setSectionOpen((s) => ({ ...s, behavior: next }))}
+          onOpenChange={setOpen('behavior')}
         >
           <div className="space-y-4">
             <BehaviorPanel
@@ -538,7 +459,7 @@ function TelegramAdvancedSettings({ conn }: { conn: MessengerConnection }) {
             replied,
           })}
           open={sectionOpen.diagnostics}
-          onOpenChange={(next) => setSectionOpen((s) => ({ ...s, diagnostics: next }))}
+          onOpenChange={setOpen('diagnostics')}
         >
           <MessengerListenerPanel type="telegram" conn={conn} />
         </AdvancedSectionCard>
@@ -547,7 +468,7 @@ function TelegramAdvancedSettings({ conn }: { conn: MessengerConnection }) {
           icon="shield-user"
           title={t('settings.integrations.telegram.advanced.dangerZone.title')}
           open={sectionOpen.accessControl}
-          onOpenChange={(next) => setSectionOpen((s) => ({ ...s, accessControl: next }))}
+          onOpenChange={setOpen('accessControl')}
         >
           <div className="-mx-4 -my-3 divide-y divide-border/60">
             <AccessControlRow
@@ -649,7 +570,7 @@ function TelegramAdvancedSettings({ conn }: { conn: MessengerConnection }) {
                 })
           }
           open={sectionOpen.bindings}
-          onOpenChange={(next) => setSectionOpen((s) => ({ ...s, bindings: next }))}
+          onOpenChange={setOpen('bindings')}
         >
           <SessionBindingsPanel
             type="telegram"
@@ -663,7 +584,7 @@ function TelegramAdvancedSettings({ conn }: { conn: MessengerConnection }) {
           title={t('settings.integrations.telegram.commands.title')}
           meta={t('settings.integrations.telegram.commands.description')}
           open={sectionOpen.commands}
-          onOpenChange={(next) => setSectionOpen((s) => ({ ...s, commands: next }))}
+          onOpenChange={setOpen('commands')}
         >
           <div data-settings-item="integrations.telegram.commands">
             <MessengerCommandsButton platform="telegram" />
@@ -674,7 +595,7 @@ function TelegramAdvancedSettings({ conn }: { conn: MessengerConnection }) {
           icon="refresh"
           title={t('settings.integrations.telegram.advanced.syncLog.title')}
           open={sectionOpen.syncLog}
-          onOpenChange={(next) => setSectionOpen((s) => ({ ...s, syncLog: next }))}
+          onOpenChange={setOpen('syncLog')}
         >
           {hasSyncResults ? (
             <TelegramLastSyncResults conn={conn} />
@@ -689,28 +610,30 @@ function TelegramAdvancedSettings({ conn }: { conn: MessengerConnection }) {
   );
 }
 
-export function TelegramSectionCard({ conn }: { conn: MessengerConnection }) {
+export function TelegramSectionCard({
+  conn,
+  view,
+}: {
+  conn: MessengerConnection;
+  view: TelegramViewState;
+}) {
   const { t } = useI18n();
-  const statusLabels = useTelegramStatusLabels();
   const updateConnection = useMessengerStore((s) => s.updateConnection);
   const testConnection = useMessengerStore((s) => s.testConnection);
   const disconnectTelegram = useMessengerStore((s) => s.disconnectTelegram);
   const saveTelegramConfig = useMessengerStore((s) => s.saveTelegramConfig);
   const startTelegramListener = useMessengerStore((s) => s.startTelegramListener);
   const stopTelegramListener = useMessengerStore((s) => s.stopTelegramListener);
-  const onboardingStep = useMessengerStore((s) => s.onboardingStep);
-  const onboardingType = useMessengerStore((s) => s.onboardingType);
   const [cardOpen, setCardOpen] = useState(false);
   const [advancedOpen, setAdvancedOpen] = useState(false);
   const [showToken, setShowToken] = useState(false);
   const [tokenInput, setTokenInput] = useState('');
   const [disconnectConfirmOpen, setDisconnectConfirmOpen] = useState(false);
-  const [disconnecting, setDisconnecting] = useState(false);
 
   const displayStatus = deriveTelegramDisplayStatus(conn);
   const hasToken = Boolean(conn.botToken);
   const configured = hasToken || Boolean(conn.telegramServerConfigured);
-  const showWizard = onboardingStep !== null && onboardingType === 'telegram';
+  const showWizard = view === 'wizard';
 
   useEffect(() => {
     if (showWizard) setCardOpen(true);
@@ -750,7 +673,7 @@ export function TelegramSectionCard({ conn }: { conn: MessengerConnection }) {
           >
             <Icon name="telegram-fill" className={cn('size-5 shrink-0', TELEGRAM_BRAND_CLASS)} />
             <span className="shrink-0 text-sm font-semibold text-foreground">Telegram</span>
-            <StatusBadge status={displayStatus} labels={statusLabels} />
+            <StatusBadge type="telegram" status={displayStatus} />
             {conn.telegramBotUsername && (
               <span className="min-w-0 truncate text-xs text-muted-foreground">
                 @{conn.telegramBotUsername}
@@ -880,64 +803,13 @@ export function TelegramSectionCard({ conn }: { conn: MessengerConnection }) {
 
         </CollapsibleContent>
 
-      <Dialog open={disconnectConfirmOpen} onOpenChange={setDisconnectConfirmOpen}>
-        <DialogContent className="max-w-md">
-          <DialogHeader>
-            <DialogTitle>{t('settings.integrations.telegram.disconnect.dialog.title')}</DialogTitle>
-            <DialogDescription>
-              {t('settings.integrations.telegram.disconnect.dialog.description')}
-            </DialogDescription>
-          </DialogHeader>
-          <DialogFooter>
-            <Button
-              type="button"
-              variant="ghost"
-              size="sm"
-              onClick={() => setDisconnectConfirmOpen(false)}
-            >
-              {t('settings.common.actions.cancel')}
-            </Button>
-            <Button
-              type="button"
-              variant="destructive"
-              size="sm"
-              disabled={disconnecting}
-              onClick={() => {
-                setDisconnecting(true);
-                void disconnectTelegram().finally(() => {
-                  setDisconnecting(false);
-                  setDisconnectConfirmOpen(false);
-                });
-              }}
-            >
-              {t('settings.integrations.telegram.disconnect.dialog.confirm')}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      <MessengerDisconnectDialog
+        type="telegram"
+        open={disconnectConfirmOpen}
+        onOpenChange={setDisconnectConfirmOpen}
+        onDisconnect={disconnectTelegram}
+      />
       </div>
     </Collapsible>
-  );
-}
-
-/** Square "Connect Telegram" tile — shown while no bot token is configured. */
-export function TelegramConnectTile({ onConnect }: { onConnect: () => void }) {
-  const { t } = useI18n();
-  return (
-    <button
-      type="button"
-      onClick={onConnect}
-      data-settings-item="integrations.telegram.connect"
-      className="flex size-40 flex-col items-center justify-center gap-2 rounded-xl border border-dashed border-border p-4 text-center text-muted-foreground transition-colors hover:border-primary/40 hover:text-foreground"
-    >
-      <Icon name="telegram-fill" className={cn('size-9', TELEGRAM_BRAND_CLASS)} />
-      <span className="flex items-center gap-1 text-xs font-medium">
-        <Icon name="add" className="size-3.5" />
-        {t('settings.integrations.telegram.connect')}
-      </span>
-      <span className="text-[10px] font-normal leading-snug text-muted-foreground/80">
-        {t('settings.integrations.telegram.connectHint')}
-      </span>
-    </button>
   );
 }
