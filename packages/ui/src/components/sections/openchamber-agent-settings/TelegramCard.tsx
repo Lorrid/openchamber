@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import { useEffect, useState } from 'react';
 import {
   deriveTelegramDisplayStatus,
   isTelegramChatProjectSyncable,
@@ -7,8 +7,6 @@ import {
   telegramChatOpenUrl,
   useMessengerStore,
   type MessengerConnection,
-  type MessengerVerbosity,
-  type MessengerPermissionMode,
   type TelegramReplyMode,
 } from '@/stores/useMessengerStore';
 import { useProjectsStore } from '@/stores/useProjectsStore';
@@ -25,12 +23,13 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog';
 import { cn } from '@/lib/utils';
-import { useI18n, type I18nKey } from '@/lib/i18n';
+import { useI18n } from '@/lib/i18n';
 import { Icon } from '@/components/icon/Icon';
 import {
   AccessControlRow,
   AdvancedSectionCard,
   BehaviorPanel,
+  MessengerListenerBadge,
   MessengerListenerPanel,
   MessengerSegmentedControl,
   SessionBindingsPanel,
@@ -38,11 +37,9 @@ import {
   TelegramUserInfoBotHint,
   isMessengerIntegrationEnabled,
   parseMessengerIdList,
-  type MessengerBehaviorStrings,
 } from './messenger-shared';
 import { TelegramOnboardingWizard } from './TelegramOnboardingWizard';
 import { MessengerCommandsButton } from './MessengerCommandPalette';
-
 
 /** Telegram brand mark — intentional product color, not a theme token. */
 const TELEGRAM_BRAND_CLASS = 'text-[#2AABEE]';
@@ -54,78 +51,6 @@ function useTelegramStatusLabels(): Record<MessengerConnection['status'], string
     connecting: t('settings.integrations.telegram.status.connecting'),
     error: t('settings.integrations.telegram.status.error'),
     disconnected: t('settings.integrations.telegram.status.disconnected'),
-  };
-}
-
-const TELEGRAM_VERBOSITY_OPTIONS: {
-  id: MessengerVerbosity;
-  labelKey: I18nKey;
-  descKey: I18nKey;
-}[] = [
-  {
-    id: 'quiet',
-    labelKey: 'settings.integrations.telegram.bridge.verbosity.quiet.label',
-    descKey: 'settings.integrations.telegram.bridge.verbosity.quiet.desc',
-  },
-  {
-    id: 'normal',
-    labelKey: 'settings.integrations.telegram.bridge.verbosity.normal.label',
-    descKey: 'settings.integrations.telegram.bridge.verbosity.normal.desc',
-  },
-  {
-    id: 'verbose',
-    labelKey: 'settings.integrations.telegram.bridge.verbosity.verbose.label',
-    descKey: 'settings.integrations.telegram.bridge.verbosity.verbose.desc',
-  },
-];
-
-const TELEGRAM_PERMISSION_MODE_OPTIONS: {
-  id: MessengerPermissionMode;
-  labelKey: I18nKey;
-  descKey: I18nKey;
-}[] = [
-  {
-    id: 'ask',
-    labelKey: 'settings.integrations.telegram.bridge.permissionMode.ask.label',
-    descKey: 'settings.integrations.telegram.bridge.permissionMode.ask.desc',
-  },
-  {
-    id: 'yolo',
-    labelKey: 'settings.integrations.telegram.bridge.permissionMode.yolo.label',
-    descKey: 'settings.integrations.telegram.bridge.permissionMode.yolo.desc',
-  },
-  {
-    id: 'agent',
-    labelKey: 'settings.integrations.telegram.bridge.permissionMode.agent.label',
-    descKey: 'settings.integrations.telegram.bridge.permissionMode.agent.desc',
-  },
-];
-
-function useTelegramBehaviorStrings(): MessengerBehaviorStrings {
-  const { t } = useI18n();
-  return {
-    unavailable: t('settings.integrations.telegram.bridge.unavailable'),
-    verbosityTitle: t('settings.integrations.telegram.bridge.verbosity.title'),
-    verbosityOptions: TELEGRAM_VERBOSITY_OPTIONS.map((opt) => ({
-      id: opt.id,
-      label: t(opt.labelKey),
-      desc: t(opt.descKey),
-    })),
-    permissionTitle: t('settings.integrations.telegram.bridge.permissionMode.title'),
-    permissionOptions: TELEGRAM_PERMISSION_MODE_OPTIONS.map((opt) => ({
-      id: opt.id,
-      label: t(opt.labelKey),
-      desc: t(opt.descKey),
-    })),
-    notifyTitle: t('settings.integrations.telegram.bridge.notifyOnComplete.title'),
-    notifyDescription: t('settings.integrations.telegram.bridge.notifyOnComplete.description'),
-    interruptTitle: t('settings.integrations.telegram.bridge.interruptTimeout.title'),
-    interruptUnit: t('settings.integrations.telegram.bridge.interruptTimeout.unit'),
-    interruptDescription: t('settings.integrations.telegram.bridge.interruptTimeout.description'),
-    activeLabel: (count) =>
-      count === 1
-        ? t('settings.integrations.telegram.bridge.activeOne')
-        : t('settings.integrations.telegram.bridge.activeMany', { count }),
   };
 }
 
@@ -435,30 +360,13 @@ function TelegramOwnerUserIdsEditor({ conn }: { conn: MessengerConnection }) {
   );
 }
 
-function TelegramGroupsList({
-  conn,
-  showHeader = true,
-}: {
-  conn: MessengerConnection;
-  showHeader?: boolean;
-}) {
+function TelegramGroupsList({ conn }: { conn: MessengerConnection }) {
   const { t } = useI18n();
   const inbound = useMessengerStore((s) => s.telegramInbound);
   const chats = listTelegramManagedChats(conn, inbound);
 
   return (
     <div data-settings-item="integrations.telegram.groups" className="space-y-3">
-      {showHeader && (
-        <div>
-          <div className="text-sm font-semibold text-foreground">
-            {t('settings.integrations.telegram.groups.title')}
-          </div>
-          <p className="mt-1 text-xs text-muted-foreground leading-snug">
-            {t('settings.integrations.telegram.groups.description')}
-          </p>
-        </div>
-      )}
-
       {chats.length === 0 ? (
         <p className="text-xs text-muted-foreground leading-snug">
           {t('settings.integrations.telegram.advanced.syncLog.empty')}
@@ -518,14 +426,13 @@ function TelegramOwnersAndGroupsPanel({ conn }: { conn: MessengerConnection }) {
           {t('settings.integrations.telegram.controls.description')}
         </p>
       </div>
-      <TelegramGroupsList conn={conn} showHeader={false} />
+      <TelegramGroupsList conn={conn} />
     </div>
   );
 }
 
 function TelegramAdvancedSettings({ conn }: { conn: MessengerConnection }) {
   const { t } = useI18n();
-  const behaviorStrings = useTelegramBehaviorStrings();
   const updateConnection = useMessengerStore((s) => s.updateConnection);
   const saveTelegramConfig = useMessengerStore((s) => s.saveTelegramConfig);
   const refreshBridgeStatus = useMessengerStore((s) => s.refreshBridgeStatus);
@@ -551,8 +458,6 @@ function TelegramAdvancedSettings({ conn }: { conn: MessengerConnection }) {
   const inputClass =
     'w-full rounded-md border border-border bg-background px-3 py-1.5 text-sm text-foreground focus:outline-none focus:ring-1 focus:ring-ring';
 
-  const listenerConnected = Boolean(conn.telegramListenerConnected);
-  const listenerRunning = Boolean(conn.telegramListenerRunning);
   const seen = conn.telegramListenerTotalRawMessages ?? 0;
   const forwarded = conn.telegramListenerTotalReceived ?? 0;
   const replied = conn.telegramListenerTotalReplied ?? 0;
@@ -565,35 +470,6 @@ function TelegramAdvancedSettings({ conn }: { conn: MessengerConnection }) {
   const toggleAccess = (key: TelegramAccessControlKey) => {
     setAccessOpen((prev) => (prev === key ? null : key));
   };
-
-  const listenerBadge = (
-    <span
-      className={cn(
-        'inline-flex items-center gap-1.5 rounded-full px-2 py-0.5 text-[11px] font-medium',
-        listenerConnected
-          ? 'bg-[var(--status-success)]/15 text-[var(--status-success)]'
-          : listenerRunning
-            ? 'bg-[var(--status-warning)]/15 text-[var(--status-warning)]'
-            : 'bg-muted text-muted-foreground',
-      )}
-    >
-      <span
-        className={cn(
-          'size-1.5 rounded-full',
-          listenerConnected
-            ? 'bg-[var(--status-success)]'
-            : listenerRunning
-              ? 'bg-[var(--status-warning)]'
-              : 'bg-muted-foreground',
-        )}
-      />
-      {listenerConnected
-        ? t('settings.integrations.telegram.listener.status.live')
-        : listenerRunning
-          ? t('settings.integrations.telegram.listener.status.connecting')
-          : t('settings.integrations.telegram.listener.status.off')}
-    </span>
-  );
 
   return (
     <div className="space-y-4">
@@ -617,9 +493,6 @@ function TelegramAdvancedSettings({ conn }: { conn: MessengerConnection }) {
             <BehaviorPanel
               type="telegram"
               bridgeStatus={bridgeStatus}
-              refreshBridgeStatus={refreshBridgeStatus}
-              strings={behaviorStrings}
-              settingsItemPrefix="integrations.telegram"
             />
             <div
               data-settings-item="integrations.telegram.reply-mode"
@@ -658,7 +531,7 @@ function TelegramAdvancedSettings({ conn }: { conn: MessengerConnection }) {
         <AdvancedSectionCard
           icon="pulse"
           title={t('settings.integrations.telegram.advanced.diagnostics.title')}
-          badge={listenerBadge}
+          badge={<MessengerListenerBadge type="telegram" conn={conn} />}
           meta={t('settings.integrations.telegram.advanced.diagnostics.stats', {
             seen,
             forwarded,

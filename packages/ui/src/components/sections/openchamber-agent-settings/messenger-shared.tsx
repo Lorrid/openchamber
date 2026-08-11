@@ -22,18 +22,19 @@ import { useI18n, type I18nKey } from '@/lib/i18n';
 import { Icon } from '@/components/icon/Icon';
 import type { IconName } from '@/components/icon/icons';
 
-/**
- * Presentational building blocks shared by the Discord and Telegram cards in
- * the Integrations settings section. Platform copy is injected per card —
- * every user-facing string arrives already localized (see the call sites in
- * MessengerSection.tsx / TelegramCard.tsx).
- */
-
 /** Official Telegram Web deep link for @userinfobot (user-requested URL). */
 const TELEGRAM_USERINFOBOT_URL = 'https://web.telegram.org/k/#@userinfobot';
 
+function messengerKey(type: MessengerType, suffix: string): I18nKey {
+  return `settings.integrations.${type}.${suffix}` as I18nKey;
+}
+
+function messengerBridgeKey(type: MessengerType, suffix: string): I18nKey {
+  return messengerKey(type, `bridge.${suffix}`);
+}
+
 /** Clickable @userinfobot link — visible handle is the product username. */
-export function TelegramUserInfoBotLink({ className }: { className?: string }) {
+function TelegramUserInfoBotLink({ className }: { className?: string }) {
   return (
     <a
       href={TELEGRAM_USERINFOBOT_URL}
@@ -146,6 +147,48 @@ export function StatusBadge({
         <Icon name="loader-4" className="size-3 animate-spin" />
       ) : null}
       {label}
+    </span>
+  );
+}
+
+export function MessengerListenerBadge({
+  type,
+  conn,
+}: {
+  type: MessengerType;
+  conn: MessengerConnection;
+}) {
+  const { t } = useI18n();
+  const connected = Boolean(
+    type === 'discord' ? conn.discordListenerConnected : conn.telegramListenerConnected,
+  );
+  const running = Boolean(
+    type === 'discord' ? conn.discordListenerRunning : conn.telegramListenerRunning,
+  );
+  const status = connected ? 'live' : running ? 'connecting' : 'off';
+
+  return (
+    <span
+      className={cn(
+        'inline-flex items-center gap-1.5 rounded-full px-2 py-0.5 text-[11px] font-medium',
+        connected
+          ? 'bg-[var(--status-success)]/15 text-[var(--status-success)]'
+          : running
+            ? 'bg-[var(--status-warning)]/15 text-[var(--status-warning)]'
+            : 'bg-muted text-muted-foreground',
+      )}
+    >
+      <span
+        className={cn(
+          'size-1.5 rounded-full',
+          connected
+            ? 'bg-[var(--status-success)]'
+            : running
+              ? 'bg-[var(--status-warning)]'
+              : 'bg-muted-foreground',
+        )}
+      />
+      {t(messengerKey(type, `listener.status.${status}`))}
     </span>
   );
 }
@@ -284,7 +327,7 @@ export function MessengerListenerPanel({
   conn: MessengerConnection;
 }) {
   const { t } = useI18n();
-  const k = (suffix: string) => `settings.integrations.${type}.${suffix}` as I18nKey;
+  const k = (suffix: string) => messengerKey(type, suffix);
   const isDiscord = type === 'discord';
   const subscribeToEvents = useOpenChamberAgentEventsStore((s) => s.subscribeToEvents);
   const inbound = useMessengerStore((s) => (isDiscord ? s.discordInbound : s.telegramInbound));
@@ -506,40 +549,24 @@ export function MessengerListenerPanel({
   );
 }
 
-/** Fully localized copy for the behavior panel — resolved per platform. */
-export interface MessengerBehaviorStrings {
-  unavailable: string;
-  verbosityTitle: string;
-  verbosityOptions: { id: MessengerVerbosity; label: string; desc: string }[];
-  permissionTitle: string;
-  permissionOptions: { id: MessengerPermissionMode; label: string; desc: string }[];
-  notifyTitle: string;
-  notifyDescription: string;
-  interruptTitle: string;
-  interruptUnit: string;
-  interruptDescription: string;
-  activeLabel: (count: number) => string;
-}
+const MESSENGER_VERBOSITIES: MessengerVerbosity[] = ['quiet', 'normal', 'verbose'];
+const MESSENGER_PERMISSION_MODES: MessengerPermissionMode[] = ['ask', 'yolo', 'agent'];
 
 export function BehaviorPanel({
   type,
   bridgeStatus,
-  refreshBridgeStatus,
-  strings,
-  settingsItemPrefix,
   worktreesSlot,
   footerNotes,
 }: {
   type: MessengerType;
   bridgeStatus: ReturnType<typeof useMessengerStore.getState>['bridgeStatus'];
-  refreshBridgeStatus: (t?: MessengerType) => Promise<void>;
-  strings: MessengerBehaviorStrings;
-  /** data-settings-item anchor prefix, e.g. 'integrations.discord'. */
-  settingsItemPrefix: string;
   /** Optional platform-specific extra controls (Discord worktree sync). */
   worktreesSlot?: React.ReactNode;
   footerNotes?: React.ReactNode;
 }) {
+  const { t } = useI18n();
+  const k = (suffix: string) => messengerBridgeKey(type, suffix);
+  const settingsItemPrefix = `integrations.${type}`;
   const bridgeVerbosity = useMessengerStore((s) => s.bridgeVerbosity);
   const setBridgeVerbosity = useMessengerStore((s) => s.setBridgeVerbosity);
   const bridgePermissionMode = useMessengerStore((s) => s.bridgePermissionMode);
@@ -548,21 +575,10 @@ export function BehaviorPanel({
   const setBridgeNotifyOnComplete = useMessengerStore((s) => s.setBridgeNotifyOnComplete);
   const bridgeInterruptTimeoutMs = useMessengerStore((s) => s.bridgeInterruptTimeoutMs);
   const setBridgeInterruptTimeoutMs = useMessengerStore((s) => s.setBridgeInterruptTimeoutMs);
-  useEffect(() => {
-    refreshBridgeStatus(type);
-    const id = setInterval(() => refreshBridgeStatus(type), 8000);
-    return () => clearInterval(id);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [type]);
 
-  const active = bridgeStatus.active.filter((a) => a.type === type);
+  const activeCount = bridgeStatus.active.filter((a) => a.type === type).length;
   const currentVerbosity: MessengerVerbosity = bridgeVerbosity[type] ?? 'normal';
-  const currentVerbosityOption =
-    strings.verbosityOptions.find((o) => o.id === currentVerbosity) ?? strings.verbosityOptions[0];
   const currentPermissionMode: MessengerPermissionMode = bridgePermissionMode[type] ?? 'agent';
-  const currentPermissionOption =
-    strings.permissionOptions.find((o) => o.id === currentPermissionMode) ??
-    strings.permissionOptions[0];
   const notifyOnComplete = bridgeNotifyOnComplete[type] ?? false;
   const interruptTimeoutMs =
     bridgeInterruptTimeoutMs[type] ?? MESSENGER_INTERRUPT_TIMEOUT_DEFAULT_MS;
@@ -571,42 +587,42 @@ export function BehaviorPanel({
   return (
     <div className="space-y-4">
       {!bridgeStatus.enabled ? (
-        <p className="text-xs text-[var(--status-warning)] leading-snug">{strings.unavailable}</p>
+        <p className="text-xs text-[var(--status-warning)] leading-snug">{t(k('unavailable'))}</p>
       ) : null}
 
       {/* Output verbosity — how much of each OpenCode turn is mirrored back. */}
       <div className="space-y-2">
-        <div className="text-sm font-medium text-foreground">{strings.verbosityTitle}</div>
+        <div className="text-sm font-medium text-foreground">{t(k('verbosity.title'))}</div>
         <MessengerSegmentedControl
           value={currentVerbosity}
           disabled={controlsDisabled}
-          ariaLabel={strings.verbosityTitle}
+          ariaLabel={t(k('verbosity.title'))}
           onChange={(id) => setBridgeVerbosity(type, id)}
-          options={strings.verbosityOptions.map((opt) => ({
-            id: opt.id,
-            label: opt.label,
+          options={MESSENGER_VERBOSITIES.map((id) => ({
+            id,
+            label: t(k(`verbosity.${id}.label`)),
           }))}
         />
         <div className="text-xs text-muted-foreground leading-snug">
-          {currentVerbosityOption.desc}
+          {t(k(`verbosity.${currentVerbosity}.desc`))}
         </div>
       </div>
 
       {/* Tool permission mode — same defaults as /yolo and /permissions. */}
       <div className="space-y-2">
-        <div className="text-sm font-medium text-foreground">{strings.permissionTitle}</div>
+        <div className="text-sm font-medium text-foreground">{t(k('permissionMode.title'))}</div>
         <MessengerSegmentedControl
           value={currentPermissionMode}
           disabled={controlsDisabled}
-          ariaLabel={strings.permissionTitle}
+          ariaLabel={t(k('permissionMode.title'))}
           onChange={(id) => setBridgePermissionMode(type, id)}
-          options={strings.permissionOptions.map((opt) => ({
-            id: opt.id,
-            label: opt.label,
+          options={MESSENGER_PERMISSION_MODES.map((id) => ({
+            id,
+            label: t(k(`permissionMode.${id}.label`)),
           }))}
         />
         <div className="text-xs text-muted-foreground leading-snug">
-          {currentPermissionOption.desc}
+          {t(k(`permissionMode.${currentPermissionMode}.desc`))}
         </div>
       </div>
 
@@ -616,12 +632,14 @@ export function BehaviorPanel({
             checked={notifyOnComplete}
             onChange={(checked) => setBridgeNotifyOnComplete(type, checked)}
             disabled={controlsDisabled}
-            ariaLabel={strings.notifyTitle}
+            ariaLabel={t(k('notifyOnComplete.title'))}
           />
           <span className="min-w-0">
-            <span className="block text-sm font-medium text-foreground">{strings.notifyTitle}</span>
+            <span className="block text-sm font-medium text-foreground">
+              {t(k('notifyOnComplete.title'))}
+            </span>
             <span className="block text-xs text-muted-foreground leading-snug">
-              {strings.notifyDescription}
+              {t(k('notifyOnComplete.description'))}
             </span>
           </span>
         </label>
@@ -634,7 +652,7 @@ export function BehaviorPanel({
           className="text-sm font-medium text-foreground"
           htmlFor={`${settingsItemPrefix.replace(/\./g, '-')}-interrupt-timeout-ms`}
         >
-          {strings.interruptTitle}
+          {t(k('interruptTimeout.title'))}
         </label>
         <div className="flex items-center gap-2">
           <input
@@ -653,16 +671,19 @@ export function BehaviorPanel({
             }}
             className="h-8 w-28 rounded-md border border-border bg-background px-3 text-sm text-foreground focus:outline-none focus:ring-1 focus:ring-ring disabled:opacity-50"
           />
-          <span className="text-xs text-muted-foreground">{strings.interruptUnit}</span>
+          <span className="text-xs text-muted-foreground">{t(k('interruptTimeout.unit'))}</span>
         </div>
         <div className="text-xs text-muted-foreground leading-snug">
-          {strings.interruptDescription}
+          {t(k('interruptTimeout.description'))}
         </div>
       </div>
 
-      {active.length > 0 && (
+      {activeCount > 0 && (
         <div className="text-xs text-muted-foreground">
-          <span className="text-primary">▶</span> {strings.activeLabel(active.length)}
+          <span className="text-primary">▶</span>{' '}
+          {activeCount === 1
+            ? t(k('activeOne'))
+            : t(k('activeMany'), { count: activeCount })}
         </div>
       )}
 

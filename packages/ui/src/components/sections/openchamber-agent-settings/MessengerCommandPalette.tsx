@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react';
+import { useMemo, useState } from 'react';
 import {
   Dialog,
   DialogContent,
@@ -13,27 +13,14 @@ import { copyTextToClipboard } from '@/lib/clipboard';
 import { toast } from '@/components/ui/toast';
 import { cn } from '@/lib/utils';
 import {
-  DISCORD_COMMANDS,
   MESSENGER_COMMAND_CATEGORY_ORDER,
-  TELEGRAM_COMMANDS,
-  type MessengerCommandCategory,
+  commandsFor,
+  type MessengerCommandEntry,
   type MessengerCommandPlatform,
-  type DiscordCommandEntry,
-  type TelegramCommandEntry,
 } from './messenger-commands-data';
-
-type PaletteCommand = DiscordCommandEntry | TelegramCommandEntry;
 
 function platformKey(platform: MessengerCommandPlatform, suffix: string): I18nKey {
   return `settings.integrations.${platform}.commands.${suffix}` as I18nKey;
-}
-
-function commandText(cmd: PaletteCommand): string {
-  return cmd.example ?? `/${cmd.name}`;
-}
-
-function commandsFor(platform: MessengerCommandPlatform): PaletteCommand[] {
-  return platform === 'discord' ? DISCORD_COMMANDS : TELEGRAM_COMMANDS;
 }
 
 type MessengerCommandPaletteProps = {
@@ -42,53 +29,34 @@ type MessengerCommandPaletteProps = {
   onOpenChange: (open: boolean) => void;
 };
 
-export function MessengerCommandPalette({
+function MessengerCommandPalette({
   platform,
   open,
   onOpenChange,
 }: MessengerCommandPaletteProps) {
   const { t } = useI18n();
   const [query, setQuery] = useState('');
-  const allCommands = commandsFor(platform);
-  const categoryOrder = MESSENGER_COMMAND_CATEGORY_ORDER;
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
-    if (!q) return allCommands;
-    return allCommands.filter(
+    const commands = commandsFor(platform);
+    if (!q) return commands;
+    return commands.filter(
       (cmd) =>
         cmd.name.includes(q) ||
         t(cmd.descriptionKey as I18nKey).toLowerCase().includes(q),
     );
-  }, [allCommands, query, t]);
+  }, [platform, query, t]);
 
-  const suggested = useMemo(
-    () => filtered.filter((cmd) => cmd.suggested),
-    [filtered],
-  );
-
-  const byCategory = useMemo(() => {
-    const map = new Map<MessengerCommandCategory, PaletteCommand[]>();
-    for (const cat of categoryOrder) {
-      map.set(cat, []);
-    }
-    for (const cmd of filtered) {
-      if (!cmd.suggested) {
-        map.get(cmd.category)?.push(cmd);
-      }
-    }
-    return map;
-  }, [categoryOrder, filtered]);
-
-  const handleCopy = async (cmd: PaletteCommand) => {
-    const text = commandText(cmd);
-    const result = await copyTextToClipboard(text);
+  const suggested = filtered.filter((cmd) => cmd.suggested);
+  const handleCopy = async (cmd: MessengerCommandEntry) => {
+    const result = await copyTextToClipboard(cmd.example ?? `/${cmd.name}`);
     if (result.ok) {
       toast.success(t(platformKey(platform, 'copied')));
     }
   };
 
-  const renderRow = (cmd: PaletteCommand) => (
+  const renderRow = (cmd: MessengerCommandEntry) => (
     <li
       key={cmd.name}
       className="flex items-center gap-2 rounded-md px-2 py-1.5 hover:bg-[var(--interactive-hover)]/50"
@@ -149,8 +117,8 @@ export function MessengerCommandPalette({
                   <ul className="space-y-0.5">{suggested.map(renderRow)}</ul>
                 </section>
               )}
-              {categoryOrder.map((cat) => {
-                const items = byCategory.get(cat) ?? [];
+              {MESSENGER_COMMAND_CATEGORY_ORDER.map((cat) => {
+                const items = filtered.filter((cmd) => !cmd.suggested && cmd.category === cat);
                 if (items.length === 0) return null;
                 return (
                   <section key={cat}>

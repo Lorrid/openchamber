@@ -5,10 +5,7 @@ import {
   deriveTelegramViewState,
   isDiscordGuildSyncing,
   useMessengerStore,
-  type MessengerType,
   type MessengerConnection,
-  type MessengerVerbosity,
-  type MessengerPermissionMode,
   type MessengerDiagnosisCheck,
 } from '@/stores/useMessengerStore';
 import { useDiscordGuildMembershipPoll } from './useDiscordGuildMembershipPoll';
@@ -34,13 +31,12 @@ import {
   AccessControlRow,
   AdvancedSectionCard,
   BehaviorPanel,
+  MessengerListenerBadge,
   MessengerListenerPanel,
   SessionBindingsPanel,
   StatusBadge,
-  TelegramUserInfoBotLink,
   formatRelative,
   isMessengerIntegrationEnabled,
-  type MessengerBehaviorStrings,
 } from './messenger-shared';
 import { TelegramConnectTile, TelegramSectionCard } from './TelegramCard';
 
@@ -53,38 +49,15 @@ type DiscordGuildListItem = {
   icon?: string | null;
 };
 
-interface MessengerMeta {
-  name: string;
-  color: string;
-  targetLabel: string;
-  targetPlaceholder: string;
-  targetHelp: React.ReactNode;
-}
-
-const MESSENGER_META: Record<MessengerType, MessengerMeta> = {
-  discord: {
-    name: 'Discord',
-    color: DISCORD_BRAND_CLASS,
-    targetLabel: 'Channel ID',
-    targetPlaceholder: 'e.g. 1234567890123456789',
-    targetHelp: (
-      <>
-        Enable Developer Mode, then right-click a text channel → <strong>Copy Channel ID</strong>.
-      </>
-    ),
-  },
-  telegram: {
-    name: 'Telegram',
-    color: 'text-[#2AABEE]',
-    targetLabel: 'Chat ID',
-    targetPlaceholder: 'e.g. -1001234567890 or 123456789',
-    targetHelp: (
-      <>
-        Message the bot, then read the id from the recent-messages list or ask{' '}
-        <TelegramUserInfoBotLink />.
-      </>
-    ),
-  },
+const DISCORD_META = {
+  name: 'Discord',
+  color: DISCORD_BRAND_CLASS,
+  targetPlaceholder: 'e.g. 1234567890123456789',
+  targetHelp: (
+    <>
+      Enable Developer Mode, then right-click a text channel → <strong>Copy Channel ID</strong>.
+    </>
+  ),
 };
 
 /** Public Discord CDN guild icon URL, or null when the guild has no icon. */
@@ -139,50 +112,6 @@ function DiscordGuildIcon({
     </span>
   );
 }
-
-const VERBOSITY_OPTIONS: {
-  id: MessengerVerbosity;
-  labelKey: I18nKey;
-  descKey: I18nKey;
-}[] = [
-  {
-    id: 'quiet',
-    labelKey: 'settings.integrations.discord.bridge.verbosity.quiet.label',
-    descKey: 'settings.integrations.discord.bridge.verbosity.quiet.desc',
-  },
-  {
-    id: 'normal',
-    labelKey: 'settings.integrations.discord.bridge.verbosity.normal.label',
-    descKey: 'settings.integrations.discord.bridge.verbosity.normal.desc',
-  },
-  {
-    id: 'verbose',
-    labelKey: 'settings.integrations.discord.bridge.verbosity.verbose.label',
-    descKey: 'settings.integrations.discord.bridge.verbosity.verbose.desc',
-  },
-];
-
-const PERMISSION_MODE_OPTIONS: {
-  id: MessengerPermissionMode;
-  labelKey: I18nKey;
-  descKey: I18nKey;
-}[] = [
-  {
-    id: 'ask',
-    labelKey: 'settings.integrations.discord.bridge.permissionMode.ask.label',
-    descKey: 'settings.integrations.discord.bridge.permissionMode.ask.desc',
-  },
-  {
-    id: 'yolo',
-    labelKey: 'settings.integrations.discord.bridge.permissionMode.yolo.label',
-    descKey: 'settings.integrations.discord.bridge.permissionMode.yolo.desc',
-  },
-  {
-    id: 'agent',
-    labelKey: 'settings.integrations.discord.bridge.permissionMode.agent.label',
-    descKey: 'settings.integrations.discord.bridge.permissionMode.agent.desc',
-  },
-];
 
 type AccessControlKey = 'fallback' | 'owner' | 'trusted' | 'slash';
 
@@ -295,35 +224,6 @@ function DiscordDiagnosePanel({
       )}
     </div>
   );
-}
-
-/** Localized strings for the shared BehaviorPanel, resolved from shared bridge keys. */
-function useDiscordBehaviorStrings(): MessengerBehaviorStrings {
-  const { t } = useI18n();
-  return {
-    unavailable: t('settings.integrations.discord.bridge.unavailable'),
-    verbosityTitle: t('settings.integrations.discord.bridge.verbosity.title'),
-    verbosityOptions: VERBOSITY_OPTIONS.map((opt) => ({
-      id: opt.id,
-      label: t(opt.labelKey),
-      desc: t(opt.descKey),
-    })),
-    permissionTitle: t('settings.integrations.discord.bridge.permissionMode.title'),
-    permissionOptions: PERMISSION_MODE_OPTIONS.map((opt) => ({
-      id: opt.id,
-      label: t(opt.labelKey),
-      desc: t(opt.descKey),
-    })),
-    notifyTitle: t('settings.integrations.discord.bridge.notifyOnComplete.title'),
-    notifyDescription: t('settings.integrations.discord.bridge.notifyOnComplete.description'),
-    interruptTitle: t('settings.integrations.discord.bridge.interruptTimeout.title'),
-    interruptUnit: t('settings.integrations.discord.bridge.interruptTimeout.unit'),
-    interruptDescription: t('settings.integrations.discord.bridge.interruptTimeout.description'),
-    activeLabel: (count) =>
-      count === 1
-        ? t('settings.integrations.discord.bridge.activeOne')
-        : t('settings.integrations.discord.bridge.activeMany', { count }),
-  };
 }
 
 /** Discord-only worktree sync toggle — injected into the shared BehaviorPanel. */
@@ -452,23 +352,8 @@ function DiscordSyncResults({
   );
 }
 
-function DiscordAdvancedSettings({
-  conn,
-  open,
-  onOpenChange,
-  hideTrigger = false,
-}: {
-  conn: MessengerConnection;
-  open?: boolean;
-  onOpenChange?: (open: boolean) => void;
-  /** When true, the parent owns the open control (e.g. connected-state button). */
-  hideTrigger?: boolean;
-}) {
-  const [internalOpen, setInternalOpen] = useState(false);
-  const isOpen = open ?? internalOpen;
-  const setOpen = onOpenChange ?? setInternalOpen;
+function DiscordAdvancedSettings({ conn }: { conn: MessengerConnection }) {
   const { t } = useI18n();
-  const behaviorStrings = useDiscordBehaviorStrings();
 
   const updateConnection = useMessengerStore((s) => s.updateConnection);
   const saveDiscordConfig = useMessengerStore((s) => s.saveDiscordConfig);
@@ -480,16 +365,15 @@ function DiscordAdvancedSettings({
   const bridgeStatus = useMessengerStore((s) => s.bridgeStatus);
 
   useEffect(() => {
-    if (!isOpen) return;
-    void refreshBridgeStatus(conn.type);
-    const id = setInterval(() => void refreshBridgeStatus(conn.type), 8000);
+    void refreshBridgeStatus('discord');
+    const id = setInterval(() => void refreshBridgeStatus('discord'), 8000);
     return () => clearInterval(id);
-  }, [isOpen, conn.type, refreshBridgeStatus]);
+  }, [refreshBridgeStatus]);
 
   const inputClass =
     'w-full rounded-md border border-border bg-background px-3 py-1.5 text-sm text-foreground focus:outline-none focus:ring-1 focus:ring-ring';
 
-  const meta = MESSENGER_META[conn.type];
+  const meta = DISCORD_META;
   const target = conn.defaultChannelId;
   const hasTarget = Boolean(target);
 
@@ -520,43 +404,12 @@ function DiscordAdvancedSettings({
     setAccessOpen((prev) => (prev === key ? null : key));
   };
 
-  const listenerConnected = Boolean(conn.discordListenerConnected);
-  const listenerRunning = Boolean(conn.discordListenerRunning);
   const seen = conn.discordListenerTotalRawMessages ?? 0;
   const forwarded = conn.discordListenerTotalReceived ?? 0;
   const replied = conn.discordListenerTotalReplied ?? 0;
   const syncChannels = conn.lastSyncChannels ?? [];
   const syncFailed = syncChannels.filter((c) => Boolean(c.error) || Boolean(c.threadError)).length;
   const bindingsCount = bridgeStatus.bindings.filter((b) => b.type === conn.type).length;
-
-  const listenerBadge = (
-    <span
-      className={cn(
-        'inline-flex items-center gap-1.5 rounded-full px-2 py-0.5 text-[11px] font-medium',
-        listenerConnected
-          ? 'bg-[var(--status-success)]/15 text-[var(--status-success)]'
-          : listenerRunning
-            ? 'bg-[var(--status-warning)]/15 text-[var(--status-warning)]'
-            : 'bg-muted text-muted-foreground',
-      )}
-    >
-      <span
-        className={cn(
-          'size-1.5 rounded-full',
-          listenerConnected
-            ? 'bg-[var(--status-success)]'
-            : listenerRunning
-              ? 'bg-[var(--status-warning)]'
-              : 'bg-muted-foreground',
-        )}
-      />
-      {listenerConnected
-        ? t('settings.integrations.discord.listener.status.live')
-        : listenerRunning
-          ? t('settings.integrations.discord.listener.status.connecting')
-          : t('settings.integrations.discord.listener.status.off')}
-    </span>
-  );
 
   const fallbackFields = (
     <div data-settings-item="integrations.discord.fallback-channel" className="space-y-2">
@@ -626,7 +479,7 @@ function DiscordAdvancedSettings({
     </div>
   );
 
-  const content = (
+  return (
     <div className="space-y-4">
       <div className="space-y-1 px-0.5">
         <h3 className="text-lg font-semibold tracking-tight text-foreground">
@@ -647,9 +500,6 @@ function DiscordAdvancedSettings({
           <BehaviorPanel
             type={conn.type}
             bridgeStatus={bridgeStatus}
-            refreshBridgeStatus={refreshBridgeStatus}
-            strings={behaviorStrings}
-            settingsItemPrefix="integrations.discord"
             worktreesSlot={<DiscordWorktreesSlot />}
             footerNotes={
               <div data-settings-item="integrations.discord.proxy-worktrees" className="space-y-1">
@@ -663,7 +513,7 @@ function DiscordAdvancedSettings({
         <AdvancedSectionCard
           icon="pulse"
           title={t('settings.integrations.discord.advanced.diagnostics.title')}
-          badge={listenerBadge}
+          badge={<MessengerListenerBadge type="discord" conn={conn} />}
           meta={t('settings.integrations.discord.advanced.diagnostics.stats', {
             seen,
             forwarded,
@@ -842,29 +692,6 @@ function DiscordAdvancedSettings({
         </AdvancedSectionCard>
       </div>
     </div>
-  );
-
-  if (hideTrigger) {
-    return isOpen ? content : null;
-  }
-
-  return (
-    <Collapsible open={isOpen} onOpenChange={setOpen} className="border-t border-border/60 pt-3">
-      <label className="flex cursor-pointer select-none items-center gap-2">
-        <Checkbox
-          checked={isOpen}
-          onChange={setOpen}
-          ariaLabel={t('settings.integrations.discord.actions.advancedSettings')}
-        />
-        <span className="text-xs font-medium text-foreground">
-          {t('settings.integrations.discord.actions.advancedSettings')}
-        </span>
-        <span className="text-[10px] font-normal text-muted-foreground">
-          {t('settings.integrations.discord.actions.advancedSettingsHint')}
-        </span>
-      </label>
-      <CollapsibleContent className="pt-3">{content}</CollapsibleContent>
-    </Collapsible>
   );
 }
 
@@ -1332,7 +1159,7 @@ function ConnectionCard({ conn }: { conn: MessengerConnection }) {
     });
   };
 
-  const meta = MESSENGER_META[conn.type];
+  const meta = DISCORD_META;
   const displayStatus = deriveDiscordDisplayStatus(conn);
 
   const token = conn.botToken;
@@ -1532,12 +1359,7 @@ function ConnectionCard({ conn }: { conn: MessengerConnection }) {
           <div ref={advancedSectionRef}>
             {advancedOpen && (
               <div className="border-t border-[var(--interactive-border)] pt-4">
-                <DiscordAdvancedSettings
-                  conn={conn}
-                  open={advancedOpen}
-                  onOpenChange={setAdvancedOpen}
-                  hideTrigger
-                />
+                <DiscordAdvancedSettings conn={conn} />
               </div>
             )}
           </div>
@@ -1593,7 +1415,7 @@ function ConnectionCard({ conn }: { conn: MessengerConnection }) {
  */
 function DiscordConnectCard({ onConnect }: { onConnect: () => void }) {
   const { t } = useI18n();
-  const meta = MESSENGER_META.discord;
+  const meta = DISCORD_META;
   return (
     <button
       type="button"
