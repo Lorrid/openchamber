@@ -11,7 +11,7 @@ export type MessengerCommandPlatform = 'discord' | 'telegram';
 
 export type MessengerCommandEntry = {
   name: string;
-  /** Shared i18n key under settings.integrations.commands.* */
+  /** Desc key suffix under settings.integrations.{platform}.commands.desc.* */
   descriptionKey: string;
   category: MessengerCommandCategory;
   /** Platforms that surface this command in Settings. */
@@ -25,6 +25,14 @@ export type MessengerCommandEntry = {
   discordExample?: string;
   telegramExample?: string;
 };
+
+/** Catalog stores shared `settings.integrations.commands.desc.*`; derive remaps per platform. */
+function platformDescKey(descriptionKey: string, platform: MessengerCommandPlatform): string {
+  return descriptionKey.replace(
+    'settings.integrations.commands.desc.',
+    `settings.integrations.${platform}.commands.desc.`,
+  );
+}
 
 /**
  * Single source of truth for messenger command reference in Settings.
@@ -297,7 +305,7 @@ export const DISCORD_COMMANDS: DiscordCommandEntry[] = MESSENGER_COMMANDS.filter
   cmd.platforms.includes('discord'),
 ).map((cmd) => ({
   name: cmd.name,
-  descriptionKey: cmd.descriptionKey,
+  descriptionKey: platformDescKey(cmd.descriptionKey, 'discord'),
   category: cmd.category,
   suggested: cmd.suggested,
   nativeSlash: cmd.nativeSlash,
@@ -309,7 +317,7 @@ export const TELEGRAM_COMMANDS: TelegramCommandEntry[] = MESSENGER_COMMANDS.filt
   cmd.platforms.includes('telegram'),
 ).map((cmd) => ({
   name: cmd.name,
-  descriptionKey: cmd.descriptionKey,
+  descriptionKey: platformDescKey(cmd.descriptionKey, 'telegram'),
   category: cmd.category,
   suggested: cmd.suggested,
   example: exampleFor(cmd, 'telegram'),

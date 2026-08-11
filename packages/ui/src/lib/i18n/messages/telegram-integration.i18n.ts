@@ -1,6 +1,8 @@
 /** Telegram integration UI strings — merged into each locale's settingsDict */
 export const telegramIntegrationI18n = {
   en: {
+    'settings.integrations.telegram.advanced.syncLog.title': 'Sync log',
+    'settings.integrations.telegram.advanced.syncLog.empty': 'No project sync results yet.',
     'settings.integrations.telegram.connect': 'Connect Telegram',
     'settings.integrations.telegram.connectHint': 'Chat with your agent from Telegram',
     'settings.integrations.telegram.targetHelp.before': 'Message the bot, then read the id from the recent-messages list or ask ',
@@ -91,7 +93,7 @@ export const telegramIntegrationI18n = {
     'settings.integrations.telegram.advanced.sessionBindings.count': '{count} active bindings',
     'settings.integrations.telegram.advanced.sessionBindings.countOne': '1 active binding',
     'settings.integrations.telegram.advanced.sessionBindings.empty': 'No chat ↔ session bindings yet.',
-    'settings.integrations.telegram.advanced.dangerZone.title': 'Danger zone',
+    'settings.integrations.telegram.advanced.dangerZone.title': 'Access control',
     'settings.integrations.telegram.advanced.fallbackChat.title': 'Default Chat ID',
     'settings.integrations.telegram.advanced.fallbackChat.description':
       'Chat that receives test messages. Applied on the next listener start.',
@@ -220,6 +222,8 @@ export const telegramIntegrationI18n = {
     'settings.integrations.telegram.commands.desc.reloadOpencode': 'Reload/reconnect OpenChamber-managed OpenCode (cannot kill an external process)',
   },
   de: {
+    'settings.integrations.telegram.advanced.syncLog.title': 'Sync-Protokoll',
+    'settings.integrations.telegram.advanced.syncLog.empty': 'Noch keine Projekt-Sync-Ergebnisse.',
     'settings.integrations.telegram.connect': 'Telegram verbinden',
     'settings.integrations.telegram.connectHint': 'Chatten Sie mit Ihrem Agenten über Telegram',
     'settings.integrations.telegram.targetHelp.before': 'Schreiben Sie dem Bot und lesen Sie die ID in der Liste der letzten Nachrichten oder fragen Sie ',
@@ -300,7 +304,7 @@ export const telegramIntegrationI18n = {
     'settings.integrations.telegram.advanced.sessionBindings.count': '{count} aktive Bindungen',
     'settings.integrations.telegram.advanced.sessionBindings.countOne': '1 aktive Bindung',
     'settings.integrations.telegram.advanced.sessionBindings.empty': 'Noch keine Chat-↔-Sitzungsbindungen.',
-    'settings.integrations.telegram.advanced.dangerZone.title': 'Gefahrenzone',
+    'settings.integrations.telegram.advanced.dangerZone.title': 'Zugriffskontrolle',
     'settings.integrations.telegram.advanced.fallbackChat.title': 'Standard-Chat-ID',
     'settings.integrations.telegram.advanced.fallbackChat.description': 'Chat, der Testnachrichten erhält. Wird beim nächsten Listener-Start angewendet.',
     'settings.integrations.telegram.advanced.fallbackChat.placeholder': 'z. B. -1001234567890 oder 123456789',
@@ -411,6 +415,8 @@ export const telegramIntegrationI18n = {
     'settings.integrations.telegram.commands.desc.reloadOpencode': 'Von OpenChamber verwaltetes OpenCode neu laden/neu verbinden (kann keinen externen Prozess beenden)',
   },
   es: {
+    'settings.integrations.telegram.advanced.syncLog.title': 'Registro de sincronización',
+    'settings.integrations.telegram.advanced.syncLog.empty': 'Aún no hay resultados de sincronización de proyectos.',
     'settings.integrations.telegram.connect': 'Conectar Telegram',
     'settings.integrations.telegram.connectHint': 'Habla con tu agente desde Telegram',
     'settings.integrations.telegram.targetHelp.before': 'Escribe al bot y luego lee el id en la lista de mensajes recientes o pregunta a ',
@@ -501,7 +507,7 @@ export const telegramIntegrationI18n = {
     'settings.integrations.telegram.advanced.sessionBindings.count': '{count} vínculos activos',
     'settings.integrations.telegram.advanced.sessionBindings.countOne': '1 vínculo activo',
     'settings.integrations.telegram.advanced.sessionBindings.empty': 'Aún no hay vínculos chat ↔ sesión.',
-    'settings.integrations.telegram.advanced.dangerZone.title': 'Zona de peligro',
+    'settings.integrations.telegram.advanced.dangerZone.title': 'Control de acceso',
     'settings.integrations.telegram.advanced.fallbackChat.title': 'ID de chat predeterminado',
     'settings.integrations.telegram.advanced.fallbackChat.description':
       'Chat que recibe los mensajes de prueba. Se aplica en el próximo inicio del listener.',
@@ -626,6 +632,8 @@ export const telegramIntegrationI18n = {
     'settings.integrations.telegram.commands.desc.reloadOpencode': 'Recarga/reconecta OpenCode gestionado por OpenChamber (no puede matar un proceso externo)',
   },
   fr: {
+    'settings.integrations.telegram.advanced.syncLog.title': 'Journal de synchronisation',
+    'settings.integrations.telegram.advanced.syncLog.empty': 'Aucun résultat de synchronisation de projet pour le moment.',
     'settings.integrations.telegram.connect': 'Connecter Telegram',
     'settings.integrations.telegram.connectHint': 'Discutez avec votre agent depuis Telegram',
     'settings.integrations.telegram.targetHelp.before': 'Écrivez au bot, puis lisez l’id dans la liste des messages récents ou demandez à ',
@@ -716,7 +724,7 @@ export const telegramIntegrationI18n = {
     'settings.integrations.telegram.advanced.sessionBindings.count': '{count} liaisons actives',
     'settings.integrations.telegram.advanced.sessionBindings.countOne': '1 liaison active',
     'settings.integrations.telegram.advanced.sessionBindings.empty': 'Aucune liaison chat ↔ session pour le moment.',
-    'settings.integrations.telegram.advanced.dangerZone.title': 'Zone dangereuse',
+    'settings.integrations.telegram.advanced.dangerZone.title': 'Contrôle d’accès',
     'settings.integrations.telegram.advanced.fallbackChat.title': 'ID de chat par défaut',
     'settings.integrations.telegram.advanced.fallbackChat.description':
       'Chat qui reçoit les messages de test. Appliqué au prochain démarrage du listener.',
@@ -841,6 +849,8 @@ export const telegramIntegrationI18n = {
     'settings.integrations.telegram.commands.desc.reloadOpencode': 'Recharger/reconnecter OpenCode géré par OpenChamber (ne peut pas tuer un processus externe)',
   },
   ja: {
+    'settings.integrations.telegram.advanced.syncLog.title': '同期ログ',
+    'settings.integrations.telegram.advanced.syncLog.empty': 'プロジェクト同期の結果はまだありません。',
     'settings.integrations.telegram.connect': 'Telegram を接続',
     'settings.integrations.telegram.connectHint': 'Telegram からエージェントとチャット',
     'settings.integrations.telegram.targetHelp.before': 'ボットにメッセージを送り、最近のメッセージ一覧か ',
@@ -931,7 +941,7 @@ export const telegramIntegrationI18n = {
     'settings.integrations.telegram.advanced.sessionBindings.count': '{count} 件のアクティブなバインディング',
     'settings.integrations.telegram.advanced.sessionBindings.countOne': '1 件のアクティブなバインディング',
     'settings.integrations.telegram.advanced.sessionBindings.empty': 'チャット ↔ セッションのバインディングはまだありません。',
-    'settings.integrations.telegram.advanced.dangerZone.title': '危険ゾーン',
+    'settings.integrations.telegram.advanced.dangerZone.title': 'アクセス制御',
     'settings.integrations.telegram.advanced.fallbackChat.title': 'デフォルトのチャット ID',
     'settings.integrations.telegram.advanced.fallbackChat.description':
       'テストメッセージを受け取るチャット。次回のリスナー起動時に適用されます。',
@@ -1056,6 +1066,8 @@ export const telegramIntegrationI18n = {
     'settings.integrations.telegram.commands.desc.reloadOpencode': 'OpenChamber 管理の OpenCode を再読み込み/再接続（外部プロセスは終了不可）',
   },
   ko: {
+    'settings.integrations.telegram.advanced.syncLog.title': '동기화 로그',
+    'settings.integrations.telegram.advanced.syncLog.empty': '아직 프로젝트 동기화 결과가 없습니다.',
     'settings.integrations.telegram.connect': 'Telegram 연결',
     'settings.integrations.telegram.connectHint': 'Telegram에서 에이전트와 대화하세요',
     'settings.integrations.telegram.targetHelp.before': '봇에게 메시지를 보낸 뒤 최근 메시지 목록이나 ',
@@ -1146,7 +1158,7 @@ export const telegramIntegrationI18n = {
     'settings.integrations.telegram.advanced.sessionBindings.count': '활성 바인딩 {count}개',
     'settings.integrations.telegram.advanced.sessionBindings.countOne': '활성 바인딩 1개',
     'settings.integrations.telegram.advanced.sessionBindings.empty': '아직 채팅 ↔ 세션 바인딩이 없습니다.',
-    'settings.integrations.telegram.advanced.dangerZone.title': '위험 구역',
+    'settings.integrations.telegram.advanced.dangerZone.title': '접근 제어',
     'settings.integrations.telegram.advanced.fallbackChat.title': '기본 채팅 ID',
     'settings.integrations.telegram.advanced.fallbackChat.description':
       '테스트 메시지를 받는 채팅입니다. 다음 리스너 시작 시 적용됩니다.',
@@ -1271,6 +1283,8 @@ export const telegramIntegrationI18n = {
     'settings.integrations.telegram.commands.desc.reloadOpencode': 'OpenChamber 관리 OpenCode 다시 로드/재연결(외부 프로세스는 종료 불가)',
   },
   pl: {
+    'settings.integrations.telegram.advanced.syncLog.title': 'Dziennik synchronizacji',
+    'settings.integrations.telegram.advanced.syncLog.empty': 'Brak wyników synchronizacji projektów.',
     'settings.integrations.telegram.connect': 'Połącz Telegram',
     'settings.integrations.telegram.connectHint': 'Rozmawiaj z agentem przez Telegram',
     'settings.integrations.telegram.targetHelp.before': 'Napisz do bota, a potem odczytaj identyfikator z listy ostatnich wiadomości lub zapytaj ',
@@ -1361,7 +1375,7 @@ export const telegramIntegrationI18n = {
     'settings.integrations.telegram.advanced.sessionBindings.count': '{count} aktywnych powiązań',
     'settings.integrations.telegram.advanced.sessionBindings.countOne': '1 aktywne powiązanie',
     'settings.integrations.telegram.advanced.sessionBindings.empty': 'Brak powiązań czat ↔ sesja.',
-    'settings.integrations.telegram.advanced.dangerZone.title': 'Strefa niebezpieczna',
+    'settings.integrations.telegram.advanced.dangerZone.title': 'Kontrola dostępu',
     'settings.integrations.telegram.advanced.fallbackChat.title': 'Domyślny identyfikator czatu',
     'settings.integrations.telegram.advanced.fallbackChat.description':
       'Czat, który otrzymuje wiadomości testowe. Zastosowane przy następnym uruchomieniu listenera.',
@@ -1486,6 +1500,8 @@ export const telegramIntegrationI18n = {
     'settings.integrations.telegram.commands.desc.reloadOpencode': 'Przeładuj/połącz ponownie OpenCode zarządzane przez OpenChamber (nie może zabić procesu zewnętrznego)',
   },
   'pt-BR': {
+    'settings.integrations.telegram.advanced.syncLog.title': 'Registro de sincronização',
+    'settings.integrations.telegram.advanced.syncLog.empty': 'Ainda não há resultados de sincronização de projetos.',
     'settings.integrations.telegram.connect': 'Conectar Telegram',
     'settings.integrations.telegram.connectHint': 'Converse com seu agente pelo Telegram',
     'settings.integrations.telegram.targetHelp.before': 'Mande mensagem ao bot e depois leia o id na lista de mensagens recentes ou pergunte ao ',
@@ -1576,7 +1592,7 @@ export const telegramIntegrationI18n = {
     'settings.integrations.telegram.advanced.sessionBindings.count': '{count} vínculos ativos',
     'settings.integrations.telegram.advanced.sessionBindings.countOne': '1 vínculo ativo',
     'settings.integrations.telegram.advanced.sessionBindings.empty': 'Ainda não há vínculos chat ↔ sessão.',
-    'settings.integrations.telegram.advanced.dangerZone.title': 'Zona de perigo',
+    'settings.integrations.telegram.advanced.dangerZone.title': 'Controle de acesso',
     'settings.integrations.telegram.advanced.fallbackChat.title': 'ID de chat padrão',
     'settings.integrations.telegram.advanced.fallbackChat.description':
       'Chat que recebe as mensagens de teste. Aplicado na próxima inicialização do listener.',
@@ -1701,6 +1717,8 @@ export const telegramIntegrationI18n = {
     'settings.integrations.telegram.commands.desc.reloadOpencode': 'Recarregar/reconectar OpenCode gerenciado pelo OpenChamber (não pode encerrar um processo externo)',
   },
   uk: {
+    'settings.integrations.telegram.advanced.syncLog.title': 'Журнал синхронізації',
+    'settings.integrations.telegram.advanced.syncLog.empty': 'Ще немає результатів синхронізації проєктів.',
     'settings.integrations.telegram.connect': 'Підключити Telegram',
     'settings.integrations.telegram.connectHint': 'Спілкуйтеся з агентом через Telegram',
     'settings.integrations.telegram.targetHelp.before': 'Напишіть боту, а потім прочитайте id у списку останніх повідомлень або запитайте в ',
@@ -1791,7 +1809,7 @@ export const telegramIntegrationI18n = {
     'settings.integrations.telegram.advanced.sessionBindings.count': '{count} активних прив’язок',
     'settings.integrations.telegram.advanced.sessionBindings.countOne': '1 активна прив’язка',
     'settings.integrations.telegram.advanced.sessionBindings.empty': 'Поки немає прив’язок чат ↔ сесія.',
-    'settings.integrations.telegram.advanced.dangerZone.title': 'Небезпечна зона',
+    'settings.integrations.telegram.advanced.dangerZone.title': 'Контроль доступу',
     'settings.integrations.telegram.advanced.fallbackChat.title': 'ID чату за замовчуванням',
     'settings.integrations.telegram.advanced.fallbackChat.description':
       'Чат, який отримує тестові повідомлення. Застосовується під час наступного запуску прослуховувача.',
@@ -1916,6 +1934,8 @@ export const telegramIntegrationI18n = {
     'settings.integrations.telegram.commands.desc.reloadOpencode': 'Перезавантажити/перепідключити OpenCode під керуванням OpenChamber (не може завершити зовнішній процес)',
   },
   'zh-CN': {
+    'settings.integrations.telegram.advanced.syncLog.title': '同步日志',
+    'settings.integrations.telegram.advanced.syncLog.empty': '尚无项目同步结果。',
     'settings.integrations.telegram.connect': '连接 Telegram',
     'settings.integrations.telegram.connectHint': '通过 Telegram 与你的智能体聊天',
     'settings.integrations.telegram.targetHelp.before': '先给机器人发消息，然后从最近消息列表或 ',
@@ -2006,7 +2026,7 @@ export const telegramIntegrationI18n = {
     'settings.integrations.telegram.advanced.sessionBindings.count': '{count} 个活动绑定',
     'settings.integrations.telegram.advanced.sessionBindings.countOne': '1 个活动绑定',
     'settings.integrations.telegram.advanced.sessionBindings.empty': '暂无聊天 ↔ 会话绑定。',
-    'settings.integrations.telegram.advanced.dangerZone.title': '危险区域',
+    'settings.integrations.telegram.advanced.dangerZone.title': '访问控制',
     'settings.integrations.telegram.advanced.fallbackChat.title': '默认聊天 ID',
     'settings.integrations.telegram.advanced.fallbackChat.description':
       '接收测试消息的聊天。在下次启动监听器时生效。',
@@ -2131,6 +2151,8 @@ export const telegramIntegrationI18n = {
     'settings.integrations.telegram.commands.desc.reloadOpencode': '重新加载/重新连接 OpenChamber 管理的 OpenCode（无法终止外部进程）',
   },
   'zh-TW': {
+    'settings.integrations.telegram.advanced.syncLog.title': '同步日誌',
+    'settings.integrations.telegram.advanced.syncLog.empty': '尚無專案同步結果。',
     'settings.integrations.telegram.connect': '連接 Telegram',
     'settings.integrations.telegram.connectHint': '透過 Telegram 與你的代理聊天',
     'settings.integrations.telegram.targetHelp.before': '先傳訊息給機器人，再從最近訊息列表或 ',
@@ -2221,7 +2243,7 @@ export const telegramIntegrationI18n = {
     'settings.integrations.telegram.advanced.sessionBindings.count': '{count} 個作用中綁定',
     'settings.integrations.telegram.advanced.sessionBindings.countOne': '1 個作用中綁定',
     'settings.integrations.telegram.advanced.sessionBindings.empty': '尚無聊天 ↔ 工作階段綁定。',
-    'settings.integrations.telegram.advanced.dangerZone.title': '危險區域',
+    'settings.integrations.telegram.advanced.dangerZone.title': '存取控制',
     'settings.integrations.telegram.advanced.fallbackChat.title': '預設聊天 ID',
     'settings.integrations.telegram.advanced.fallbackChat.description':
       '接收測試訊息的聊天。在下次啟動監聽器時生效。',

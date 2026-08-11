@@ -24,35 +24,9 @@ import {
 
 type PaletteCommand = DiscordCommandEntry | TelegramCommandEntry;
 
-const CATEGORY_LABEL_KEYS: Record<MessengerCommandCategory, I18nKey> = {
-  chat: 'settings.integrations.commands.category.chat',
-  model: 'settings.integrations.commands.category.model',
-  shell: 'settings.integrations.commands.category.shell',
-  git: 'settings.integrations.commands.category.git',
-  queue: 'settings.integrations.commands.category.queue',
-  ops: 'settings.integrations.commands.category.ops',
-  sharing: 'settings.integrations.commands.category.sharing',
-};
-
-const PLATFORM_COPY: Record<
-  MessengerCommandPlatform,
-  {
-    button: I18nKey;
-    title: I18nKey;
-    description: I18nKey;
-  }
-> = {
-  discord: {
-    button: 'settings.integrations.discord.commands.button',
-    title: 'settings.integrations.discord.commands.title',
-    description: 'settings.integrations.discord.commands.description',
-  },
-  telegram: {
-    button: 'settings.integrations.telegram.commands.button',
-    title: 'settings.integrations.telegram.commands.title',
-    description: 'settings.integrations.telegram.commands.description',
-  },
-};
+function platformKey(platform: MessengerCommandPlatform, suffix: string): I18nKey {
+  return `settings.integrations.${platform}.commands.${suffix}` as I18nKey;
+}
 
 function commandText(cmd: PaletteCommand): string {
   return cmd.example ?? `/${cmd.name}`;
@@ -75,7 +49,6 @@ export function MessengerCommandPalette({
 }: MessengerCommandPaletteProps) {
   const { t } = useI18n();
   const [query, setQuery] = useState('');
-  const copy = PLATFORM_COPY[platform];
   const allCommands = commandsFor(platform);
   const categoryOrder = MESSENGER_COMMAND_CATEGORY_ORDER;
 
@@ -111,7 +84,7 @@ export function MessengerCommandPalette({
     const text = commandText(cmd);
     const result = await copyTextToClipboard(text);
     if (result.ok) {
-      toast.success(t('settings.integrations.commands.copied'));
+      toast.success(t(platformKey(platform, 'copied')));
     }
   };
 
@@ -132,7 +105,7 @@ export function MessengerCommandPalette({
         size="xs"
         className="h-7 shrink-0 px-2"
         onClick={() => void handleCopy(cmd)}
-        aria-label={t('settings.integrations.commands.copy')}
+        aria-label={t(platformKey(platform, 'copy'))}
       >
         <Icon name="file-copy" className="size-3.5" />
       </Button>
@@ -143,8 +116,8 @@ export function MessengerCommandPalette({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-md gap-3 p-5">
         <DialogHeader>
-          <DialogTitle>{t(copy.title)}</DialogTitle>
-          <DialogDescription>{t(copy.description)}</DialogDescription>
+          <DialogTitle>{t(platformKey(platform, 'title'))}</DialogTitle>
+          <DialogDescription>{t(platformKey(platform, 'description'))}</DialogDescription>
         </DialogHeader>
 
         <div className="relative">
@@ -156,7 +129,7 @@ export function MessengerCommandPalette({
             type="search"
             value={query}
             onChange={(e) => setQuery(e.target.value)}
-            placeholder={t('settings.integrations.commands.search')}
+            placeholder={t(platformKey(platform, 'search'))}
             className="h-8 w-full rounded-md border border-border bg-background pl-8 pr-3 text-xs text-foreground focus:outline-none focus:ring-1 focus:ring-ring"
           />
         </div>
@@ -164,14 +137,14 @@ export function MessengerCommandPalette({
         <div className="max-h-[min(60vh,420px)] space-y-3 overflow-y-auto pr-1">
           {filtered.length === 0 ? (
             <p className="py-4 text-center text-xs text-muted-foreground">
-              {t('settings.integrations.commands.noResults')}
+              {t(platformKey(platform, 'noResults'))}
             </p>
           ) : (
             <>
               {suggested.length > 0 && (
                 <section>
                   <h4 className="mb-1 px-1 text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
-                    {t('settings.integrations.commands.suggested')}
+                    {t(platformKey(platform, 'suggested'))}
                   </h4>
                   <ul className="space-y-0.5">{suggested.map(renderRow)}</ul>
                 </section>
@@ -182,7 +155,7 @@ export function MessengerCommandPalette({
                 return (
                   <section key={cat}>
                     <h4 className="mb-1 px-1 text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
-                      {t(CATEGORY_LABEL_KEYS[cat])}
+                      {t(platformKey(platform, `category.${cat}`))}
                     </h4>
                     <ul className="space-y-0.5">{items.map(renderRow)}</ul>
                   </section>
@@ -204,7 +177,6 @@ type MessengerCommandsButtonProps = {
 export function MessengerCommandsButton({ platform, className }: MessengerCommandsButtonProps) {
   const { t } = useI18n();
   const [open, setOpen] = useState(false);
-  const copy = PLATFORM_COPY[platform];
 
   return (
     <>
@@ -216,7 +188,7 @@ export function MessengerCommandsButton({ platform, className }: MessengerComman
         onClick={() => setOpen(true)}
       >
         <Icon name="command" className="size-3.5" />
-        {t(copy.button)}
+        {t(platformKey(platform, 'button'))}
       </Button>
       <MessengerCommandPalette platform={platform} open={open} onOpenChange={setOpen} />
     </>

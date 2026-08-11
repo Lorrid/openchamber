@@ -64,18 +64,18 @@ const TELEGRAM_VERBOSITY_OPTIONS: {
 }[] = [
   {
     id: 'quiet',
-    labelKey: 'settings.integrations.bridge.verbosity.quiet.label',
-    descKey: 'settings.integrations.bridge.verbosity.quiet.desc',
+    labelKey: 'settings.integrations.telegram.bridge.verbosity.quiet.label',
+    descKey: 'settings.integrations.telegram.bridge.verbosity.quiet.desc',
   },
   {
     id: 'normal',
-    labelKey: 'settings.integrations.bridge.verbosity.normal.label',
-    descKey: 'settings.integrations.bridge.verbosity.normal.desc',
+    labelKey: 'settings.integrations.telegram.bridge.verbosity.normal.label',
+    descKey: 'settings.integrations.telegram.bridge.verbosity.normal.desc',
   },
   {
     id: 'verbose',
-    labelKey: 'settings.integrations.bridge.verbosity.verbose.label',
-    descKey: 'settings.integrations.bridge.verbosity.verbose.desc',
+    labelKey: 'settings.integrations.telegram.bridge.verbosity.verbose.label',
+    descKey: 'settings.integrations.telegram.bridge.verbosity.verbose.desc',
   },
 ];
 
@@ -86,18 +86,18 @@ const TELEGRAM_PERMISSION_MODE_OPTIONS: {
 }[] = [
   {
     id: 'ask',
-    labelKey: 'settings.integrations.bridge.permissionMode.ask.label',
-    descKey: 'settings.integrations.bridge.permissionMode.ask.desc',
+    labelKey: 'settings.integrations.telegram.bridge.permissionMode.ask.label',
+    descKey: 'settings.integrations.telegram.bridge.permissionMode.ask.desc',
   },
   {
     id: 'yolo',
-    labelKey: 'settings.integrations.bridge.permissionMode.yolo.label',
-    descKey: 'settings.integrations.bridge.permissionMode.yolo.desc',
+    labelKey: 'settings.integrations.telegram.bridge.permissionMode.yolo.label',
+    descKey: 'settings.integrations.telegram.bridge.permissionMode.yolo.desc',
   },
   {
     id: 'agent',
-    labelKey: 'settings.integrations.bridge.permissionMode.agent.label',
-    descKey: 'settings.integrations.bridge.permissionMode.agent.desc',
+    labelKey: 'settings.integrations.telegram.bridge.permissionMode.agent.label',
+    descKey: 'settings.integrations.telegram.bridge.permissionMode.agent.desc',
   },
 ];
 
@@ -105,13 +105,13 @@ function useTelegramBehaviorStrings(): MessengerBehaviorStrings {
   const { t } = useI18n();
   return {
     unavailable: t('settings.integrations.telegram.bridge.unavailable'),
-    verbosityTitle: t('settings.integrations.bridge.verbosity.title'),
+    verbosityTitle: t('settings.integrations.telegram.bridge.verbosity.title'),
     verbosityOptions: TELEGRAM_VERBOSITY_OPTIONS.map((opt) => ({
       id: opt.id,
       label: t(opt.labelKey),
       desc: t(opt.descKey),
     })),
-    permissionTitle: t('settings.integrations.bridge.permissionMode.title'),
+    permissionTitle: t('settings.integrations.telegram.bridge.permissionMode.title'),
     permissionOptions: TELEGRAM_PERMISSION_MODE_OPTIONS.map((opt) => ({
       id: opt.id,
       label: t(opt.labelKey),
@@ -461,7 +461,7 @@ function TelegramGroupsList({
 
       {chats.length === 0 ? (
         <p className="text-xs text-muted-foreground leading-snug">
-          {t('settings.integrations.advanced.syncLog.empty')}
+          {t('settings.integrations.telegram.advanced.syncLog.empty')}
         </p>
       ) : (
         <div className="space-y-2">
@@ -609,7 +609,7 @@ function TelegramAdvancedSettings({ conn }: { conn: MessengerConnection }) {
       <div className="space-y-3">
         <AdvancedSectionCard
           icon="settings-3"
-          title={t('settings.integrations.advanced.behavior.title')}
+          title={t('settings.integrations.telegram.advanced.behavior.title')}
           open={sectionOpen.behavior}
           onOpenChange={(next) => setSectionOpen((s) => ({ ...s, behavior: next }))}
         >
@@ -657,9 +657,9 @@ function TelegramAdvancedSettings({ conn }: { conn: MessengerConnection }) {
 
         <AdvancedSectionCard
           icon="pulse"
-          title={t('settings.integrations.advanced.diagnostics.title')}
+          title={t('settings.integrations.telegram.advanced.diagnostics.title')}
           badge={listenerBadge}
-          meta={t('settings.integrations.advanced.diagnostics.stats', {
+          meta={t('settings.integrations.telegram.advanced.diagnostics.stats', {
             seen,
             forwarded,
             replied,
@@ -667,18 +667,12 @@ function TelegramAdvancedSettings({ conn }: { conn: MessengerConnection }) {
           open={sectionOpen.diagnostics}
           onOpenChange={(next) => setSectionOpen((s) => ({ ...s, diagnostics: next }))}
         >
-          <MessengerListenerPanel
-            type="telegram"
-            conn={conn}
-            title={t('settings.integrations.telegram.listener.title')}
-            privacyHint={t('settings.integrations.telegram.listener.privacyHint')}
-            waiting={t('settings.integrations.telegram.listener.waiting')}
-          />
+          <MessengerListenerPanel type="telegram" conn={conn} />
         </AdvancedSectionCard>
 
         <AdvancedSectionCard
           icon="shield-user"
-          title={t('settings.integrations.advanced.accessControl.title')}
+          title={t('settings.integrations.telegram.advanced.dangerZone.title')}
           open={sectionOpen.accessControl}
           onOpenChange={(next) => setSectionOpen((s) => ({ ...s, accessControl: next }))}
         >
@@ -773,11 +767,11 @@ function TelegramAdvancedSettings({ conn }: { conn: MessengerConnection }) {
 
         <AdvancedSectionCard
           icon="apps"
-          title={t('settings.integrations.advanced.sessionBindings.title')}
+          title={t('settings.integrations.telegram.advanced.sessionBindings.title')}
           meta={
             bindingsCount === 1
-              ? t('settings.integrations.advanced.sessionBindings.countOne')
-              : t('settings.integrations.advanced.sessionBindings.count', {
+              ? t('settings.integrations.telegram.advanced.sessionBindings.countOne')
+              : t('settings.integrations.telegram.advanced.sessionBindings.count', {
                   count: bindingsCount,
                 })
           }
@@ -787,14 +781,14 @@ function TelegramAdvancedSettings({ conn }: { conn: MessengerConnection }) {
           <SessionBindingsPanel
             type="telegram"
             bridgeStatus={bridgeStatus}
-            emptyText={t('settings.integrations.advanced.sessionBindings.emptyTelegram')}
+            emptyText={t('settings.integrations.telegram.advanced.sessionBindings.empty')}
           />
         </AdvancedSectionCard>
 
         <AdvancedSectionCard
           icon="command"
-          title={t('settings.integrations.advanced.commands.title')}
-          meta={t('settings.integrations.advanced.commands.description')}
+          title={t('settings.integrations.telegram.commands.title')}
+          meta={t('settings.integrations.telegram.commands.description')}
           open={sectionOpen.commands}
           onOpenChange={(next) => setSectionOpen((s) => ({ ...s, commands: next }))}
         >
@@ -805,7 +799,7 @@ function TelegramAdvancedSettings({ conn }: { conn: MessengerConnection }) {
 
         <AdvancedSectionCard
           icon="refresh"
-          title={t('settings.integrations.advanced.syncLog.title')}
+          title={t('settings.integrations.telegram.advanced.syncLog.title')}
           open={sectionOpen.syncLog}
           onOpenChange={(next) => setSectionOpen((s) => ({ ...s, syncLog: next }))}
         >
@@ -813,7 +807,7 @@ function TelegramAdvancedSettings({ conn }: { conn: MessengerConnection }) {
             <TelegramLastSyncResults conn={conn} />
           ) : (
             <div className="text-xs text-muted-foreground">
-              {t('settings.integrations.advanced.syncLog.empty')}
+              {t('settings.integrations.telegram.advanced.syncLog.empty')}
             </div>
           )}
         </AdvancedSectionCard>

@@ -147,18 +147,18 @@ const VERBOSITY_OPTIONS: {
 }[] = [
   {
     id: 'quiet',
-    labelKey: 'settings.integrations.bridge.verbosity.quiet.label',
-    descKey: 'settings.integrations.bridge.verbosity.quiet.desc',
+    labelKey: 'settings.integrations.discord.bridge.verbosity.quiet.label',
+    descKey: 'settings.integrations.discord.bridge.verbosity.quiet.desc',
   },
   {
     id: 'normal',
-    labelKey: 'settings.integrations.bridge.verbosity.normal.label',
-    descKey: 'settings.integrations.bridge.verbosity.normal.desc',
+    labelKey: 'settings.integrations.discord.bridge.verbosity.normal.label',
+    descKey: 'settings.integrations.discord.bridge.verbosity.normal.desc',
   },
   {
     id: 'verbose',
-    labelKey: 'settings.integrations.bridge.verbosity.verbose.label',
-    descKey: 'settings.integrations.bridge.verbosity.verbose.desc',
+    labelKey: 'settings.integrations.discord.bridge.verbosity.verbose.label',
+    descKey: 'settings.integrations.discord.bridge.verbosity.verbose.desc',
   },
 ];
 
@@ -169,18 +169,18 @@ const PERMISSION_MODE_OPTIONS: {
 }[] = [
   {
     id: 'ask',
-    labelKey: 'settings.integrations.bridge.permissionMode.ask.label',
-    descKey: 'settings.integrations.bridge.permissionMode.ask.desc',
+    labelKey: 'settings.integrations.discord.bridge.permissionMode.ask.label',
+    descKey: 'settings.integrations.discord.bridge.permissionMode.ask.desc',
   },
   {
     id: 'yolo',
-    labelKey: 'settings.integrations.bridge.permissionMode.yolo.label',
-    descKey: 'settings.integrations.bridge.permissionMode.yolo.desc',
+    labelKey: 'settings.integrations.discord.bridge.permissionMode.yolo.label',
+    descKey: 'settings.integrations.discord.bridge.permissionMode.yolo.desc',
   },
   {
     id: 'agent',
-    labelKey: 'settings.integrations.bridge.permissionMode.agent.label',
-    descKey: 'settings.integrations.bridge.permissionMode.agent.desc',
+    labelKey: 'settings.integrations.discord.bridge.permissionMode.agent.label',
+    descKey: 'settings.integrations.discord.bridge.permissionMode.agent.desc',
   },
 ];
 
@@ -301,14 +301,14 @@ function DiscordDiagnosePanel({
 function useDiscordBehaviorStrings(): MessengerBehaviorStrings {
   const { t } = useI18n();
   return {
-    unavailable: t('settings.integrations.bridge.unavailable'),
-    verbosityTitle: t('settings.integrations.bridge.verbosity.title'),
+    unavailable: t('settings.integrations.discord.bridge.unavailable'),
+    verbosityTitle: t('settings.integrations.discord.bridge.verbosity.title'),
     verbosityOptions: VERBOSITY_OPTIONS.map((opt) => ({
       id: opt.id,
       label: t(opt.labelKey),
       desc: t(opt.descKey),
     })),
-    permissionTitle: t('settings.integrations.bridge.permissionMode.title'),
+    permissionTitle: t('settings.integrations.discord.bridge.permissionMode.title'),
     permissionOptions: PERMISSION_MODE_OPTIONS.map((opt) => ({
       id: opt.id,
       label: t(opt.labelKey),
@@ -316,13 +316,13 @@ function useDiscordBehaviorStrings(): MessengerBehaviorStrings {
     })),
     notifyTitle: t('settings.integrations.discord.bridge.notifyOnComplete.title'),
     notifyDescription: t('settings.integrations.discord.bridge.notifyOnComplete.description'),
-    interruptTitle: t('settings.integrations.bridge.interruptTimeout.title'),
-    interruptUnit: t('settings.integrations.bridge.interruptTimeout.unit'),
-    interruptDescription: t('settings.integrations.bridge.interruptTimeout.description'),
+    interruptTitle: t('settings.integrations.discord.bridge.interruptTimeout.title'),
+    interruptUnit: t('settings.integrations.discord.bridge.interruptTimeout.unit'),
+    interruptDescription: t('settings.integrations.discord.bridge.interruptTimeout.description'),
     activeLabel: (count) =>
       count === 1
-        ? t('settings.integrations.bridge.activeOne')
-        : t('settings.integrations.bridge.activeMany', { count }),
+        ? t('settings.integrations.discord.bridge.activeOne')
+        : t('settings.integrations.discord.bridge.activeMany', { count }),
   };
 }
 
@@ -478,8 +478,6 @@ function DiscordAdvancedSettings({
   const discordDiagnosisRunning = useMessengerStore((s) => s.discordDiagnosisRunning);
   const refreshBridgeStatus = useMessengerStore((s) => s.refreshBridgeStatus);
   const bridgeStatus = useMessengerStore((s) => s.bridgeStatus);
-  const discordHistory = useMessengerStore((s) => s.discordHistory);
-  const loadDiscordHistory = useMessengerStore((s) => s.loadDiscordHistory);
 
   useEffect(() => {
     if (!isOpen) return;
@@ -642,7 +640,7 @@ function DiscordAdvancedSettings({
       <div className="space-y-3">
         <AdvancedSectionCard
           icon="settings-3"
-          title={t('settings.integrations.advanced.behavior.title')}
+          title={t('settings.integrations.discord.advanced.behavior.title')}
           open={sectionOpen.behavior}
           onOpenChange={(next) => setSectionOpen((s) => ({ ...s, behavior: next }))}
         >
@@ -664,9 +662,9 @@ function DiscordAdvancedSettings({
 
         <AdvancedSectionCard
           icon="pulse"
-          title={t('settings.integrations.advanced.diagnostics.title')}
+          title={t('settings.integrations.discord.advanced.diagnostics.title')}
           badge={listenerBadge}
-          meta={t('settings.integrations.advanced.diagnostics.stats', {
+          meta={t('settings.integrations.discord.advanced.diagnostics.stats', {
             seen,
             forwarded,
             replied,
@@ -675,28 +673,7 @@ function DiscordAdvancedSettings({
           onOpenChange={(next) => setSectionOpen((s) => ({ ...s, diagnostics: next }))}
         >
           <div className="space-y-4">
-            <MessengerListenerPanel
-              type="discord"
-              conn={conn}
-              title={t('settings.integrations.discord.listener.title')}
-              privacyHint={t('settings.integrations.discord.listener.privacyHint')}
-              waiting={t('settings.integrations.discord.listener.waiting')}
-              history={{
-                messages: discordHistory,
-                targetChannelId: conn.defaultChannelId,
-                loadHistory: loadDiscordHistory,
-                title: t('settings.integrations.discord.listener.history.title'),
-                fetchLabel: t('settings.integrations.discord.listener.history.fetch'),
-                needsTarget: t('settings.integrations.discord.listener.history.needsTarget'),
-                empty: t('settings.integrations.discord.listener.history.empty'),
-                olderOne: t('settings.integrations.discord.listener.history.olderOne'),
-                olderMany: (count) =>
-                  t('settings.integrations.discord.listener.history.olderMany', { count }),
-                noTextOne: t('settings.integrations.discord.listener.history.noTextOne'),
-                noTextMany: (count) =>
-                  t('settings.integrations.discord.listener.history.noTextMany', { count }),
-              }}
-            />
+            <MessengerListenerPanel type="discord" conn={conn} />
             <div className="border-t border-border/60 pt-3">
               <DiscordDiagnosePanel
                 conn={conn}
@@ -710,7 +687,7 @@ function DiscordAdvancedSettings({
 
         <AdvancedSectionCard
           icon="shield-user"
-          title={t('settings.integrations.advanced.accessControl.title')}
+          title={t('settings.integrations.discord.advanced.dangerZone.title')}
           open={sectionOpen.accessControl}
           onOpenChange={(next) => setSectionOpen((s) => ({ ...s, accessControl: next }))}
         >
@@ -800,11 +777,11 @@ function DiscordAdvancedSettings({
 
         <AdvancedSectionCard
           icon="apps"
-          title={t('settings.integrations.advanced.sessionBindings.title')}
+          title={t('settings.integrations.discord.advanced.sessionBindings.title')}
           meta={
             bindingsCount === 1
-              ? t('settings.integrations.advanced.sessionBindings.countOne')
-              : t('settings.integrations.advanced.sessionBindings.count', {
+              ? t('settings.integrations.discord.advanced.sessionBindings.countOne')
+              : t('settings.integrations.discord.advanced.sessionBindings.count', {
                   count: bindingsCount,
                 })
           }
@@ -814,14 +791,14 @@ function DiscordAdvancedSettings({
           <SessionBindingsPanel
             type={conn.type}
             bridgeStatus={bridgeStatus}
-            emptyText={t('settings.integrations.advanced.sessionBindings.emptyDiscord')}
+            emptyText={t('settings.integrations.discord.advanced.sessionBindings.empty')}
           />
         </AdvancedSectionCard>
 
         <AdvancedSectionCard
           icon="command"
-          title={t('settings.integrations.advanced.commands.title')}
-          meta={t('settings.integrations.advanced.commands.description')}
+          title={t('settings.integrations.discord.commands.title')}
+          meta={t('settings.integrations.discord.commands.description')}
           open={sectionOpen.commands}
           onOpenChange={(next) => setSectionOpen((s) => ({ ...s, commands: next }))}
         >
@@ -832,7 +809,7 @@ function DiscordAdvancedSettings({
 
         <AdvancedSectionCard
           icon="refresh"
-          title={t('settings.integrations.advanced.syncLog.title')}
+          title={t('settings.integrations.discord.advanced.syncLog.title')}
           badge={
             syncFailed > 0 ? (
               <span className="inline-flex items-center gap-1.5 rounded-full bg-[var(--status-warning)]/15 px-2 py-0.5 text-[11px] font-medium text-[var(--status-warning)]">
@@ -847,7 +824,7 @@ function DiscordAdvancedSettings({
                   when: formatRelative(
                     conn.lastSyncAt,
                     t,
-                    t('settings.integrations.relative.never'),
+                    t('settings.integrations.discord.relative.never'),
                   ),
                 })
               : t('settings.integrations.discord.advanced.syncLog.never')
@@ -859,7 +836,7 @@ function DiscordAdvancedSettings({
             <DiscordSyncResults channels={syncChannels} />
           ) : (
             <div className="text-xs text-muted-foreground">
-              {t('settings.integrations.advanced.syncLog.empty')}
+              {t('settings.integrations.discord.advanced.syncLog.empty')}
             </div>
           )}
         </AdvancedSectionCard>

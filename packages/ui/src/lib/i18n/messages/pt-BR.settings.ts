@@ -1,6 +1,5 @@
 import { discordIntegrationI18n } from './discord-integration.i18n';
 import { telegramIntegrationI18n } from './telegram-integration.i18n';
-import { messengerIntegrationI18n } from './messenger-integration.i18n';
 
 export const settingsDict = {
   'settings.providers.page.openCodeGo.title': 'Monitoramento de uso do OpenCode Go',
@@ -2137,7 +2136,6 @@ export const settingsDict = {
   "settings.openchamber.visual.option.followUpBehavior.queue.label": "Queue",
   ...discordIntegrationI18n['pt-BR'],
   ...telegramIntegrationI18n['pt-BR'],
-  ...messengerIntegrationI18n['pt-BR'],
   "settings.integrations.discord.commands.category.project": "Projetos",
   "settings.integrations.discord.commands.category.mcp": "Servidores MCP",
   "settings.integrations.discord.commands.category.ops": "Operações da sessão",

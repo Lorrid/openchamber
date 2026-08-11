@@ -275,116 +275,74 @@ export function AccessControlRow({
   );
 }
 
-type DiscordHistoryMessage = ReturnType<
-  typeof useMessengerStore.getState
->['discordHistory'][number];
-
-export type MessengerListenerPanelProps = {
-  type: MessengerType;
-  conn: MessengerConnection;
-  /** Platform-specific panel title. */
-  title: string;
-  /** Shown when connected but no inbound messages have been seen yet. */
-  privacyHint: string;
-  /** Shown while listening with an empty inbound list. */
-  waiting: string;
-  /** Discord-only channel history controls. */
-  history?: {
-    messages: DiscordHistoryMessage[];
-    targetChannelId?: string;
-    loadHistory: (channelId: string, limit?: number) => Promise<boolean>;
-    title: string;
-    fetchLabel: string;
-    needsTarget: string;
-    empty: string;
-    olderOne: string;
-    olderMany: (count: number) => string;
-    noTextOne: string;
-    noTextMany: (count: number) => string;
-  };
-};
-
-/**
- * Shared Discord/Telegram listener diagnostics panel. Platform differences are
- * expressed via props (`privacyHint`, `waiting`, optional Discord history).
- */
+/** Shared Discord/Telegram listener diagnostics. */
 export function MessengerListenerPanel({
   type,
   conn,
-  title,
-  privacyHint,
-  waiting,
-  history,
-}: MessengerListenerPanelProps) {
+}: {
+  type: MessengerType;
+  conn: MessengerConnection;
+}) {
   const { t } = useI18n();
-  const subscribeToEvents = useOpenChamberAgentEventsStore((s) => s.subscribeToEvents);
-  const discordInbound = useMessengerStore((s) => s.discordInbound);
-  const telegramInbound = useMessengerStore((s) => s.telegramInbound);
-  const startDiscordListener = useMessengerStore((s) => s.startDiscordListener);
-  const stopDiscordListener = useMessengerStore((s) => s.stopDiscordListener);
-  const refreshDiscordListenerStatus = useMessengerStore((s) => s.refreshDiscordListenerStatus);
-  const loadRecentDiscordMessages = useMessengerStore((s) => s.loadRecentDiscordMessages);
-  const ingestDiscordInbound = useMessengerStore((s) => s.ingestDiscordInbound);
-  const startTelegramListener = useMessengerStore((s) => s.startTelegramListener);
-  const stopTelegramListener = useMessengerStore((s) => s.stopTelegramListener);
-  const refreshTelegramListenerStatus = useMessengerStore((s) => s.refreshTelegramListenerStatus);
-  const loadRecentTelegramMessages = useMessengerStore((s) => s.loadRecentTelegramMessages);
-  const ingestTelegramInbound = useMessengerStore((s) => s.ingestTelegramInbound);
-
+  const k = (suffix: string) => `settings.integrations.${type}.${suffix}` as I18nKey;
   const isDiscord = type === 'discord';
-  const running = Boolean(
-    isDiscord ? conn.discordListenerRunning : conn.telegramListenerRunning,
+  const subscribeToEvents = useOpenChamberAgentEventsStore((s) => s.subscribeToEvents);
+  const inbound = useMessengerStore((s) => (isDiscord ? s.discordInbound : s.telegramInbound));
+  const history = useMessengerStore((s) => s.discordHistory);
+  const start = useMessengerStore((s) =>
+    isDiscord ? s.startDiscordListener : s.startTelegramListener,
   );
+  const stop = useMessengerStore((s) =>
+    isDiscord ? s.stopDiscordListener : s.stopTelegramListener,
+  );
+  const refresh = useMessengerStore((s) =>
+    isDiscord ? s.refreshDiscordListenerStatus : s.refreshTelegramListenerStatus,
+  );
+  const loadRecent = useMessengerStore((s) =>
+    isDiscord ? s.loadRecentDiscordMessages : s.loadRecentTelegramMessages,
+  );
+  const ingest = useMessengerStore((s) =>
+    isDiscord ? s.ingestDiscordInbound : s.ingestTelegramInbound,
+  );
+  const loadHistory = useMessengerStore((s) => s.loadDiscordHistory);
+
+  const running = Boolean(isDiscord ? conn.discordListenerRunning : conn.telegramListenerRunning);
   const connected = Boolean(
     isDiscord ? conn.discordListenerConnected : conn.telegramListenerConnected,
   );
-  const seen = isDiscord
-    ? (conn.discordListenerTotalRawMessages ?? 0)
-    : (conn.telegramListenerTotalRawMessages ?? 0);
-  const forwarded = isDiscord
-    ? (conn.discordListenerTotalReceived ?? 0)
-    : (conn.telegramListenerTotalReceived ?? 0);
-  const replied = isDiscord
-    ? (conn.discordListenerTotalReplied ?? 0)
-    : (conn.telegramListenerTotalReplied ?? 0);
-  const lastUpdateAt = isDiscord
-    ? (conn.discordListenerLastUpdateAt ?? null)
-    : (conn.telegramListenerLastUpdateAt ?? null);
+  const seen = (isDiscord ? conn.discordListenerTotalRawMessages : conn.telegramListenerTotalRawMessages) ?? 0;
+  const forwarded =
+    (isDiscord ? conn.discordListenerTotalReceived : conn.telegramListenerTotalReceived) ?? 0;
+  const replied =
+    (isDiscord ? conn.discordListenerTotalReplied : conn.telegramListenerTotalReplied) ?? 0;
+  const lastUpdateAt =
+    (isDiscord ? conn.discordListenerLastUpdateAt : conn.telegramListenerLastUpdateAt) ?? null;
   const error = isDiscord ? conn.discordListenerError : conn.telegramListenerError;
-  const inbound: MessengerInboundMessage[] = isDiscord ? discordInbound : telegramInbound;
-  const eventType = isDiscord
-    ? 'messenger.discord.message_received'
-    : 'messenger.telegram.message_received';
-  const neverLabel = t('settings.integrations.relative.never');
+  const historyTarget = isDiscord ? conn.defaultChannelId : undefined;
+  const unknownKey = (
+    isDiscord ? k('listener.fromUnknown') : 'settings.integrations.telegram.recent.fromUnknown'
+  ) as I18nKey;
+  const nonTextKey = (
+    isDiscord ? k('listener.nonText') : 'settings.integrations.telegram.recent.nonText'
+  ) as I18nKey;
 
   useEffect(() => {
     if (!running) return;
-    const ingest = isDiscord ? ingestDiscordInbound : ingestTelegramInbound;
-    const handler = (event: OpenChamberAgentUiRealtimeEvent) => {
+    const eventType = isDiscord
+      ? 'messenger.discord.message_received'
+      : 'messenger.telegram.message_received';
+    return subscribeToEvents((event: OpenChamberAgentUiRealtimeEvent) => {
       if (event.eventType !== eventType) return;
       const data = event.data as MessengerInboundMessage | undefined;
-      if (data && typeof data === 'object' && 'updateId' in data) {
-        ingest(data);
-      }
-    };
-    return subscribeToEvents(handler);
-  }, [
-    running,
-    subscribeToEvents,
-    isDiscord,
-    eventType,
-    ingestDiscordInbound,
-    ingestTelegramInbound,
-  ]);
+      if (data && typeof data === 'object' && 'updateId' in data) ingest(data);
+    });
+  }, [running, isDiscord, subscribeToEvents, ingest]);
 
   useEffect(() => {
     if (!running) return;
     let cancelled = false;
-    const refresh = isDiscord ? refreshDiscordListenerStatus : refreshTelegramListenerStatus;
-    const loadRecent = isDiscord ? loadRecentDiscordMessages : loadRecentTelegramMessages;
     const tick = async () => {
-      if (cancelled) return;
-      await Promise.all([refresh(), loadRecent()]);
+      if (!cancelled) await Promise.all([refresh(), loadRecent()]);
     };
     tick();
     const id = setInterval(tick, 10_000);
@@ -392,54 +350,31 @@ export function MessengerListenerPanel({
       cancelled = true;
       clearInterval(id);
     };
-  }, [
-    running,
-    isDiscord,
-    refreshDiscordListenerStatus,
-    refreshTelegramListenerStatus,
-    loadRecentDiscordMessages,
-    loadRecentTelegramMessages,
-  ]);
+  }, [running, refresh, loadRecent]);
 
   useEffect(() => {
     if (!isDiscord) return;
     void useMessengerStore.getState().resyncDiscordStatus();
-    if (conn.botToken) void loadRecentDiscordMessages();
-  }, [isDiscord, conn.botToken, loadRecentDiscordMessages]);
-
-  const startListener = isDiscord ? startDiscordListener : startTelegramListener;
-  const stopListener = isDiscord ? stopDiscordListener : stopTelegramListener;
-  const historyTarget = history?.targetChannelId;
+    if (conn.botToken) void loadRecent();
+  }, [isDiscord, conn.botToken, loadRecent]);
 
   return (
     <div className="space-y-3">
       <div className="flex flex-wrap items-center justify-between gap-2">
-        <div className="flex items-center gap-2 text-xs font-medium text-foreground">{title}</div>
-        <div className="flex items-center gap-2">
-          {!running ? (
-            <Button
-              type="button"
-              variant="default"
-              size="xs"
-              className="!font-normal normal-case"
-              onClick={() => void startListener()}
-            >
-              <Icon name="play" className="size-3.5" />
-              {t('settings.integrations.listener.start')}
-            </Button>
-          ) : (
-            <Button
-              type="button"
-              variant="outline"
-              size="xs"
-              className="!font-normal normal-case text-[var(--status-error)] hover:text-[var(--status-error)]"
-              onClick={() => void stopListener()}
-            >
-              <Icon name="stop" className="size-3.5" />
-              {t('settings.integrations.listener.stop')}
-            </Button>
+        <div className="text-xs font-medium text-foreground">{t(k('listener.title'))}</div>
+        <Button
+          type="button"
+          variant={running ? 'outline' : 'default'}
+          size="xs"
+          className={cn(
+            '!font-normal normal-case',
+            running && 'text-[var(--status-error)] hover:text-[var(--status-error)]',
           )}
-        </div>
+          onClick={() => void (running ? stop() : start())}
+        >
+          <Icon name={running ? 'stop' : 'play'} className="size-3.5" />
+          {t(k(running ? 'listener.stop' : 'listener.start'))}
+        </Button>
       </div>
 
       <div className="grid grid-cols-2 gap-2 text-[10px] @xl:grid-cols-4">
@@ -451,28 +386,23 @@ export function MessengerListenerPanel({
           ] as const
         ).map(([key, value]) => (
           <div key={key} className="rounded-lg border border-border bg-background px-2 py-1.5">
-            <div className="text-muted-foreground">
-              {t(`settings.integrations.listener.stats.${key}` as I18nKey)}
-            </div>
+            <div className="text-muted-foreground">{t(k(`listener.stats.${key}`))}</div>
             <div className="font-medium text-foreground">{value}</div>
           </div>
         ))}
         <div className="rounded-lg border border-border bg-background px-2 py-1.5">
-          <div className="text-muted-foreground">
-            {t('settings.integrations.listener.stats.lastUpdate')}
-          </div>
+          <div className="text-muted-foreground">{t(k('listener.stats.lastUpdate'))}</div>
           <div className="font-medium text-foreground">
-            {formatRelative(lastUpdateAt, t, neverLabel)}
+            {formatRelative(lastUpdateAt, t, t(k('relative.never')))}
           </div>
         </div>
       </div>
 
       {connected && seen === 0 && (
         <div className="rounded-md border border-border/60 bg-muted/40 px-3 py-2 text-[11px] leading-snug text-muted-foreground">
-          {privacyHint}
+          {t(k('listener.privacyHint'))}
         </div>
       )}
-
       {error && (
         <div className="flex items-start gap-1.5 text-[11px] leading-snug text-destructive">
           <Icon name="alert" className="mt-0.5 size-3.5 shrink-0" />
@@ -481,11 +411,9 @@ export function MessengerListenerPanel({
       )}
 
       {!running ? (
-        <div className="text-[11px] leading-snug text-muted-foreground">
-          {t('settings.integrations.listener.startHint')}
-        </div>
+        <div className="text-[11px] leading-snug text-muted-foreground">{t(k('listener.startHint'))}</div>
       ) : inbound.length === 0 ? (
-        <div className="text-[11px] italic text-muted-foreground">{waiting}</div>
+        <div className="text-[11px] italic text-muted-foreground">{t(k('listener.waiting'))}</div>
       ) : (
         <ul className="max-h-48 space-y-1.5 overflow-y-auto">
           {inbound.slice(0, 8).map((m) => (
@@ -495,9 +423,7 @@ export function MessengerListenerPanel({
             >
               <div className="flex items-center justify-between gap-2">
                 <span className="truncate font-medium text-foreground">
-                  {m.from?.firstName ??
-                    m.from?.username ??
-                    t('settings.integrations.listener.fromUnknown')}
+                  {m.from?.firstName ?? m.from?.username ?? t(unknownKey)}
                   {m.from?.username ? (
                     <span className="text-muted-foreground"> @{m.from.username}</span>
                   ) : null}
@@ -507,55 +433,47 @@ export function MessengerListenerPanel({
                 </span>
               </div>
               <div className="break-words text-muted-foreground">
-                {m.text ?? <em>{t('settings.integrations.listener.nonText')}</em>}
+                {m.text ?? <em>{t(nonTextKey)}</em>}
               </div>
               <div className="text-[9px] text-muted-foreground">
-                {isDiscord ? (
-                  <>
-                    channel {m.chatId}
-                    {m.discord?.guildId ? ` · guild ${m.discord.guildId}` : ''}
-                  </>
-                ) : (
-                  <>
-                    {t('settings.integrations.telegram.recent.chatLabel')} {m.chatId}
-                    {m.chatTitle ? ` · ${m.chatTitle}` : ''}
-                    {m.telegram?.messageThreadId
-                      ? ` · ${t('settings.integrations.telegram.recent.topicLabel')} ${m.telegram.messageThreadId}`
-                      : ''}
-                  </>
-                )}
+                {isDiscord
+                  ? `channel ${m.chatId}${m.discord?.guildId ? ` · guild ${m.discord.guildId}` : ''}`
+                  : `${t('settings.integrations.telegram.recent.chatLabel')} ${m.chatId}${
+                      m.chatTitle ? ` · ${m.chatTitle}` : ''
+                    }${
+                      m.telegram?.messageThreadId
+                        ? ` · ${t('settings.integrations.telegram.recent.topicLabel')} ${m.telegram.messageThreadId}`
+                        : ''
+                    }`}
               </div>
             </li>
           ))}
         </ul>
       )}
 
-      {history ? (
+      {isDiscord ? (
         <div className="space-y-1.5 border-t border-border/60 pt-2">
           <div className="flex flex-wrap items-center justify-between gap-2">
-            <div className="text-[11px] font-medium text-foreground">{history.title}</div>
+            <div className="text-[11px] font-medium text-foreground">{t(k('listener.history.title'))}</div>
             <button
               type="button"
-              onClick={() => historyTarget && history.loadHistory(historyTarget, 50)}
+              onClick={() => historyTarget && loadHistory(historyTarget, 50)}
               disabled={!historyTarget}
               className="rounded bg-primary/10 px-2 py-0.5 text-[10px] text-primary hover:bg-primary/20 disabled:opacity-50"
             >
-              {history.fetchLabel}
+              {t(k('listener.history.fetch'))}
             </button>
           </div>
           {!historyTarget && (
-            <div className="text-[10px] text-muted-foreground">{history.needsTarget}</div>
+            <div className="text-[10px] text-muted-foreground">{t(k('listener.history.needsTarget'))}</div>
           )}
-          {historyTarget && history.messages.length === 0 && (
-            <div className="text-[10px] italic text-muted-foreground">{history.empty}</div>
+          {historyTarget && history.length === 0 && (
+            <div className="text-[10px] italic text-muted-foreground">{t(k('listener.history.empty'))}</div>
           )}
-          {history.messages.length > 0 && (
+          {history.length > 0 && (
             <ul className="max-h-40 space-y-1 overflow-y-auto">
-              {history.messages.slice(0, 10).map((m) => (
-                <li
-                  key={m.id}
-                  className="rounded border border-border bg-background px-2 py-1 text-[10px]"
-                >
+              {history.slice(0, 10).map((m) => (
+                <li key={m.id} className="rounded border border-border bg-background px-2 py-1 text-[10px]">
                   <span className="font-medium text-foreground">
                     {m.author.globalName ?? m.author.username ?? m.author.id}
                   </span>{' '}
@@ -566,18 +484,18 @@ export function MessengerListenerPanel({
                     {m.content || (
                       <em>
                         {m.attachmentCount === 1
-                          ? history.noTextOne
-                          : history.noTextMany(m.attachmentCount)}
+                          ? t(k('listener.history.noTextOne'))
+                          : t(k('listener.history.noTextMany'), { count: m.attachmentCount })}
                       </em>
                     )}
                   </div>
                 </li>
               ))}
-              {history.messages.length > 10 && (
+              {history.length > 10 && (
                 <li className="px-2 text-[10px] italic text-muted-foreground">
-                  {history.messages.length - 10 === 1
-                    ? history.olderOne
-                    : history.olderMany(history.messages.length - 10)}
+                  {history.length - 10 === 1
+                    ? t(k('listener.history.olderOne'))
+                    : t(k('listener.history.olderMany'), { count: history.length - 10 })}
                 </li>
               )}
             </ul>

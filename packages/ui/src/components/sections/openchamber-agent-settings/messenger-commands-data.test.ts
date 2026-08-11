@@ -17,9 +17,15 @@ describe('messenger-commands-data', () => {
     );
   });
 
-  test('uses shared description keys and platform-specific examples', () => {
+  test('remaps description keys per platform and keeps platform-specific examples', () => {
     const session = MESSENGER_COMMANDS.find((c) => c.name === 'session');
     expect(session?.descriptionKey).toBe('settings.integrations.commands.desc.session');
+    expect(DISCORD_COMMANDS.find((c) => c.name === 'session')?.descriptionKey).toBe(
+      'settings.integrations.discord.commands.desc.session',
+    );
+    expect(TELEGRAM_COMMANDS.find((c) => c.name === 'session')?.descriptionKey).toBe(
+      'settings.integrations.telegram.commands.desc.session',
+    );
     expect(DISCORD_COMMANDS.find((c) => c.name === 'session')?.example).toContain('prompt:');
     expect(TELEGRAM_COMMANDS.find((c) => c.name === 'session')?.example).not.toContain('prompt:');
 
