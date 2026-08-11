@@ -10,9 +10,17 @@
  * comes back as an explainable result rather than an opaque evaluation error.
  */
 
-/** Visible text is capped so a long page cannot flood the agent's context. */
+/**
+ * Budget caps. The snapshot cost is bounded by these, not by the size of the
+ * page: a document with ten thousand nodes returns the same shape as one with
+ * two hundred, because only visible interactive elements are collected and both
+ * lists are cut off here. What the caps drop is always reported, so a partial
+ * answer never reads as a complete one.
+ */
 const MAX_TEXT_CHARS = 6_000;
 const MAX_ELEMENTS = 120;
+/** Enough to recognise a control; full labels are what made entries expensive. */
+const MAX_LABEL_CHARS = 80;
 
 /**
  * Shared helpers, injected into each script. `describe` builds the same kind of
@@ -21,6 +29,7 @@ const MAX_ELEMENTS = 120;
  */
 const HELPERS = `
   var MAX_ELEMENTS = ${MAX_ELEMENTS};
+  var MAX_LABEL_CHARS = ${MAX_LABEL_CHARS};
   var visible = function (element) {
     var rect = element.getBoundingClientRect();
     if (rect.width < 1 || rect.height < 1) return false;
@@ -32,10 +41,10 @@ const HELPERS = `
     if (aria) return aria.trim();
     var value = element.getAttribute('value');
     var text = (element.innerText || element.textContent || '').replace(/\\s+/g, ' ').trim();
-    if (text) return text.slice(0, 120);
-    if (value) return String(value).slice(0, 120);
+    if (text) return text.slice(0, MAX_LABEL_CHARS);
+    if (value) return String(value).slice(0, MAX_LABEL_CHARS);
     var placeholder = element.getAttribute('placeholder');
-    return placeholder ? placeholder.trim().slice(0, 120) : '';
+    return placeholder ? placeholder.trim().slice(0, MAX_LABEL_CHARS) : '';
   };
   var cssPath = function (element) {
     if (element.id) return '#' + CSS.escape(element.id);
@@ -79,31 +88,51 @@ const wrap = (body: string): string => `(() => {\n${HELPERS}\n${body}\n})()`;
 export const buildSnapshotScript = (): string => wrap(`
   var interactive = document.querySelectorAll('a[href], button, input, select, textarea, [role="button"], [role="link"], [role="tab"], [contenteditable="true"]');
   var elements = [];
-  for (var i = 0; i < interactive.length && elements.length < MAX_ELEMENTS; i += 1) {
+  var visibleTotal = 0;
+  for (var i = 0; i < interactive.length; i += 1) {
     var element = interactive[i];
     if (!visible(element)) continue;
+    visibleTotal += 1;
+    if (elements.length >= MAX_ELEMENTS) continue;
+
     var rect = element.getBoundingClientRect();
-    elements.push({
+    // Empty and default-valued fields are left out rather than serialized as
+    // "" and false. Repeated across a hundred entries that overhead dwarfed
+    // the information it carried.
+    var entry = {
       selector: cssPath(element),
       tag: element.tagName.toLowerCase(),
-      type: element.getAttribute('type') || '',
-      role: element.getAttribute('role') || '',
-      label: label(element),
-      disabled: element.disabled === true,
       bounds: { x: Math.round(rect.x), y: Math.round(rect.y), width: Math.round(rect.width), height: Math.round(rect.height) }
-    });
+    };
+    var type = element.getAttribute('type');
+    if (type) entry.type = type;
+    var role = element.getAttribute('role');
+    if (role) entry.role = role;
+    var labelText = label(element);
+    if (labelText) entry.label = labelText;
+    if (element.disabled === true) entry.disabled = true;
+    elements.push(entry);
   }
   var body = document.body ? (document.body.innerText || '') : '';
   var text = body.replace(/\\n{3,}/g, '\\n\\n').trim();
-  return {
+  var result = {
     ok: true,
     url: String(location.href),
     title: String(document.title || ''),
-    truncated: text.length > ${MAX_TEXT_CHARS},
     text: text.slice(0, ${MAX_TEXT_CHARS}),
-    elementCount: elements.length,
     elements: elements
   };
+  // State what was dropped. A capped list that reports only its own length
+  // reads as the whole page, and the agent acts as if it had seen everything.
+  if (text.length > ${MAX_TEXT_CHARS}) {
+    result.textTruncated = true;
+    result.textTotalChars = text.length;
+  }
+  if (visibleTotal > elements.length) {
+    result.elementsTruncated = true;
+    result.interactiveElementsOnPage = visibleTotal;
+  }
+  return result;
 `);
 
 export const buildClickScript = ({ selector, text }: { selector?: string; text?: string }): string => wrap(`
