@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'bun:test';
 
-import { extractProjectActionUrl, extractTerminalPreviewUrl } from './terminalPreview';
+import { extractAnnouncedUrls, extractProjectActionUrl, extractTerminalPreviewUrl } from './terminalPreview';
 
 /**
  * Real output from a project running four Astro apps behind a dev gateway. The
@@ -91,5 +91,41 @@ describe('auto-discovery url', () => {
 
   test('a configured action may still open a bare url it printed, taking the first', () => {
     expect(extractProjectActionUrl(ROUTING_TABLE_CHUNK)).toBe('http://127.0.0.1:4321/');
+  });
+});
+
+describe('every announced url', () => {
+  test('returns each server that announced itself, in order', () => {
+    const output = [
+      '[gateway] OpenChamber website dev gateway ready on http://localhost:3000',
+      '[gateway] - site -> http://127.0.0.1:4321',
+      '[api] ⚡  API dev server running on http://localhost:8787',
+      '[analytics] ┃ Local    http://localhost:4323/__analytics',
+      '[docs] ┃ Local    http://localhost:4322/docs',
+    ].join('\n');
+
+    expect(extractAnnouncedUrls(output)).toEqual([
+      'http://localhost:3000',
+      'http://localhost:8787',
+      'http://localhost:4323/__analytics',
+      'http://localhost:4322/docs',
+    ]);
+  });
+
+  test('leaves out routing-table entries, which announce nothing', () => {
+    expect(extractAnnouncedUrls('[gateway] - site -> http://127.0.0.1:4321')).toEqual([]);
+  });
+
+  test('does not repeat an address announced twice', () => {
+    const output = [
+      '[site] ┃ Local    http://localhost:4321/',
+      '[site] server running on http://localhost:4321/',
+    ].join('\n');
+    expect(extractAnnouncedUrls(output)).toEqual(['http://localhost:4321/']);
+  });
+
+  test('is empty for output with no announcement', () => {
+    expect(extractAnnouncedUrls('building...\ndone')).toEqual([]);
+    expect(extractAnnouncedUrls('')).toEqual([]);
   });
 });

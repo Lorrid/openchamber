@@ -1205,6 +1205,8 @@ export const dict: Record<I18nKey, string> = {
   "contextPanel.browser.waitingForServerHint": "Todavía no acepta conexiones. La página se cargará en cuanto lo haga.",
   "contextPanel.browser.loadFailedUnknown": "No se pudo acceder a la página.",
   "contextPanel.browser.devServers.title": "Servidores de desarrollo activos",
+  "projectActions.toast.multipleServers": "Se encontraron {count} servidores: elige uno en el panel del navegador",
+  "contextPanel.browser.devServers.justStarted": "Recién iniciados",
   "contextPanel.browser.devServers.unavailable": "No se pudieron comprobar los servidores de desarrollo activos.",
   "contextPanel.browser.annotate.toggle": "Anotar página",
   "contextPanel.browser.annotate.intro": "Esta es una selección anotada del navegador integrado.",

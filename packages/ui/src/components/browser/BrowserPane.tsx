@@ -436,7 +436,7 @@ const WebviewBrowser: React.FC<BrowserPaneProps> = ({ initialUrl, directory, tab
           />
         ) : null}
         {initialSrc !== null && !startUrl && !navigation.url && !isLoading ? (
-          <BrowserEmptyState onOpen={loadUrl} />
+          <BrowserEmptyState onOpen={loadUrl} directory={directory} />
         ) : null}
         {isWaitingForServer ? (
           <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 bg-background p-6 text-center">

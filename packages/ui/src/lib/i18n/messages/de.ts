@@ -1055,6 +1055,8 @@ export const dict = {
   'contextPanel.browser.waitingForServerHint': 'Er nimmt noch keine Verbindungen an. Die Seite lädt, sobald er es tut.',
   'contextPanel.browser.loadFailedUnknown': 'Die Seite war nicht erreichbar.',
   'contextPanel.browser.devServers.title': 'Laufende Dev-Server',
+  'projectActions.toast.multipleServers': '{count} Server gefunden — wähle einen im Browser-Panel',
+  'contextPanel.browser.devServers.justStarted': 'Gerade gestartet',
   'contextPanel.browser.devServers.unavailable': 'Laufende Dev-Server konnten nicht geprüft werden.',
   'contextPanel.browser.annotate.toggle': 'Seite annotieren',
   'contextPanel.browser.annotate.intro': 'Dies ist eine annotierte Auswahl aus dem integrierten Browser.',

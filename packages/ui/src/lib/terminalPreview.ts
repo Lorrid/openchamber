@@ -37,28 +37,39 @@ const normalizeLoopbackUrl = (url: string): string => {
   return normalized;
 };
 
-export const extractTerminalPreviewUrl = (text: string): string | null => {
-  if (!text) return null;
+/**
+ * Every address a server announced in this output, in the order announced.
+ *
+ * A project can start several servers at once — a gateway and the apps behind
+ * it, an API alongside a site — and each announces itself. Taking the first is
+ * a coin toss decided by which chunk the terminal emitted first, so callers
+ * that must choose are given all of them instead.
+ */
+export const extractAnnouncedUrls = (text: string): string[] => {
+  if (!text) return [];
 
   const cleaned = text.replace(ANSI_ESCAPE_PATTERN, '');
+  const found: string[] = [];
+  const seen = new Set<string>();
+  const add = (url: string) => {
+    if (seen.has(url)) return;
+    seen.add(url);
+    found.push(url);
+  };
+
   const pythonMatch = cleaned.match(PYTHON_HTTP_SERVER_PATTERN);
   if (pythonMatch?.[1]) {
     const port = Number.parseInt(pythonMatch[1], 10);
     if (Number.isFinite(port) && port > 0 && port <= 65535) {
-      return `http://127.0.0.1:${port}/`;
+      add(`http://127.0.0.1:${port}/`);
     }
   }
 
-  const lines = cleaned.split('\n');
-  for (const line of lines) {
-    if (!PREVIEW_OUTPUT_PATTERN.test(line)) {
-      continue;
-    }
+  for (const line of cleaned.split('\n')) {
+    if (!PREVIEW_OUTPUT_PATTERN.test(line)) continue;
 
     const matches = Array.from(line.matchAll(LOOPBACK_URL_PATTERN));
-    if (matches.length === 0) {
-      continue;
-    }
+    if (matches.length === 0) continue;
 
     const withPort = matches.find((match) => {
       try {
@@ -67,11 +78,15 @@ export const extractTerminalPreviewUrl = (text: string): string | null => {
         return false;
       }
     });
-    return normalizeLoopbackUrl((withPort ?? matches[0])[1]);
+    add(normalizeLoopbackUrl((withPort ?? matches[0])[1]));
   }
 
-  return null;
+  return found;
 };
+
+export const extractTerminalPreviewUrl = (text: string): string | null => (
+  extractAnnouncedUrls(text)[0] ?? null
+);
 
 export const isTerminalPreviewUrlAvailable = async (url: string, timeoutMs = 1500): Promise<boolean> => {
   if (!url) return false;
