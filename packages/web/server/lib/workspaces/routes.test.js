@@ -1039,8 +1039,10 @@ describe('workspace provider operation routes', () => {
 
   it('leaves a registration alone when its options already match the policy', async () => {
     const registry = routeRegistry();
-    const existing = { id: 'plugin-1', spec: '@openchamber/opencode-container-workspace', scope: 'user', options: reconciledOptions() };
+    const pluginSpec = '/current/opencode-container-workspace/src/plugin.js';
+    const existing = { id: 'plugin-1', spec: pluginSpec, scope: 'user', options: reconciledOptions() };
     const deps = dependencies({ dependencies: {
+      workspacePluginSpec: pluginSpec,
       listPluginEntries: vi.fn(() => [existing]),
       createPluginEntry: vi.fn(),
       deletePluginEntry: vi.fn(),
@@ -1051,6 +1053,30 @@ describe('workspace provider operation routes', () => {
 
     expect(deps.createPluginEntry).not.toHaveBeenCalled();
     expect(deps.deletePluginEntry).not.toHaveBeenCalled();
+  });
+
+  it('rewrites a matching registration whose packaged AppImage path is stale', async () => {
+    const registry = routeRegistry();
+    const currentSpec = '/tmp/.mount_current/resources/opencode-container-workspace/src/plugin.js';
+    const existing = {
+      id: 'plugin-1',
+      spec: '/tmp/.mount_previous/resources/opencode-container-workspace/src/plugin.js',
+      scope: 'user',
+      options: reconciledOptions(),
+    };
+    let pluginEntries = [existing];
+    const deps = dependencies({ dependencies: {
+      workspacePluginSpec: currentSpec,
+      listPluginEntries: vi.fn(() => pluginEntries),
+      deletePluginEntry: vi.fn(() => { pluginEntries = []; }),
+      createPluginEntry: vi.fn((entry) => { pluginEntries.push({ ...entry, id: 'rewritten' }); }),
+    } });
+    registerWorkspaceRoutes(registry.app, deps);
+
+    await registry.route('GET', '/api/workspaces/readiness')({ query: {} }, response());
+
+    expect(deps.deletePluginEntry).toHaveBeenCalledWith('plugin-1', null);
+    expect(pluginEntries).toEqual([expect.objectContaining({ spec: currentSpec, scope: 'user', options: reconciledOptions() })]);
   });
 
   it('rewrites a registration whose options fell behind the current policy', async () => {
@@ -1077,9 +1103,11 @@ describe('workspace provider operation routes', () => {
   it('rolls persisted settings and plugin configuration back when activation fails', async () => {
     const registry = routeRegistry();
     // Matching options keep startup reconciliation out of this test's way.
-    const previousPlugin = { id: 'plugin-1', spec: '@openchamber/opencode-container-workspace', scope: 'user', options: reconciledOptions() };
+    const pluginSpec = '/current/opencode-container-workspace/src/plugin.js';
+    const previousPlugin = { id: 'plugin-1', spec: pluginSpec, scope: 'user', options: reconciledOptions() };
     let pluginEntries = [previousPlugin];
     const deps = dependencies({ dependencies: {
+      workspacePluginSpec: pluginSpec,
       listPluginEntries: vi.fn(() => pluginEntries),
       deletePluginEntry: vi.fn(() => { pluginEntries = []; }),
       createPluginEntry: vi.fn((entry) => { pluginEntries.push({ ...entry, id: 'restored' }); }),

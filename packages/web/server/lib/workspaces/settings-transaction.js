@@ -97,7 +97,10 @@ export function createSettingsTransaction({
       console.log('[Secure Workspaces] Registered the workspace plugin, which enabled settings expected and OpenCode did not have');
       return;
     }
-    if (entries.length === 1 && entries[0].scope === 'user' && canonicalJson(entries[0].options ?? null) === canonicalJson(options)) return;
+    if (entries.length === 1
+      && entries[0].spec === pluginSpec
+      && entries[0].scope === 'user'
+      && canonicalJson(entries[0].options ?? null) === canonicalJson(options)) return;
     const transaction = {
       version: 1,
       phase: 'prepared',
