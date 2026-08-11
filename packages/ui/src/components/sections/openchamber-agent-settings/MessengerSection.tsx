@@ -1,49 +1,43 @@
-import React, { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import {
   deriveDiscordDisplayStatus,
   deriveDiscordViewState,
   deriveTelegramViewState,
   isDiscordGuildSyncing,
   useMessengerStore,
-  type MessengerType,
+  type DiscordViewState,
   type MessengerConnection,
-  type MessengerVerbosity,
-  type MessengerPermissionMode,
   type MessengerDiagnosisCheck,
-  type MessengerInboundMessage,
 } from '@/stores/useMessengerStore';
 import { useDiscordGuildMembershipPoll } from './useDiscordGuildMembershipPoll';
-import { useOpenChamberAgentEventsStore, type OpenChamberAgentUiRealtimeEvent } from '@/stores/useOpenChamberAgentEventsStore';
 import { useProjectsStore } from '@/stores/useProjectsStore';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { Button } from '@/components/ui/button';
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from '@/components/ui/dialog';
 import { Switch } from '@/components/ui/switch';
 import { cn } from '@/lib/utils';
-import { useI18n, type I18nKey } from '@/lib/i18n';
+import { useI18n } from '@/lib/i18n';
 import { Icon } from '@/components/icon/Icon';
 import { DiscordOnboardingWizard } from './DiscordOnboardingWizard';
-import { DiscordCommandsButton } from './DiscordCommandPalette';
+import { MessengerCommandsButton } from './MessengerCommandPalette';
 import {
+  AccessControlRow,
   AdvancedSectionCard,
   BehaviorPanel,
-  DangerZoneRow,
+  MessengerConnectTile,
+  MessengerDisconnectDialog,
+  MessengerLabeledCheckbox,
+  MessengerListenerBadge,
+  MessengerListenerPanel,
+  MessengerReplyModeControl,
   SessionBindingsPanel,
   StatusBadge,
-  TelegramUserInfoBotLink,
+  buildMessengerProjectSyncPayloads,
+  buildMessengerProjectSyncSummary,
   formatRelative,
   isMessengerIntegrationEnabled,
-  type MessengerBehaviorStrings,
 } from './messenger-shared';
-import { TelegramConnectTile, TelegramSectionCard } from './TelegramCard';
+import { TelegramSectionCard } from './TelegramCard';
 
 /** Discord brand mark — intentional product color, not a theme token. */
 const DISCORD_BRAND_CLASS = 'text-[#5865F2]';
@@ -54,38 +48,15 @@ type DiscordGuildListItem = {
   icon?: string | null;
 };
 
-interface MessengerMeta {
-  name: string;
-  color: string;
-  targetLabel: string;
-  targetPlaceholder: string;
-  targetHelp: React.ReactNode;
-}
-
-const MESSENGER_META: Record<MessengerType, MessengerMeta> = {
-  discord: {
-    name: 'Discord',
-    color: DISCORD_BRAND_CLASS,
-    targetLabel: 'Channel ID',
-    targetPlaceholder: 'e.g. 1234567890123456789',
-    targetHelp: (
-      <>
-        Enable Developer Mode, then right-click a text channel → <strong>Copy Channel ID</strong>.
-      </>
-    ),
-  },
-  telegram: {
-    name: 'Telegram',
-    color: 'text-[#2AABEE]',
-    targetLabel: 'Chat ID',
-    targetPlaceholder: 'e.g. -1001234567890 or 123456789',
-    targetHelp: (
-      <>
-        Message the bot, then read the id from the recent-messages list or ask{' '}
-        <TelegramUserInfoBotLink />.
-      </>
-    ),
-  },
+const DISCORD_META = {
+  name: 'Discord',
+  color: DISCORD_BRAND_CLASS,
+  targetPlaceholder: 'e.g. 1234567890123456789',
+  targetHelp: (
+    <>
+      Enable Developer Mode, then right-click a text channel → <strong>Copy Channel ID</strong>.
+    </>
+  ),
 };
 
 /** Public Discord CDN guild icon URL, or null when the guild has no icon. */
@@ -141,300 +112,13 @@ function DiscordGuildIcon({
   );
 }
 
-const VERBOSITY_OPTIONS: {
-  id: MessengerVerbosity;
-  labelKey: I18nKey;
-  descKey: I18nKey;
-}[] = [
-  {
-    id: 'quiet',
-    labelKey: 'settings.integrations.discord.bridge.verbosity.quiet.label',
-    descKey: 'settings.integrations.discord.bridge.verbosity.quiet.desc',
-  },
-  {
-    id: 'normal',
-    labelKey: 'settings.integrations.discord.bridge.verbosity.normal.label',
-    descKey: 'settings.integrations.discord.bridge.verbosity.normal.desc',
-  },
-  {
-    id: 'verbose',
-    labelKey: 'settings.integrations.discord.bridge.verbosity.verbose.label',
-    descKey: 'settings.integrations.discord.bridge.verbosity.verbose.desc',
-  },
-];
-
-const PERMISSION_MODE_OPTIONS: {
-  id: MessengerPermissionMode;
-  labelKey: I18nKey;
-  descKey: I18nKey;
-}[] = [
-  {
-    id: 'ask',
-    labelKey: 'settings.integrations.discord.bridge.permissionMode.ask.label',
-    descKey: 'settings.integrations.discord.bridge.permissionMode.ask.desc',
-  },
-  {
-    id: 'yolo',
-    labelKey: 'settings.integrations.discord.bridge.permissionMode.yolo.label',
-    descKey: 'settings.integrations.discord.bridge.permissionMode.yolo.desc',
-  },
-  {
-    id: 'agent',
-    labelKey: 'settings.integrations.discord.bridge.permissionMode.agent.label',
-    descKey: 'settings.integrations.discord.bridge.permissionMode.agent.desc',
-  },
-];
-
-type DangerZoneKey = 'fallback' | 'owner' | 'trusted' | 'slash';
-
-/** Localized status labels for the Discord badge (shared StatusBadge input). */
-function useDiscordStatusLabels(): Record<MessengerConnection['status'], string> {
-  const { t } = useI18n();
-  return {
-    connected: t('settings.integrations.discord.status.connected'),
-    connecting: t('settings.integrations.discord.status.connecting'),
-    error: t('settings.integrations.discord.status.error'),
-    disconnected: t('settings.integrations.discord.status.disconnected'),
-  };
-}
+type AccessControlKey = 'fallback' | 'owner' | 'trusted' | 'slash';
 
 function severityClass(s: MessengerDiagnosisCheck['severity']) {
   if (s === 'ok') return 'text-green-600 dark:text-green-400';
   if (s === 'warn') return 'text-yellow-600 dark:text-yellow-400';
   if (s === 'error') return 'text-destructive';
   return 'text-muted-foreground';
-}
-
-function DiscordListenerPanel({
-  conn,
-  inbound,
-  history,
-  startListener,
-  stopListener,
-  refreshStatus,
-  loadRecent,
-  loadHistory,
-}: {
-  conn: MessengerConnection;
-  inbound: MessengerInboundMessage[];
-  history: ReturnType<typeof useMessengerStore.getState>['discordHistory'];
-  startListener: () => Promise<boolean>;
-  stopListener: () => Promise<boolean>;
-  refreshStatus: () => Promise<void>;
-  loadRecent: () => Promise<void>;
-  loadHistory: (channelId: string, limit?: number) => Promise<boolean>;
-}) {
-  const { t } = useI18n();
-  const running = Boolean(conn.discordListenerRunning);
-  const connected = Boolean(conn.discordListenerConnected);
-  const subscribeToEvents = useOpenChamberAgentEventsStore((s) => s.subscribeToEvents);
-  const ingestDiscordInbound = useMessengerStore((s) => s.ingestDiscordInbound);
-
-  useEffect(() => {
-    if (!running) return;
-    const handler = (event: OpenChamberAgentUiRealtimeEvent) => {
-      if (event.eventType !== 'messenger.discord.message_received') return;
-      const data = event.data as MessengerInboundMessage | undefined;
-      if (data && typeof data === 'object' && 'updateId' in data) {
-        ingestDiscordInbound(data);
-      }
-    };
-    return subscribeToEvents(handler);
-  }, [running, subscribeToEvents, ingestDiscordInbound]);
-
-  useEffect(() => {
-    if (!running) return;
-    let cancelled = false;
-    const tick = async () => {
-      if (cancelled) return;
-      await Promise.all([refreshStatus(), loadRecent()]);
-    };
-    tick();
-    const id = setInterval(tick, 10_000);
-    return () => {
-      cancelled = true;
-      clearInterval(id);
-    };
-  }, [running, refreshStatus, loadRecent]);
-
-  // Reconcile with the live server (settings.json auto-start). Re-run when the
-  // hydrated token appears so we don't race Zustand persist.
-  useEffect(() => {
-    void useMessengerStore.getState().resyncDiscordStatus();
-    if (conn.botToken) void loadRecent();
-  }, [conn.botToken, loadRecent]);
-
-  const historyTarget = conn.defaultChannelId;
-
-  return (
-    <div className="space-y-3">
-      <div className="flex items-center justify-between gap-2 flex-wrap">
-        <div className="flex items-center gap-2 text-xs font-medium text-foreground">
-          {t('settings.integrations.discord.listener.title')}
-        </div>
-        <div className="flex items-center gap-2">
-          {!running ? (
-            <Button
-              type="button"
-              variant="default"
-              size="xs"
-              className="!font-normal normal-case"
-              onClick={() => void startListener()}
-            >
-              <Icon name="play" className="size-3.5" />
-              {t('settings.integrations.discord.listener.start')}
-            </Button>
-          ) : (
-            <Button
-              type="button"
-              variant="outline"
-              size="xs"
-              className="!font-normal normal-case text-[var(--status-error)] hover:text-[var(--status-error)]"
-              onClick={() => void stopListener()}
-            >
-              <Icon name="stop" className="size-3.5" />
-              {t('settings.integrations.discord.listener.stop')}
-            </Button>
-          )}
-        </div>
-      </div>
-
-      <div className="grid grid-cols-2 gap-2 text-[10px] @xl:grid-cols-4">
-        <div className="rounded-lg border border-border bg-background px-2 py-1.5">
-          <div className="text-muted-foreground">Gateway saw</div>
-          <div className="text-foreground font-medium">
-            {conn.discordListenerTotalRawMessages ?? 0}
-          </div>
-        </div>
-        <div className="rounded-lg border border-border bg-background px-2 py-1.5">
-          <div className="text-muted-foreground">Forwarded</div>
-          <div className="text-foreground font-medium">
-            {conn.discordListenerTotalReceived ?? 0}
-          </div>
-        </div>
-        <div className="rounded-lg border border-border bg-background px-2 py-1.5">
-          <div className="text-muted-foreground">Replied</div>
-          <div className="text-foreground font-medium">
-            {conn.discordListenerTotalReplied ?? 0}
-          </div>
-        </div>
-        <div className="rounded-lg border border-border bg-background px-2 py-1.5">
-          <div className="text-muted-foreground">Last update</div>
-          <div className="text-foreground font-medium">
-            {formatRelative(
-              conn.discordListenerLastUpdateAt ?? null,
-              t,
-              t('settings.integrations.discord.relative.never'),
-            )}
-          </div>
-        </div>
-      </div>
-
-      {/* Hint when the gateway is connected but no messages have arrived yet —
-          either the bot has no channel access, or MESSAGE_CONTENT is off. */}
-      {connected && (conn.discordListenerTotalRawMessages ?? 0) === 0 && (
-        <div className="rounded-md border border-border/60 bg-muted/40 px-3 py-2 text-[11px] text-muted-foreground leading-snug">
-          Connected. If messages don't arrive, give the bot <em>View Channel</em> access and enable
-          the <em>Message Content</em> intent, then restart the listener.
-        </div>
-      )}
-
-      {conn.discordListenerError && (
-        <div className="text-[11px] text-destructive flex items-start gap-1.5 leading-snug">
-          <Icon name="alert" className="size-3.5 shrink-0 mt-0.5" />
-          {conn.discordListenerError}
-        </div>
-      )}
-
-      {!running ? (
-        <div className="text-[11px] text-muted-foreground leading-snug">
-          Start the listener so OpenChamber agent can answer messages sent to the bot.
-        </div>
-      ) : inbound.length === 0 ? (
-        <div className="text-[11px] text-muted-foreground italic">
-          Waiting for messages… Mention or DM the bot in your server.
-        </div>
-      ) : (
-        <ul className="space-y-1.5 max-h-48 overflow-y-auto">
-          {inbound.slice(0, 8).map((m) => (
-            <li
-              key={String(m.updateId)}
-              className="rounded bg-background border border-border px-2 py-1.5 text-[11px] space-y-0.5"
-            >
-              <div className="flex items-center justify-between gap-2">
-                <span className="font-medium text-foreground truncate">
-                  {m.from?.firstName ?? m.from?.username ?? 'Unknown'}
-                  {m.from?.username ? (
-                    <span className="text-muted-foreground"> @{m.from.username}</span>
-                  ) : null}
-                </span>
-                <span className="text-[9px] text-muted-foreground shrink-0">
-                  {new Date(m.receivedAt).toLocaleTimeString()}
-                </span>
-              </div>
-              <div className="text-muted-foreground break-words">
-                {m.text ?? <em>(non-text message)</em>}
-              </div>
-              <div className="text-[9px] text-muted-foreground">
-                channel {m.chatId}
-                {m.discord?.guildId ? ` · guild ${m.discord.guildId}` : ''}
-              </div>
-            </li>
-          ))}
-        </ul>
-      )}
-
-      {/* History fetch — last messages from the configured channel. */}
-      <div className="border-t border-border/60 pt-2 space-y-1.5">
-        <div className="flex items-center justify-between gap-2 flex-wrap">
-          <div className="text-[11px] font-medium text-foreground">Channel history</div>
-          <button
-            type="button"
-            onClick={() => historyTarget && loadHistory(historyTarget, 50)}
-            disabled={!historyTarget}
-            className="rounded bg-primary/10 px-2 py-0.5 text-[10px] text-primary hover:bg-primary/20 disabled:opacity-50"
-          >
-            Fetch last 50
-          </button>
-        </div>
-        {!historyTarget && (
-          <div className="text-[10px] text-muted-foreground">
-            Save a default Channel ID to enable history fetch.
-          </div>
-        )}
-        {historyTarget && history.length === 0 && (
-          <div className="text-[10px] text-muted-foreground italic">
-            No history loaded yet — click "Fetch last 50".
-          </div>
-        )}
-        {history.length > 0 && (
-          <ul className="space-y-1 max-h-40 overflow-y-auto">
-            {history.slice(0, 10).map((m) => (
-              <li
-                key={m.id}
-                className="rounded bg-background border border-border px-2 py-1 text-[10px]"
-              >
-                <span className="font-medium text-foreground">
-                  {m.author.globalName ?? m.author.username ?? m.author.id}
-                </span>{' '}
-                <span className="text-[9px] text-muted-foreground">
-                  {new Date(m.timestamp).toLocaleTimeString()}
-                </span>
-                <div className="text-muted-foreground break-words">
-                  {m.content || <em>(no text — {m.attachmentCount} attachment{m.attachmentCount === 1 ? '' : 's'})</em>}
-                </div>
-              </li>
-            ))}
-            {history.length > 10 && (
-              <li className="text-[10px] text-muted-foreground italic px-2">
-                + {history.length - 10} older message{history.length - 10 === 1 ? '' : 's'}
-              </li>
-            )}
-          </ul>
-        )}
-      </div>
-    </div>
-  );
 }
 
 function DiscordDiagnosePanel({
@@ -528,35 +212,6 @@ function DiscordDiagnosePanel({
       )}
     </div>
   );
-}
-
-/** Localized strings for the shared BehaviorPanel, resolved from discord keys. */
-function useDiscordBehaviorStrings(): MessengerBehaviorStrings {
-  const { t } = useI18n();
-  return {
-    unavailable: t('settings.integrations.discord.bridge.unavailable'),
-    verbosityTitle: t('settings.integrations.discord.bridge.verbosity.title'),
-    verbosityOptions: VERBOSITY_OPTIONS.map((opt) => ({
-      id: opt.id,
-      label: t(opt.labelKey),
-      desc: t(opt.descKey),
-    })),
-    permissionTitle: t('settings.integrations.discord.bridge.permissionMode.title'),
-    permissionOptions: PERMISSION_MODE_OPTIONS.map((opt) => ({
-      id: opt.id,
-      label: t(opt.labelKey),
-      desc: t(opt.descKey),
-    })),
-    notifyTitle: t('settings.integrations.discord.bridge.notifyOnComplete.title'),
-    notifyDescription: t('settings.integrations.discord.bridge.notifyOnComplete.description'),
-    interruptTitle: t('settings.integrations.discord.bridge.interruptTimeout.title'),
-    interruptUnit: t('settings.integrations.discord.bridge.interruptTimeout.unit'),
-    interruptDescription: t('settings.integrations.discord.bridge.interruptTimeout.description'),
-    activeLabel: (count) =>
-      count === 1
-        ? t('settings.integrations.discord.bridge.activeOne')
-        : t('settings.integrations.discord.bridge.activeMany', { count }),
-  };
 }
 
 /** Discord-only worktree sync toggle — injected into the shared BehaviorPanel. */
@@ -685,23 +340,8 @@ function DiscordSyncResults({
   );
 }
 
-function DiscordAdvancedSettings({
-  conn,
-  open,
-  onOpenChange,
-  hideTrigger = false,
-}: {
-  conn: MessengerConnection;
-  open?: boolean;
-  onOpenChange?: (open: boolean) => void;
-  /** When true, the parent owns the open control (e.g. connected-state button). */
-  hideTrigger?: boolean;
-}) {
-  const [internalOpen, setInternalOpen] = useState(false);
-  const isOpen = open ?? internalOpen;
-  const setOpen = onOpenChange ?? setInternalOpen;
+function DiscordAdvancedSettings({ conn }: { conn: MessengerConnection }) {
   const { t } = useI18n();
-  const behaviorStrings = useDiscordBehaviorStrings();
 
   const updateConnection = useMessengerStore((s) => s.updateConnection);
   const saveDiscordConfig = useMessengerStore((s) => s.saveDiscordConfig);
@@ -711,25 +351,17 @@ function DiscordAdvancedSettings({
   const discordDiagnosisRunning = useMessengerStore((s) => s.discordDiagnosisRunning);
   const refreshBridgeStatus = useMessengerStore((s) => s.refreshBridgeStatus);
   const bridgeStatus = useMessengerStore((s) => s.bridgeStatus);
-  const startDiscordListener = useMessengerStore((s) => s.startDiscordListener);
-  const stopDiscordListener = useMessengerStore((s) => s.stopDiscordListener);
-  const refreshDiscordListenerStatus = useMessengerStore((s) => s.refreshDiscordListenerStatus);
-  const loadRecentDiscordMessages = useMessengerStore((s) => s.loadRecentDiscordMessages);
-  const discordInbound = useMessengerStore((s) => s.discordInbound);
-  const discordHistory = useMessengerStore((s) => s.discordHistory);
-  const loadDiscordHistory = useMessengerStore((s) => s.loadDiscordHistory);
 
   useEffect(() => {
-    if (!isOpen) return;
-    void refreshBridgeStatus(conn.type);
-    const id = setInterval(() => void refreshBridgeStatus(conn.type), 8000);
+    void refreshBridgeStatus('discord');
+    const id = setInterval(() => void refreshBridgeStatus('discord'), 8000);
     return () => clearInterval(id);
-  }, [isOpen, conn.type, refreshBridgeStatus]);
+  }, [refreshBridgeStatus]);
 
   const inputClass =
     'w-full rounded-md border border-border bg-background px-3 py-1.5 text-sm text-foreground focus:outline-none focus:ring-1 focus:ring-ring';
 
-  const meta = MESSENGER_META[conn.type];
+  const meta = DISCORD_META;
   const target = conn.defaultChannelId;
   const hasTarget = Boolean(target);
 
@@ -737,10 +369,14 @@ function DiscordAdvancedSettings({
   const [sectionOpen, setSectionOpen] = useState({
     behavior: true,
     diagnostics: false,
-    syncLog: false,
+    accessControl: false,
     bindings: false,
+    commands: false,
+    syncLog: false,
   });
-  const [dangerOpen, setDangerOpen] = useState<DangerZoneKey | null>(null);
+  const [accessOpen, setAccessOpen] = useState<AccessControlKey | null>(null);
+  const setOpen = (key: keyof typeof sectionOpen) => (open: boolean) =>
+    setSectionOpen((current) => ({ ...current, [key]: open }));
 
   const handleSaveTarget = async () => {
     const value = targetInput.trim();
@@ -754,47 +390,16 @@ function DiscordAdvancedSettings({
     setTargetInput('');
   };
 
-  const toggleDanger = (key: DangerZoneKey) => {
-    setDangerOpen((prev) => (prev === key ? null : key));
+  const toggleAccess = (key: AccessControlKey) => {
+    setAccessOpen((prev) => (prev === key ? null : key));
   };
 
-  const listenerConnected = Boolean(conn.discordListenerConnected);
-  const listenerRunning = Boolean(conn.discordListenerRunning);
   const seen = conn.discordListenerTotalRawMessages ?? 0;
   const forwarded = conn.discordListenerTotalReceived ?? 0;
   const replied = conn.discordListenerTotalReplied ?? 0;
   const syncChannels = conn.lastSyncChannels ?? [];
   const syncFailed = syncChannels.filter((c) => Boolean(c.error) || Boolean(c.threadError)).length;
   const bindingsCount = bridgeStatus.bindings.filter((b) => b.type === conn.type).length;
-
-  const listenerBadge = (
-    <span
-      className={cn(
-        'inline-flex items-center gap-1.5 rounded-full px-2 py-0.5 text-[11px] font-medium',
-        listenerConnected
-          ? 'bg-[var(--status-success)]/15 text-[var(--status-success)]'
-          : listenerRunning
-            ? 'bg-[var(--status-warning)]/15 text-[var(--status-warning)]'
-            : 'bg-muted text-muted-foreground',
-      )}
-    >
-      <span
-        className={cn(
-          'size-1.5 rounded-full',
-          listenerConnected
-            ? 'bg-[var(--status-success)]'
-            : listenerRunning
-              ? 'bg-[var(--status-warning)]'
-              : 'bg-muted-foreground',
-        )}
-      />
-      {listenerConnected
-        ? t('settings.integrations.discord.listener.status.live')
-        : listenerRunning
-          ? t('settings.integrations.discord.listener.status.connecting')
-          : t('settings.integrations.discord.listener.status.off')}
-    </span>
-  );
 
   const fallbackFields = (
     <div data-settings-item="integrations.discord.fallback-channel" className="space-y-2">
@@ -864,7 +469,7 @@ function DiscordAdvancedSettings({
     </div>
   );
 
-  const content = (
+  return (
     <div className="space-y-4">
       <div className="space-y-1 px-0.5">
         <h3 className="text-lg font-semibold tracking-tight text-foreground">
@@ -880,14 +485,11 @@ function DiscordAdvancedSettings({
           icon="settings-3"
           title={t('settings.integrations.discord.advanced.behavior.title')}
           open={sectionOpen.behavior}
-          onOpenChange={(next) => setSectionOpen((s) => ({ ...s, behavior: next }))}
+          onOpenChange={setOpen('behavior')}
         >
           <BehaviorPanel
             type={conn.type}
             bridgeStatus={bridgeStatus}
-            refreshBridgeStatus={refreshBridgeStatus}
-            strings={behaviorStrings}
-            settingsItemPrefix="integrations.discord"
             worktreesSlot={<DiscordWorktreesSlot />}
             footerNotes={
               <div data-settings-item="integrations.discord.proxy-worktrees" className="space-y-1">
@@ -901,26 +503,17 @@ function DiscordAdvancedSettings({
         <AdvancedSectionCard
           icon="pulse"
           title={t('settings.integrations.discord.advanced.diagnostics.title')}
-          badge={listenerBadge}
+          badge={<MessengerListenerBadge type="discord" conn={conn} />}
           meta={t('settings.integrations.discord.advanced.diagnostics.stats', {
             seen,
             forwarded,
             replied,
           })}
           open={sectionOpen.diagnostics}
-          onOpenChange={(next) => setSectionOpen((s) => ({ ...s, diagnostics: next }))}
+          onOpenChange={setOpen('diagnostics')}
         >
           <div className="space-y-4">
-            <DiscordListenerPanel
-              conn={conn}
-              inbound={discordInbound}
-              history={discordHistory}
-              startListener={startDiscordListener}
-              stopListener={stopDiscordListener}
-              refreshStatus={refreshDiscordListenerStatus}
-              loadRecent={loadRecentDiscordMessages}
-              loadHistory={loadDiscordHistory}
-            />
+            <MessengerListenerPanel type="discord" conn={conn} />
             <div className="border-t border-border/60 pt-3">
               <DiscordDiagnosePanel
                 conn={conn}
@@ -929,6 +522,128 @@ function DiscordAdvancedSettings({
                 runDiagnose={diagnoseDiscord}
               />
             </div>
+          </div>
+        </AdvancedSectionCard>
+
+        <AdvancedSectionCard
+          icon="shield-user"
+          title={t('settings.integrations.discord.advanced.dangerZone.title')}
+          open={sectionOpen.accessControl}
+          onOpenChange={setOpen('accessControl')}
+        >
+          <div className="-mx-4 -my-3 divide-y divide-border/60">
+            <AccessControlRow
+              label={t('settings.integrations.discord.advanced.dangerZone.fallbackChannel')}
+              open={accessOpen === 'fallback'}
+              onToggle={() => toggleAccess('fallback')}
+            >
+              {fallbackFields}
+            </AccessControlRow>
+            <AccessControlRow
+              label={t('settings.integrations.discord.advanced.dangerZone.ownerUserId')}
+              open={accessOpen === 'owner'}
+              onToggle={() => toggleAccess('owner')}
+            >
+              <div className="space-y-2">
+                <div className="text-xs text-muted-foreground leading-snug">
+                  {t('settings.integrations.discord.advanced.ownerUserId.description')}
+                </div>
+                <input
+                  type="text"
+                  value={conn.defaultUserId ?? ''}
+                  onChange={(e) =>
+                    updateConnection('discord', { defaultUserId: e.target.value.trim() })
+                  }
+                  onBlur={() => setTimeout(() => saveDiscordConfig(), 0)}
+                  placeholder="e.g. 123456789012345678"
+                  className={inputClass}
+                />
+              </div>
+            </AccessControlRow>
+            <AccessControlRow
+              label={t('settings.integrations.discord.advanced.dangerZone.trustedBots')}
+              open={accessOpen === 'trusted'}
+              onToggle={() => toggleAccess('trusted')}
+            >
+              <div data-settings-item="integrations.discord.trusted-bots" className="space-y-2">
+                <div className="text-xs text-muted-foreground leading-snug">
+                  {t('settings.integrations.discord.trustedBots.description')}
+                </div>
+                <textarea
+                  value={(conn.trustedBotIds ?? []).join('\n')}
+                  onChange={(e) => {
+                    const trustedBotIds = e.target.value
+                      .split(/[\s,]+/)
+                      .map((id) => id.trim())
+                      .filter(Boolean);
+                    updateConnection('discord', { trustedBotIds });
+                  }}
+                  onBlur={() => setTimeout(() => saveDiscordConfig(), 0)}
+                  placeholder={t('settings.integrations.discord.trustedBots.placeholder')}
+                  className={cn(inputClass, 'min-h-16 resize-y')}
+                />
+              </div>
+            </AccessControlRow>
+            <AccessControlRow
+              label={t('settings.integrations.discord.advanced.dangerZone.registerSlash')}
+              open={accessOpen === 'slash'}
+              onToggle={() => toggleAccess('slash')}
+            >
+              <div data-settings-item="integrations.discord.dynamic-slash" className="space-y-1.5">
+                <label className="flex cursor-pointer items-start gap-2 py-1">
+                  <Checkbox
+                    checked={Boolean(conn.registerDynamicSlashCommands)}
+                    onChange={(checked) => {
+                      updateConnection('discord', {
+                        registerDynamicSlashCommands: Boolean(checked),
+                      });
+                      setTimeout(() => saveDiscordConfig(), 0);
+                    }}
+                    ariaLabel={t('settings.integrations.discord.dynamicSlash.title')}
+                  />
+                  <span className="min-w-0">
+                    <span className="block text-sm font-medium text-foreground">
+                      {t('settings.integrations.discord.dynamicSlash.title')}
+                    </span>
+                    <span className="block text-xs text-muted-foreground leading-snug">
+                      {t('settings.integrations.discord.dynamicSlash.description')}
+                    </span>
+                  </span>
+                </label>
+              </div>
+            </AccessControlRow>
+          </div>
+        </AdvancedSectionCard>
+
+        <AdvancedSectionCard
+          icon="apps"
+          title={t('settings.integrations.discord.advanced.sessionBindings.title')}
+          meta={
+            bindingsCount === 1
+              ? t('settings.integrations.discord.advanced.sessionBindings.countOne')
+              : t('settings.integrations.discord.advanced.sessionBindings.count', {
+                  count: bindingsCount,
+                })
+          }
+          open={sectionOpen.bindings}
+          onOpenChange={setOpen('bindings')}
+        >
+          <SessionBindingsPanel
+            type={conn.type}
+            bridgeStatus={bridgeStatus}
+            emptyText={t('settings.integrations.discord.advanced.sessionBindings.empty')}
+          />
+        </AdvancedSectionCard>
+
+        <AdvancedSectionCard
+          icon="command"
+          title={t('settings.integrations.discord.commands.title')}
+          meta={t('settings.integrations.discord.commands.description')}
+          open={sectionOpen.commands}
+          onOpenChange={setOpen('commands')}
+        >
+          <div data-settings-item="integrations.discord.commands">
+            <MessengerCommandsButton platform="discord" />
           </div>
         </AdvancedSectionCard>
 
@@ -955,7 +670,7 @@ function DiscordAdvancedSettings({
               : t('settings.integrations.discord.advanced.syncLog.never')
           }
           open={sectionOpen.syncLog}
-          onOpenChange={(next) => setSectionOpen((s) => ({ ...s, syncLog: next }))}
+          onOpenChange={setOpen('syncLog')}
         >
           {syncChannels.length > 0 ? (
             <DiscordSyncResults channels={syncChannels} />
@@ -965,149 +680,9 @@ function DiscordAdvancedSettings({
             </div>
           )}
         </AdvancedSectionCard>
-
-        <AdvancedSectionCard
-          icon="apps"
-          title={t('settings.integrations.discord.advanced.sessionBindings.title')}
-          meta={
-            bindingsCount === 1
-              ? t('settings.integrations.discord.advanced.sessionBindings.countOne')
-              : t('settings.integrations.discord.advanced.sessionBindings.count', {
-                  count: bindingsCount,
-                })
-          }
-          open={sectionOpen.bindings}
-          onOpenChange={(next) => setSectionOpen((s) => ({ ...s, bindings: next }))}
-        >
-          <SessionBindingsPanel
-            type={conn.type}
-            bridgeStatus={bridgeStatus}
-            emptyText={t('settings.integrations.discord.advanced.sessionBindings.empty')}
-          />
-        </AdvancedSectionCard>
-      </div>
-
-      <div className="overflow-hidden rounded-xl border border-[var(--status-error)]/30 bg-[color-mix(in_srgb,var(--status-error)_6%,var(--background))]">
-        <div className="flex items-center gap-2 px-4 py-3">
-          <Icon name="alert" className="size-4 text-[var(--status-error)]" />
-          <span className="text-sm font-semibold text-[var(--status-error)]">
-            {t('settings.integrations.discord.advanced.dangerZone.title')}
-          </span>
-        </div>
-        <div className="divide-y divide-border/60 border-t border-[var(--status-error)]/20">
-          <DangerZoneRow
-            label={t('settings.integrations.discord.advanced.dangerZone.fallbackChannel')}
-            open={dangerOpen === 'fallback'}
-            onToggle={() => toggleDanger('fallback')}
-          >
-            {fallbackFields}
-          </DangerZoneRow>
-          <DangerZoneRow
-            label={t('settings.integrations.discord.advanced.dangerZone.ownerUserId')}
-            open={dangerOpen === 'owner'}
-            onToggle={() => toggleDanger('owner')}
-          >
-            <div className="space-y-2">
-              <div className="text-xs text-muted-foreground leading-snug">
-                {t('settings.integrations.discord.advanced.ownerUserId.description')}
-              </div>
-              <input
-                type="text"
-                value={conn.defaultUserId ?? ''}
-                onChange={(e) => updateConnection('discord', { defaultUserId: e.target.value.trim() })}
-                onBlur={() => setTimeout(() => saveDiscordConfig(), 0)}
-                placeholder="e.g. 123456789012345678"
-                className={inputClass}
-              />
-            </div>
-          </DangerZoneRow>
-          <DangerZoneRow
-            label={t('settings.integrations.discord.advanced.dangerZone.trustedBots')}
-            open={dangerOpen === 'trusted'}
-            onToggle={() => toggleDanger('trusted')}
-          >
-            <div data-settings-item="integrations.discord.trusted-bots" className="space-y-2">
-              <div className="text-xs text-muted-foreground leading-snug">
-                {t('settings.integrations.discord.trustedBots.description')}
-              </div>
-              <textarea
-                value={(conn.trustedBotIds ?? []).join('\n')}
-                onChange={(e) => {
-                  const trustedBotIds = e.target.value
-                    .split(/[\s,]+/)
-                    .map((id) => id.trim())
-                    .filter(Boolean);
-                  updateConnection('discord', { trustedBotIds });
-                }}
-                onBlur={() => setTimeout(() => saveDiscordConfig(), 0)}
-                placeholder={t('settings.integrations.discord.trustedBots.placeholder')}
-                className={cn(inputClass, 'min-h-16 resize-y')}
-              />
-            </div>
-          </DangerZoneRow>
-          <DangerZoneRow
-            label={t('settings.integrations.discord.advanced.dangerZone.registerSlash')}
-            open={dangerOpen === 'slash'}
-            onToggle={() => toggleDanger('slash')}
-          >
-            <div data-settings-item="integrations.discord.dynamic-slash" className="space-y-1.5">
-              <label className="flex cursor-pointer items-start gap-2 py-1">
-                <Checkbox
-                  checked={Boolean(conn.registerDynamicSlashCommands)}
-                  onChange={(checked) => {
-                    updateConnection('discord', { registerDynamicSlashCommands: Boolean(checked) });
-                    setTimeout(() => saveDiscordConfig(), 0);
-                  }}
-                  ariaLabel={t('settings.integrations.discord.dynamicSlash.title')}
-                />
-                <span className="min-w-0">
-                  <span className="block text-sm font-medium text-foreground">
-                    {t('settings.integrations.discord.dynamicSlash.title')}
-                  </span>
-                  <span className="block text-xs text-muted-foreground leading-snug">
-                    {t('settings.integrations.discord.dynamicSlash.description')}
-                  </span>
-                </span>
-              </label>
-            </div>
-          </DangerZoneRow>
-        </div>
       </div>
     </div>
   );
-
-  if (hideTrigger) {
-    return isOpen ? content : null;
-  }
-
-  return (
-    <Collapsible open={isOpen} onOpenChange={setOpen} className="border-t border-border/60 pt-3">
-      <label className="flex cursor-pointer select-none items-center gap-2">
-        <Checkbox
-          checked={isOpen}
-          onChange={setOpen}
-          ariaLabel={t('settings.integrations.discord.actions.advancedSettings')}
-        />
-        <span className="text-xs font-medium text-foreground">
-          {t('settings.integrations.discord.actions.advancedSettings')}
-        </span>
-        <span className="text-[10px] font-normal text-muted-foreground">
-          {t('settings.integrations.discord.actions.advancedSettingsHint')}
-        </span>
-      </label>
-      <CollapsibleContent className="pt-3">{content}</CollapsibleContent>
-    </Collapsible>
-  );
-}
-
-type DiscordReplyMode = 'always' | 'mention' | 'inherit';
-
-/** Visible per-server reply modes — always / mention only (no inherit UI). */
-const DISCORD_SERVER_REPLY_MODES = ['always', 'mention'] as const;
-
-function discordReplyModeLabelKey(mode: 'always' | 'mention'): I18nKey {
-  if (mode === 'mention') return 'settings.integrations.discord.servers.replyMode.mention';
-  return 'settings.integrations.discord.servers.replyMode.always';
 }
 
 /**
@@ -1115,35 +690,6 @@ function discordReplyModeLabelKey(mode: 'always' | 'mention'): I18nKey {
  * bot responds here (which also governs listening + OpenCode sync for this
  * server), how it replies, and whether it mirrors projects into this server.
  */
-type DiscordSyncProject = { id: string; path: string; label?: string };
-
-/**
- * Per-project Discord sync payloads (the message body posted into each
- * project's channel). Shared by the card-level "Sync projects now" and the
- * per-server "Sync now" action so both produce identical content.
- */
-function buildProjectSyncPayloads(
-  projects: DiscordSyncProject[],
-): { id: string; path: string; label: string; body: string }[] {
-  const now = new Date().toLocaleString();
-  return projects.map((p) => {
-    const label = p.label || p.path.split('/').pop() || p.path;
-    const lines = [`🤖 OpenChamber agent sync — ${label}`, '', `Last synced ${now}`];
-    return { id: p.id, path: p.path, label, body: lines.join('\n') };
-  });
-}
-
-/** Top-level Discord sync summary message. */
-function buildProjectSyncSummary(projects: DiscordSyncProject[]): string {
-  const lines = [
-    '**🤖 OpenChamber agent sync summary**',
-    '',
-    `• Projects: ${projects.length}`,
-    '',
-    `_Sent ${new Date().toLocaleString()}_`,
-  ];
-  return lines.join('\n');
-}
 
 function DiscordServerRow({
   conn,
@@ -1166,7 +712,7 @@ function DiscordServerRow({
 
   const policy = conn.discordGuildPolicies?.[guild.id];
   const respond = policy?.enabled !== false;
-  const storedReplyMode: DiscordReplyMode = policy?.replyMode ?? 'inherit';
+  const storedReplyMode = policy?.replyMode ?? 'inherit';
   // Legacy `inherit` maps to the saved default (or always) for the two-mode UI.
   const replyMode: 'always' | 'mention' =
     storedReplyMode === 'mention' || storedReplyMode === 'always'
@@ -1231,31 +777,11 @@ function DiscordServerRow({
         </label>
 
         {respond && (
-          <div
-            className="inline-flex shrink-0 items-stretch overflow-hidden rounded-md border border-[var(--interactive-border)]"
-            role="group"
-            aria-label={t('settings.integrations.discord.servers.replyMode.always')}
-          >
-            {DISCORD_SERVER_REPLY_MODES.map((mode, index) => {
-              const selected = replyMode === mode;
-              return (
-                <button
-                  key={mode}
-                  type="button"
-                  onClick={() => setDiscordGuildPolicy(guild.id, { replyMode: mode })}
-                  className={cn(
-                    'px-2.5 py-1.5 text-[11px] font-medium whitespace-nowrap transition-colors',
-                    index === 0 && 'border-r border-[var(--interactive-border)]',
-                    selected
-                      ? 'bg-[var(--interactive-selection)] text-[var(--interactive-selection-foreground)]'
-                      : 'text-muted-foreground hover:bg-interactive-hover hover:text-foreground',
-                  )}
-                >
-                  {t(discordReplyModeLabelKey(mode))}
-                </button>
-              );
-            })}
-          </div>
+          <MessengerReplyModeControl
+            type="discord"
+            value={replyMode}
+            onChange={(mode) => setDiscordGuildPolicy(guild.id, { replyMode: mode })}
+          />
         )}
 
         <Button
@@ -1287,37 +813,19 @@ function DiscordServerRow({
           </button>
 
           <div className="flex flex-wrap items-start gap-3 pr-8">
-            <label className="flex min-w-0 flex-1 cursor-pointer items-start gap-2.5">
-              <Checkbox
-                checked={syncing}
-                onChange={(checked) => setDiscordGuildPolicy(guild.id, { syncProjects: checked })}
-                ariaLabel={t('settings.integrations.discord.servers.syncProjects.label')}
-              />
-              <span className="min-w-0">
-                <span className="block text-xs font-semibold text-foreground">
-                  {t('settings.integrations.discord.servers.syncProjects.label')}
-                </span>
-                <span className="mt-0.5 block text-[11px] leading-snug text-muted-foreground">
-                  {t('settings.integrations.discord.servers.syncProjects.hint')}
-                </span>
-              </span>
-            </label>
+            <MessengerLabeledCheckbox
+              checked={syncing}
+              onChange={(checked) => setDiscordGuildPolicy(guild.id, { syncProjects: checked })}
+              label={t('settings.integrations.discord.servers.syncProjects.label')}
+              description={t('settings.integrations.discord.servers.syncProjects.hint')}
+            />
 
-            <label className="flex min-w-0 flex-1 cursor-pointer items-start gap-2.5">
-              <Checkbox
-                checked={critiqueEnabled}
-                onChange={(checked) => void setBridgeCritiqueEnabled('discord', checked)}
-                ariaLabel={t('settings.integrations.discord.bridge.critique.title')}
-              />
-              <span className="min-w-0">
-                <span className="block text-xs font-semibold text-foreground">
-                  {t('settings.integrations.discord.bridge.critique.title')}
-                </span>
-                <span className="mt-0.5 block text-[11px] leading-snug text-muted-foreground">
-                  {t('settings.integrations.discord.bridge.critique.description')}
-                </span>
-              </span>
-            </label>
+            <MessengerLabeledCheckbox
+              checked={critiqueEnabled}
+              onChange={(checked) => void setBridgeCritiqueEnabled('discord', checked)}
+              label={t('settings.integrations.discord.bridge.critique.title')}
+              description={t('settings.integrations.discord.bridge.critique.description')}
+            />
 
             <div className="flex shrink-0 flex-wrap items-center gap-1.5">
               <Button
@@ -1329,8 +837,8 @@ function DiscordServerRow({
                 onClick={() => {
                   setRowAction('sync');
                   void syncDiscordGuildProjects(
-                    buildProjectSyncPayloads(projects),
-                    buildProjectSyncSummary(projects),
+                    buildMessengerProjectSyncPayloads(projects),
+                    buildMessengerProjectSyncSummary('discord', projects),
                     { guildIds: [guild.id] },
                   ).finally(() => setRowAction(null));
                 }}
@@ -1519,11 +1027,8 @@ function DiscordServersAndInviteBlock({ conn }: { conn: MessengerConnection }) {
   );
 }
 
-function ConnectionCard({ conn }: { conn: MessengerConnection }) {
+function ConnectionCard({ conn, view }: { conn: MessengerConnection; view: DiscordViewState }) {
   const { t } = useI18n();
-  const statusLabels = useDiscordStatusLabels();
-  const onboardingStep = useMessengerStore((s) => s.onboardingStep);
-  const onboardingType = useMessengerStore((s) => s.onboardingType);
 
   const updateConnection = useMessengerStore((s) => s.updateConnection);
   const testConnection = useMessengerStore((s) => s.testConnection);
@@ -1531,7 +1036,6 @@ function ConnectionCard({ conn }: { conn: MessengerConnection }) {
   const saveDiscordConfig = useMessengerStore((s) => s.saveDiscordConfig);
   const startDiscordListener = useMessengerStore((s) => s.startDiscordListener);
   const stopDiscordListener = useMessengerStore((s) => s.stopDiscordListener);
-  const [disconnecting, setDisconnecting] = useState(false);
 
   const cardContentRef = useRef<HTMLDivElement>(null);
   const advancedSectionRef = useRef<HTMLDivElement>(null);
@@ -1541,45 +1045,31 @@ function ConnectionCard({ conn }: { conn: MessengerConnection }) {
   const [tokenInput, setTokenInput] = useState('');
   const [disconnectConfirmOpen, setDisconnectConfirmOpen] = useState(false);
 
-  const scrollToSection = (section: 'token' | 'guild' | 'channel' | 'test' | 'advanced') => {
-    // Token changes live inside Advanced. Per-server sync/channel/test controls
-    // are shown in the main card content and on the server rows.
-    const resolved =
-      section === 'guild' || section === 'channel' || section === 'test' || section === 'token'
-        ? 'advanced'
-        : section;
+  const scrollToSection = (section: 'token' | 'guild' | 'advanced') => {
+    // Token editing lives in the card header. Per-server sync/channel/test
+    // controls are shown in the main card content and on the server rows.
     setCardOpen(true);
-    if (resolved === 'advanced') {
-      setAdvancedOpen(true);
-      if (section === 'token') {
-        setShowToken(true);
-      }
-    }
+    if (section === 'token') setShowToken(true);
+    if (section === 'advanced') setAdvancedOpen(true);
+    const targetRef = section === 'advanced' ? advancedSectionRef : cardContentRef;
     window.requestAnimationFrame(() => {
-      const targetRef = resolved === 'advanced' ? advancedSectionRef : cardContentRef;
       targetRef.current?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
     });
   };
 
-  const meta = MESSENGER_META[conn.type];
+  const meta = DISCORD_META;
   const displayStatus = deriveDiscordDisplayStatus(conn);
 
   const token = conn.botToken;
 
-  const hasToken = Boolean(token);
   /** True when the bot is configured (local token OR server-side config). */
-  const configured = hasToken || Boolean(conn.discordServerConfigured);
+  const configured = Boolean(token || conn.discordServerConfigured);
   // Persistent view: the wizard owns token entry during onboarding; once a
   // token exists the configured view is stable across reloads — the badge
   // carries the transient live status (connecting/connected/error).
   // Also considers server-configured so a bot that is live on the server but
   // whose token was lost from the local store still shows the configured view.
-  const showWizard =
-    deriveDiscordViewState({
-      hasToken,
-      serverConfigured: Boolean(conn.discordServerConfigured),
-      wizardActive: onboardingStep !== null && onboardingType === 'discord',
-    }) !== 'configured';
+  const showWizard = view === 'wizard';
 
   useEffect(() => {
     if (showWizard) setCardOpen(true);
@@ -1621,7 +1111,7 @@ function ConnectionCard({ conn }: { conn: MessengerConnection }) {
           >
             <Icon name="discord-fill" className={cn('size-5 shrink-0', meta.color)} />
             <span className="shrink-0 text-sm font-semibold text-foreground">{meta.name}</span>
-            <StatusBadge status={displayStatus} labels={statusLabels} />
+            <StatusBadge type="discord" status={displayStatus} />
             {conn.discordBotUsername && (
               <span className="min-w-0 truncate text-xs text-muted-foreground">
                 {conn.discordBotUsername}
@@ -1642,6 +1132,22 @@ function ConnectionCard({ conn }: { conn: MessengerConnection }) {
               aria-label={t('settings.integrations.discord.listener.title')}
               className="data-[checked]:bg-[var(--status-success)]"
             />
+            {!showWizard && configured && (
+              <Button
+                type="button"
+                variant="outline"
+                size="xs"
+                className="!font-normal"
+                onClick={() => {
+                  setCardOpen(true);
+                  setShowToken((v) => !v);
+                }}
+              >
+                {showToken
+                  ? t('settings.common.actions.cancel')
+                  : t('settings.integrations.discord.actions.changeToken')}
+              </Button>
+            )}
             {!showWizard && (
               <Button
                 type="button"
@@ -1687,6 +1193,42 @@ function ConnectionCard({ conn }: { conn: MessengerConnection }) {
           </div>
         </div>
 
+        {!showWizard && showToken && (
+          <div className="flex min-w-0 flex-wrap items-center gap-2 px-5 pb-4">
+            <input
+              type="password"
+              value={tokenInput}
+              onChange={(e) => setTokenInput(e.target.value)}
+              placeholder={t('settings.integrations.discord.wizard.step1.tokenLabel')}
+              className={cn(inputClass, 'min-w-[12rem] flex-1')}
+            />
+            <Button
+              type="button"
+              variant="default"
+              size="xs"
+              className="!font-normal shrink-0"
+              onClick={handleSaveToken}
+              disabled={!tokenInput.trim()}
+            >
+              {t('settings.integrations.discord.actions.updateToken')}
+            </Button>
+            {displayStatus !== 'connected' && (
+              <Button
+                type="button"
+                variant="outline"
+                size="xs"
+                className="!font-normal"
+                onClick={() => testConnection(conn.type)}
+                disabled={!configured || conn.status === 'connecting'}
+              >
+                {conn.status === 'connecting'
+                  ? t('settings.integrations.discord.wizard.step1.verifying')
+                  : t('settings.integrations.discord.wizard.step1.verify')}
+              </Button>
+            )}
+          </div>
+        )}
+
       {/* Connection error */}
       {conn.error && (
         <div className="mx-5 mb-4 rounded-md bg-destructive/10 px-3 py-2 text-xs text-destructive flex items-start gap-2">
@@ -1708,66 +1250,8 @@ function ConnectionCard({ conn }: { conn: MessengerConnection }) {
           {/* Advanced settings — opened from the header control. */}
           <div ref={advancedSectionRef}>
             {advancedOpen && (
-              <div className="space-y-4 border-t border-[var(--interactive-border)] pt-4">
-                <div className="flex flex-wrap items-center gap-2">
-                  <div data-settings-item="integrations.discord.commands">
-                    <DiscordCommandsButton />
-                  </div>
-                  <Button
-                    type="button"
-                    variant="outline"
-                    size="xs"
-                    className="!font-normal"
-                    onClick={() => setShowToken((v) => !v)}
-                  >
-                    {showToken
-                      ? t('settings.common.actions.cancel')
-                      : t('settings.integrations.discord.actions.changeToken')}
-                  </Button>
-                  {displayStatus !== 'connected' && (
-                    <Button
-                      type="button"
-                      variant="outline"
-                      size="xs"
-                      className="!font-normal"
-                      onClick={() => testConnection(conn.type)}
-                      disabled={!configured || conn.status === 'connecting'}
-                    >
-                      {conn.status === 'connecting'
-                        ? t('settings.integrations.discord.wizard.step1.verifying')
-                        : t('settings.integrations.discord.wizard.step1.verify')}
-                    </Button>
-                  )}
-                </div>
-
-                {showToken && (
-                  <div className="flex min-w-0 flex-wrap items-center gap-2">
-                    <input
-                      type="password"
-                      value={tokenInput}
-                      onChange={(e) => setTokenInput(e.target.value)}
-                      placeholder={t('settings.integrations.discord.wizard.step1.tokenLabel')}
-                      className={cn(inputClass, 'min-w-[12rem] flex-1')}
-                    />
-                    <Button
-                      type="button"
-                      variant="default"
-                      size="xs"
-                      className="!font-normal shrink-0"
-                      onClick={handleSaveToken}
-                      disabled={!tokenInput.trim()}
-                    >
-                      {t('settings.integrations.discord.actions.updateToken')}
-                    </Button>
-                  </div>
-                )}
-
-                <DiscordAdvancedSettings
-                  conn={conn}
-                  open={advancedOpen}
-                  onOpenChange={setAdvancedOpen}
-                  hideTrigger
-                />
+              <div className="border-t border-[var(--interactive-border)] pt-4">
+                <DiscordAdvancedSettings conn={conn} />
               </div>
             )}
           </div>
@@ -1777,73 +1261,18 @@ function ConnectionCard({ conn }: { conn: MessengerConnection }) {
 
         </CollapsibleContent>
 
-      <Dialog open={disconnectConfirmOpen} onOpenChange={setDisconnectConfirmOpen}>
-        <DialogContent className="max-w-md">
-          <DialogHeader>
-            <DialogTitle>{t('settings.integrations.discord.disconnect.dialog.title')}</DialogTitle>
-            <DialogDescription>
-              {t('settings.integrations.discord.disconnect.dialog.description')}
-            </DialogDescription>
-          </DialogHeader>
-          <DialogFooter>
-            <Button
-              type="button"
-              variant="ghost"
-              size="sm"
-              onClick={() => setDisconnectConfirmOpen(false)}
-            >
-              {t('settings.common.actions.cancel')}
-            </Button>
-            <Button
-              type="button"
-              variant="destructive"
-              size="sm"
-              disabled={disconnecting}
-              onClick={() => {
-                setDisconnecting(true);
-                void disconnectDiscord().finally(() => {
-                  setDisconnecting(false);
-                  setDisconnectConfirmOpen(false);
-                });
-              }}
-            >
-              {t('settings.integrations.discord.disconnect.dialog.confirm')}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      <MessengerDisconnectDialog
+        type="discord"
+        open={disconnectConfirmOpen}
+        onOpenChange={setDisconnectConfirmOpen}
+        onDisconnect={disconnectDiscord}
+      />
       </div>
     </Collapsible>
   );
 }
 
-/**
- * Square "Connect Discord" tile — the only surface shown while nothing is
- * connected (no bot token). Starts the onboarding wizard on click.
- */
-function DiscordConnectCard({ onConnect }: { onConnect: () => void }) {
-  const { t } = useI18n();
-  const meta = MESSENGER_META.discord;
-  return (
-    <button
-      type="button"
-      onClick={onConnect}
-      data-settings-item="integrations.discord.connect"
-      className="flex size-40 flex-col items-center justify-center gap-2 rounded-xl border border-dashed border-border p-4 text-center text-muted-foreground transition-colors hover:border-primary/40 hover:text-foreground"
-    >
-      <Icon name="discord-fill" className={cn('size-9', meta.color)} />
-      <span className="flex items-center gap-1 text-xs font-medium">
-        <Icon name="add" className="size-3.5" />
-        {t('settings.integrations.discord.connect')}
-      </span>
-      <span className="text-[10px] font-normal leading-snug text-muted-foreground/80">
-        {t('settings.integrations.discord.connectHint')}
-      </span>
-    </button>
-  );
-}
-
-export const MessengerSection: React.FC = () => {
+export function MessengerSection() {
   const connections = useMessengerStore((s) => s.connections);
   const onboardingStep = useMessengerStore((s) => s.onboardingStep);
   const onboardingType = useMessengerStore((s) => s.onboardingType);
@@ -1909,17 +1338,23 @@ export const MessengerSection: React.FC = () => {
       {hasHydrated && (view === 'connect-card' || telegramView === 'connect-card') && (
         <div className="flex flex-wrap gap-3">
           {view === 'connect-card' && (
-            <DiscordConnectCard onConnect={() => startOnboarding('discord')} />
+            <MessengerConnectTile
+              type="discord"
+              onConnect={() => startOnboarding('discord')}
+            />
           )}
           {telegramView === 'connect-card' && (
-            <TelegramConnectTile onConnect={() => startOnboarding('telegram')} />
+            <MessengerConnectTile
+              type="telegram"
+              onConnect={() => startOnboarding('telegram')}
+            />
           )}
         </div>
       )}
-      {view !== 'connect-card' && discordConn && <ConnectionCard conn={discordConn} />}
+      {view !== 'connect-card' && discordConn && <ConnectionCard conn={discordConn} view={view} />}
       {telegramView !== 'connect-card' && telegramConn && (
-        <TelegramSectionCard conn={telegramConn} />
+        <TelegramSectionCard conn={telegramConn} view={telegramView} />
       )}
     </div>
   );
-};
+}

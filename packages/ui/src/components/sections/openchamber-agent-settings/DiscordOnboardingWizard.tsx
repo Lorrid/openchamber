@@ -1,14 +1,19 @@
-import React, { useState } from 'react';
+import { useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Icon } from '@/components/icon/Icon';
 import { useI18n } from '@/lib/i18n';
-import { cn } from '@/lib/utils';
 import {
   useMessengerStore,
   type MessengerConnection,
 } from '@/stores/useMessengerStore';
 import { useProjectsStore } from '@/stores/useProjectsStore';
 import { useDiscordGuildMembershipPoll } from './useDiscordGuildMembershipPoll';
+import {
+  MessengerListenerStep,
+  MessengerOnboardingFrame,
+  buildMessengerProjectSyncPayloads,
+  buildMessengerProjectSyncSummary,
+} from './messenger-shared';
 
 const TOTAL_STEPS = 4;
 const DEVELOPER_PORTAL_URL = 'https://discord.com/developers/applications';
@@ -17,7 +22,7 @@ const DISCORD_ID_GUIDE_URL =
 
 type DiscordOnboardingWizardProps = {
   conn: MessengerConnection;
-  onScrollToSection?: (section: 'token' | 'guild' | 'channel' | 'test' | 'advanced') => void;
+  onScrollToSection?: (section: 'token' | 'guild' | 'advanced') => void;
 };
 
 export function DiscordOnboardingWizard({
@@ -85,25 +90,6 @@ export function DiscordOnboardingWizard({
     setTimeout(() => void testConnection('discord'), 0);
   };
 
-  const buildProjectPayloads = () => {
-    const now = new Date().toLocaleString();
-    return projects.map((p) => {
-      const label = p.label || p.path.split('/').pop() || p.path;
-      const lines = [`🤖 OpenChamber agent sync — ${label}`, '', `Last synced ${now}`];
-      return { id: p.id, path: p.path, label, body: lines.join('\n') };
-    });
-  };
-
-  const buildSummary = () => {
-    return [
-      '**🤖 OpenChamber agent sync summary**',
-      '',
-      `• Projects: ${projects.length}`,
-      '',
-      `_Sent ${new Date().toLocaleString()}_`,
-    ].join('\n');
-  };
-
   const handleFinish = () => {
     finishOnboarding();
   };
@@ -146,46 +132,21 @@ export function DiscordOnboardingWizard({
   };
 
   return (
-    <div
-      className="rounded-lg border border-[color-mix(in_srgb,var(--primary-base)_20%,transparent)] bg-[color-mix(in_srgb,var(--primary-base)_5%,var(--background))] p-4 space-y-4"
-      data-settings-item="integrations.discord.wizard"
+    <MessengerOnboardingFrame
+      type="discord"
+      step={step}
+      totalSteps={TOTAL_STEPS}
+      canAdvance={canAdvance}
+      onSkip={handleFinish}
+      onBack={() => {
+        if (step === 0) return;
+        prevOnboardingStep();
+        if (step === 1) onScrollToSection?.('token');
+        if (step === 2) onScrollToSection?.('guild');
+        if (step === 3) onScrollToSection?.('advanced');
+      }}
+      onNext={handleNext}
     >
-      <div className="flex items-start justify-between gap-3">
-        <div>
-          <h4 className="typography-ui-header font-medium text-foreground">
-            {t('settings.integrations.discord.wizard.title')}
-          </h4>
-          <p className="mt-0.5 text-[11px] text-muted-foreground">
-            {t('settings.integrations.discord.wizard.stepOf', {
-              current: step + 1,
-              total: TOTAL_STEPS,
-            })}
-          </p>
-        </div>
-        <button
-          type="button"
-          onClick={handleFinish}
-          className="text-[10px] text-muted-foreground hover:text-foreground"
-        >
-          {t('settings.integrations.discord.wizard.skipToAdvanced')}
-        </button>
-      </div>
-
-      {/* Step indicators */}
-      <div className="flex gap-1">
-        {Array.from({ length: TOTAL_STEPS }, (_, i) => (
-          <div
-            key={i}
-            className={cn(
-              'h-1 flex-1 rounded-full transition-colors',
-              i <= step
-                ? 'bg-[var(--primary-base)]'
-                : 'bg-[var(--surface-muted)]',
-            )}
-          />
-        ))}
-      </div>
-
       {/* Step 0: Token */}
       {step === 0 && (
         <div className="space-y-3">
@@ -492,7 +453,10 @@ export function DiscordOnboardingWizard({
                   className="!font-normal"
                   disabled={conn.lastSyncStatus === 'sending'}
                   onClick={() =>
-                    void syncDiscordGuildProjects(buildProjectPayloads(), buildSummary())
+                    void syncDiscordGuildProjects(
+                      buildMessengerProjectSyncPayloads(projects),
+                      buildMessengerProjectSyncSummary('discord', projects),
+                    )
                   }
                 >
                   {t('settings.integrations.discord.wizard.step3.syncNow')}
@@ -505,93 +469,17 @@ export function DiscordOnboardingWizard({
 
       {/* Step 3: Start listener (bridging is always on; mute is per-server) */}
       {step === 3 && (
-        <div className="space-y-3">
-          <div>
-            <div className="text-xs font-medium text-foreground">
-              {t('settings.integrations.discord.wizard.step4.title')}
-            </div>
-            <p className="mt-1 text-[11px] text-muted-foreground leading-snug">
-              {t('settings.integrations.discord.wizard.step4.description')}
-            </p>
-          </div>
-          <div className="flex items-center gap-2">
-            <Button
-              type="button"
-              variant="outline"
-              size="xs"
-              className="!font-normal"
-              disabled={startingListener || (listenerRunning && listenerLive)}
-              onClick={() => void handleStartListener()}
-            >
-              {startingListener ? (
-                <Icon name="loader-4" className="size-3.5 animate-spin" />
-              ) : (
-                <Icon name="play" className="size-3.5" />
-              )}
-              {listenerStuck
-                ? t('settings.integrations.discord.wizard.step4.retryListener')
-                : t('settings.integrations.discord.wizard.step4.startListener')}
-            </Button>
-            <span
-              className={cn(
-                'text-[10px]',
-                listenerLive
-                  ? 'text-[var(--status-success)]'
-                  : listenerRunning
-                    ? 'text-[var(--status-warning)]'
-                    : 'text-muted-foreground',
-              )}
-            >
-              {listenerLive
-                ? t('settings.integrations.discord.wizard.step4.listenerLive')
-                : listenerRunning
-                  ? t('settings.integrations.discord.wizard.step4.listenerConnecting')
-                  : t('settings.integrations.discord.wizard.step4.listenerStopped')}
-            </span>
-          </div>
-          {conn.discordListenerError && (
-            <p className="text-[11px] text-[var(--status-error)]">{conn.discordListenerError}</p>
-          )}
-          {listenerStatusText && (
-            <p className="text-[11px] text-muted-foreground">{listenerStatusText}</p>
-          )}
-          {canAdvance && (
-            <p className="text-[11px] text-[var(--status-success)]">
-              {t('settings.integrations.discord.wizard.step4.complete')}
-            </p>
-          )}
-        </div>
+        <MessengerListenerStep
+          type="discord"
+          running={listenerRunning}
+          live={listenerLive}
+          starting={startingListener}
+          canAdvance={canAdvance}
+          error={conn.discordListenerError}
+          statusText={listenerStatusText}
+          onStart={() => void handleStartListener()}
+        />
       )}
-
-      {/* Navigation */}
-      <div className="flex items-center justify-between gap-2 border-t border-border/60 pt-3">
-        <Button
-          type="button"
-          variant="ghost"
-          size="xs"
-          className="!font-normal"
-          disabled={step === 0}
-          onClick={() => {
-            if (step === 0) return;
-            prevOnboardingStep();
-            if (step === 1) onScrollToSection?.('token');
-            if (step === 2) onScrollToSection?.('guild');
-            if (step === 3) onScrollToSection?.('advanced');
-          }}
-        >
-          {t('settings.integrations.discord.wizard.back')}
-        </Button>
-        <Button
-          type="button"
-          size="sm"
-          disabled={!canAdvance}
-          onClick={handleNext}
-        >
-          {step >= TOTAL_STEPS - 1
-            ? t('settings.integrations.discord.wizard.finish')
-            : t('settings.integrations.discord.wizard.next')}
-        </Button>
-      </div>
-    </div>
+    </MessengerOnboardingFrame>
   );
 }
