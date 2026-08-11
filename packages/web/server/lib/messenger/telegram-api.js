@@ -9,6 +9,8 @@
  * getUpdates, 429 rate limited with parameters.retry_after).
  */
 
+import { prepareTelegramHtml, isTelegramParseError } from './telegram-format.js';
+
 const TELEGRAM_MESSAGE_LIMIT = 4096;
 /** Telegram callback_data is capped at 64 bytes — keep custom ids short. */
 const TELEGRAM_CALLBACK_DATA_LIMIT = 64;
@@ -91,9 +93,13 @@ export function friendlyTelegramError(status, body, fallbackError) {
 
 /**
  * Send a text message. Returns { ok, messageId, error }.
- * `parseMode` stays unset by default: bridge content is Discord-flavored
- * markdown, which Telegram's legacy Markdown mode would reject or mangle, so
- * messages go out as plain text (markup characters stay readable).
+ *
+ * Bridge content is Discord-flavored markdown. We convert it to Telegram HTML
+ * and set `parse_mode: HTML` so bold/code/links render. If Telegram rejects
+ * the entities, retry once as plain text so the user still gets the reply.
+ *
+ * Pass `parseMode: false` to skip conversion (rare; callers that already hold
+ * literal Bot API text). `parseMode: 'HTML'` is the default.
  */
 export async function sendTelegramMessage({
   token,
@@ -103,18 +109,32 @@ export async function sendTelegramMessage({
   replyToMessageId = null,
   replyMarkup = null,
   disableNotification = false,
+  parseMode = 'HTML',
 }) {
+  const plain = String(text);
+  const useHtml = parseMode === 'HTML' || parseMode === true;
+  const prepared = useHtml ? prepareTelegramHtml(plain) : { text: plain, parseMode: null };
   const payload = {
     chat_id: chatId,
-    text: String(text).slice(0, TELEGRAM_MESSAGE_LIMIT),
+    text: prepared.text.slice(0, TELEGRAM_MESSAGE_LIMIT),
     disable_notification: Boolean(disableNotification),
   };
+  if (prepared.parseMode) payload.parse_mode = prepared.parseMode;
   if (messageThreadId) payload.message_thread_id = messageThreadId;
   if (replyToMessageId) {
     payload.reply_parameters = { message_id: replyToMessageId, allow_sending_without_reply: true };
   }
   if (replyMarkup) payload.reply_markup = replyMarkup;
-  const r = await telegramApiWithRetry(token, 'sendMessage', payload);
+
+  let r = await telegramApiWithRetry(token, 'sendMessage', payload);
+  if (!r.ok && payload.parse_mode && isTelegramParseError(r.body)) {
+    const fallback = {
+      ...payload,
+      text: plain.slice(0, TELEGRAM_MESSAGE_LIMIT),
+    };
+    delete fallback.parse_mode;
+    r = await telegramApiWithRetry(token, 'sendMessage', fallback);
+  }
   if (!r.ok) return { ok: false, error: friendlyTelegramError(r.status, r.body, r.error) };
   return { ok: true, messageId: r.body?.result?.message_id ?? null };
 }
@@ -135,13 +155,34 @@ export async function editTelegramReplyMarkup({ token, chatId, messageId, replyM
 }
 
 /** Edit message text and (by default) drop its keyboard — decision annotation. */
-export async function editTelegramMessageText({ token, chatId, messageId, text, replyMarkup = null }) {
-  const r = await telegramApi(token, 'editMessageText', {
+export async function editTelegramMessageText({
+  token,
+  chatId,
+  messageId,
+  text,
+  replyMarkup = null,
+  parseMode = 'HTML',
+}) {
+  const plain = String(text);
+  const useHtml = parseMode === 'HTML' || parseMode === true;
+  const prepared = useHtml ? prepareTelegramHtml(plain) : { text: plain, parseMode: null };
+  const payload = {
     chat_id: chatId,
     message_id: messageId,
-    text: String(text).slice(0, TELEGRAM_MESSAGE_LIMIT),
+    text: prepared.text.slice(0, TELEGRAM_MESSAGE_LIMIT),
     reply_markup: replyMarkup ?? { inline_keyboard: [] },
-  });
+  };
+  if (prepared.parseMode) payload.parse_mode = prepared.parseMode;
+
+  let r = await telegramApi(token, 'editMessageText', payload);
+  if (!r.ok && payload.parse_mode && isTelegramParseError(r.body)) {
+    const fallback = {
+      ...payload,
+      text: plain.slice(0, TELEGRAM_MESSAGE_LIMIT),
+    };
+    delete fallback.parse_mode;
+    r = await telegramApi(token, 'editMessageText', fallback);
+  }
   if (!r.ok && r.status === 400 && /not modified/i.test(r.body?.description ?? '')) {
     return { ok: true };
   }

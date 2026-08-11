@@ -115,6 +115,9 @@ describe('telegram approval surface', () => {
     expect(sent.url).toContain('bottg-token/sendMessage');
     expect(sent.body.chat_id).toBe('424242');
     expect(sent.body.text).toContain('Permission Required');
+    expect(sent.body.parse_mode).toBe('HTML');
+    expect(sent.body.text).toContain('<b>');
+    expect(sent.body.text).not.toContain('**');
 
     const keyboard = sent.body.reply_markup?.inline_keyboard;
     expect(Array.isArray(keyboard)).toBe(true);

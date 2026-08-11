@@ -15,6 +15,7 @@ import {
   createTelegramForumTopic,
   telegramMemberCanManageTopics,
 } from './telegram-api.js';
+import { markdownToTelegramHtml } from './telegram-format.js';
 import { normalizeTelegramChatIds, normalizeTelegramAccessSettings } from './telegram-access.js';
 import { createMessengerOpencodeBridge } from './messenger-opencode-bridge.js';
 import { createDiscordAgentRouter } from './discord-agent-api.js';
@@ -3723,6 +3724,10 @@ export function createMessengerSyncRouter({
 function adaptMessageFormat(content, sourceFormat, targetMessenger) {
   if (targetMessenger === 'discord') {
     return adaptToDiscord(content, sourceFormat);
+  }
+  if (targetMessenger === 'telegram') {
+    // Same conversion outbound sends use — Discord markdown → Telegram HTML.
+    return markdownToTelegramHtml(String(content ?? ''));
   }
   return content;
 }
