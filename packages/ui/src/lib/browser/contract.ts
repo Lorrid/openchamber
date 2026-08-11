@@ -100,8 +100,6 @@ export type BrowserAnnotationPayload = {
   readonly regions: ReadonlyArray<BrowserAnnotationRegion>;
   readonly strokes: ReadonlyArray<BrowserAnnotationStroke>;
   readonly styleChanges: ReadonlyArray<BrowserStyleChange>;
-  /** Union of every marked target, used to crop the screenshot. Null when empty. */
-  readonly captureRect: BrowserRect | null;
 };
 
 export const annotationTargetCount = (payload: BrowserAnnotationPayload): number => (
@@ -203,31 +201,4 @@ export const isBrowserAnnotationPayload = (value: unknown): value is BrowserAnno
   && value.strokes.every(isAnnotationStroke)
   && Array.isArray(value.styleChanges)
   && value.styleChanges.every(isStyleChange)
-  && (value.captureRect === null || isBrowserRect(value.captureRect))
 );
-
-/** Smallest rectangle covering every marked target, in CSS pixels. */
-export const unionAnnotationRect = (payload: {
-  readonly elements: ReadonlyArray<BrowserAnnotationElement>;
-  readonly regions: ReadonlyArray<BrowserAnnotationRegion>;
-  readonly strokes: ReadonlyArray<BrowserAnnotationStroke>;
-}): BrowserRect | null => {
-  const rects: BrowserRect[] = [
-    ...payload.elements.map((entry) => entry.element.bounds),
-    ...payload.regions.map((entry) => entry.rect),
-    ...payload.strokes.map((entry) => entry.bounds),
-  ];
-  if (rects.length === 0) return null;
-
-  let left = Number.POSITIVE_INFINITY;
-  let top = Number.POSITIVE_INFINITY;
-  let right = Number.NEGATIVE_INFINITY;
-  let bottom = Number.NEGATIVE_INFINITY;
-  for (const rect of rects) {
-    left = Math.min(left, rect.x);
-    top = Math.min(top, rect.y);
-    right = Math.max(right, rect.x + rect.width);
-    bottom = Math.max(bottom, rect.y + rect.height);
-  }
-  return { x: left, y: top, width: Math.max(0, right - left), height: Math.max(0, bottom - top) };
-};

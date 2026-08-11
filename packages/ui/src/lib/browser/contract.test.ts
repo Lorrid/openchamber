@@ -5,7 +5,6 @@ import {
   isBrowserAnnotationPayload,
   isBrowserElementTarget,
   navStatusUrl,
-  unionAnnotationRect,
   type BrowserAnnotationPayload,
   type BrowserElementTarget,
 } from './contract';
@@ -33,7 +32,6 @@ const payload: BrowserAnnotationPayload = {
   regions: [{ id: 'region-1', rect: { x: 200, y: 0, width: 50, height: 50 } }],
   strokes: [],
   styleChanges: [{ targetId: 'element-1', property: 'color', previousValue: 'rgb(0, 0, 0)', value: '#ff0000' }],
-  captureRect: { x: 10, y: 0, width: 240, height: 60 },
 };
 
 describe('navigation status', () => {
@@ -51,7 +49,7 @@ describe('element target validation', () => {
     expect(isBrowserElementTarget(element)).toBe(true);
   });
 
-  test('rejects payloads that would only fail later, at prompt or crop time', () => {
+  test('rejects payloads that would only fail later, at prompt or draw time', () => {
     expect(isBrowserElementTarget({ ...element, attributes: { id: 3 } })).toBe(false);
     expect(isBrowserElementTarget({ ...element, computedStyle: { display: null } })).toBe(false);
     expect(isBrowserElementTarget({ ...element, ancestry: [{ tag: 'form' }] })).toBe(false);
@@ -69,8 +67,9 @@ describe('annotation payload validation', () => {
     expect(isBrowserAnnotationPayload(payload)).toBe(true);
   });
 
-  test('accepts a payload with no capture rect', () => {
-    expect(isBrowserAnnotationPayload({ ...payload, captureRect: null })).toBe(true);
+  test('accepts a payload with nothing marked but a comment', () => {
+    expect(isBrowserAnnotationPayload({ ...payload, elements: [], regions: [], strokes: [], styleChanges: [] }))
+      .toBe(true);
   });
 
   test('rejects a payload whose nested element is malformed', () => {
@@ -99,22 +98,5 @@ describe('target geometry', () => {
   test('counts every kind of target', () => {
     expect(annotationTargetCount(payload)).toBe(2);
     expect(annotationTargetCount({ ...payload, elements: [], regions: [], strokes: [] })).toBe(0);
-  });
-
-  test('unions elements, regions and strokes into one rect', () => {
-    expect(unionAnnotationRect(payload)).toEqual({ x: 10, y: 0, width: 240, height: 60 });
-  });
-
-  test('returns null when nothing is marked', () => {
-    expect(unionAnnotationRect({ elements: [], regions: [], strokes: [] })).toBeNull();
-  });
-
-  test('includes stroke bounds in the union', () => {
-    const union = unionAnnotationRect({
-      elements: [],
-      regions: [],
-      strokes: [{ id: 's', points: [], bounds: { x: -5, y: 5, width: 10, height: 10 } }],
-    });
-    expect(union).toEqual({ x: -5, y: 5, width: 10, height: 10 });
   });
 });

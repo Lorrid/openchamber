@@ -50,7 +50,6 @@ const validPayload = {
   regions: [],
   strokes: [],
   styleChanges: [{ targetId: 'element-1', property: 'color', previousValue: '', value: '#fff' }],
-  captureRect: { x: 0, y: 0, width: 100, height: 50 },
 };
 
 const capture: PageCapture = { mime: 'image/jpeg', base64: 'AAAA', width: 1000, height: 700 };

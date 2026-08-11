@@ -27,7 +27,6 @@ const basePayload = (overrides: Partial<BrowserAnnotationPayload> = {}): Browser
   regions: [],
   strokes: [],
   styleChanges: [],
-  captureRect: null,
   ...overrides,
 });
 

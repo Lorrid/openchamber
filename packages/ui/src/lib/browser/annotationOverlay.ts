@@ -710,21 +710,6 @@ export const buildAnnotationOverlayScript = (
     var changes = [];
     styleChanges.forEach(function (change) { changes.push(change); });
 
-    var rects = elements.map(function (entry) { return entry.element.bounds; })
-      .concat(regions.map(function (entry) { return entry.rect; }))
-      .concat(strokes.map(function (entry) { return entry.bounds; }));
-    var captureRect = null;
-    if (rects.length > 0) {
-      var left = Infinity, top = Infinity, right = -Infinity, bottom = -Infinity;
-      for (var r = 0; r < rects.length; r += 1) {
-        left = Math.min(left, rects[r].x);
-        top = Math.min(top, rects[r].y);
-        right = Math.max(right, rects[r].x + rects[r].width);
-        bottom = Math.max(bottom, rects[r].y + rects[r].height);
-      }
-      captureRect = { x: left, y: top, width: Math.max(0, right - left), height: Math.max(0, bottom - top) };
-    }
-
     finish({
       id: 'annotation-' + Date.now(),
       pageUrl: String(location.href),
@@ -737,8 +722,7 @@ export const buildAnnotationOverlayScript = (
       strokes: strokes.map(function (entry) {
         return { id: entry.id, points: entry.points, bounds: entry.bounds };
       }),
-      styleChanges: changes,
-      captureRect: captureRect
+      styleChanges: changes
     });
   });
 
