@@ -2,7 +2,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import os from 'node:os';
 import { fetchOpenCodeGoUsage } from './opencodeGoQuota';
-import { readCredential } from './quotaCredentials';
+import { deleteLegacyOpenCodeGoCredential, readCredential } from './quotaCredentials';
 import { getProviderAuth, updateProviderAuth } from './opencodeAuth';
 
 type AuthEntry = Record<string, unknown> | string;
@@ -174,7 +174,6 @@ export type ProviderResult = {
 const OPENCODE_CONFIG_DIR = path.join(os.homedir(), '.config', 'opencode');
 const OPENCODE_DATA_DIR = path.join(os.homedir(), '.local', 'share', 'opencode');
 const AUTH_FILE = path.join(OPENCODE_DATA_DIR, 'auth.json');
-const OLLAMA_CLOUD_COOKIE_PATH = path.join(os.homedir(), '.config', 'ollama-quota', 'cookie');
 
 const XAI_USAGE_ENDPOINT = 'https://grok.com/grok_api_v2.GrokBuildBilling/GetGrokCreditsConfig';
 const XAI_TOKEN_ENDPOINT = 'https://auth.x.ai/oauth2/token';
@@ -284,19 +283,6 @@ const readJsonFile = (filePath: string): Record<string, unknown> | null => {
     return parsed as Record<string, unknown>;
   } catch (error) {
     console.warn(`Failed to read JSON file: ${filePath}`, error);
-    return null;
-  }
-};
-
-const readTextFile = (filePath: string): string | null => {
-  if (!fs.existsSync(filePath)) {
-    return null;
-  }
-  try {
-    const content = fs.readFileSync(filePath, 'utf8').trim();
-    return content || null;
-  } catch (error) {
-    console.warn(`Failed to read text file: ${filePath}`, error);
     return null;
   }
 };
@@ -760,6 +746,10 @@ export const listConfiguredQuotaProviders = () => {
     // Managed credentials remain enumerable; unreadable auth cannot establish xAI configuration.
   }
   const configured = new Set<string>();
+  const openCodeGoAuth = normalizeAuthEntry(getAuthEntry(auth, ['opencode-go']));
+  if (openCodeGoAuth && (typeof openCodeGoAuth.key === 'string' || typeof openCodeGoAuth.token === 'string')) configured.add('opencode-go');
+  if (readCredential('ollama-cloud')) configured.add('ollama-cloud');
+  if (readCredential('cursor')) configured.add('cursor');
 
   const anthropicAuth = normalizeAuthEntry(getAuthEntry(auth, ['anthropic', 'claude']));
   if (anthropicAuth && ((anthropicAuth as Record<string, unknown>).access || (anthropicAuth as Record<string, unknown>).token)) {
@@ -816,9 +806,6 @@ export const listConfiguredQuotaProviders = () => {
     configured.add('github-copilot-addon');
   }
 
-  if (readTextFile(OLLAMA_CLOUD_COOKIE_PATH)) {
-    configured.add('ollama-cloud');
-  }
 
   const waferAuth = normalizeAuthEntry(getAuthEntry(auth, ['wafer', 'wafer-ai', 'wafer_ai', 'wafer.ai']));
   if (waferAuth && ((waferAuth as Record<string, unknown>).key || (waferAuth as Record<string, unknown>).token)) {
@@ -896,16 +883,18 @@ const fetchCodexQuota = async (): Promise<ProviderResult> => {
 
     const windows: Record<string, UsageWindow> = {};
     if (primary) {
-      windows['5h'] = toUsageWindow({
+      const windowSeconds = toNumber(primary.limit_window_seconds);
+      windows[resolveWindowLabel(windowSeconds)] = toUsageWindow({
         usedPercent: toNumber(primary.used_percent),
-        windowSeconds: toNumber(primary.limit_window_seconds),
+        windowSeconds,
         resetAt: toTimestamp(primary.reset_at),
       });
     }
     if (secondary) {
-      windows['weekly'] = toUsageWindow({
+      const windowSeconds = toNumber(secondary.limit_window_seconds);
+      windows[resolveWindowLabel(windowSeconds)] = toUsageWindow({
         usedPercent: toNumber(secondary.used_percent),
-        windowSeconds: toNumber(secondary.limit_window_seconds),
+        windowSeconds,
         resetAt: toTimestamp(secondary.reset_at),
       });
     }
@@ -1771,7 +1760,7 @@ const parseOllamaSettingsHtml = (html: string) => {
 };
 
 const fetchOllamaCloudQuota = async (): Promise<ProviderResult> => {
-  const cookie = readTextFile(OLLAMA_CLOUD_COOKIE_PATH);
+  const cookie = readCredential('ollama-cloud')?.cookie;
 
   if (!cookie) {
     return buildResult({
@@ -2747,10 +2736,12 @@ export const fetchQuotaForProvider = async (providerId: string): Promise<Provide
     case 'wafer':
       return fetchWaferQuota();
     case 'opencode-go': {
-      const credential = readCredential('opencode-go') as { workspaceId: string; authCookie: string } | null;
-      if (!credential) return buildResult({ providerId, providerName: 'OpenCode Go', ok: false, configured: false, error: 'Not configured' });
       try {
-        return buildResult({ providerId, providerName: 'OpenCode Go', ok: true, configured: true, usage: { windows: await fetchOpenCodeGoUsage(credential) } });
+        deleteLegacyOpenCodeGoCredential();
+        const entry = normalizeAuthEntry(getAuthEntry(readAuthFile(), ['opencode-go']));
+        const apiKey = typeof entry?.key === 'string' ? entry.key : typeof entry?.token === 'string' ? entry.token : null;
+        if (!apiKey) return buildResult({ providerId, providerName: 'OpenCode Go', ok: false, configured: false, error: 'Not configured' });
+        return buildResult({ providerId, providerName: 'OpenCode Go', ok: true, configured: true, usage: { windows: await fetchOpenCodeGoUsage({ apiKey }) } });
       } catch (error) {
         return buildResult({ providerId, providerName: 'OpenCode Go', ok: false, configured: true, error: error instanceof Error ? error.message : 'Request failed' });
       }
