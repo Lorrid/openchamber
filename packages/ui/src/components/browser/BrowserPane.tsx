@@ -62,6 +62,8 @@ const ZOOM_STEP = 0.5;
 const ZOOM_MIN = -3;
 const ZOOM_MAX = 4;
 const BROWSER_PARTITION = 'persist:openchamber-browser';
+/** Kept small: this rides along with every snapshot. */
+const CONSOLE_PROBLEM_LIMIT = 20;
 const DEV_SERVER_RETRY_DELAY_MS = 600;
 /**
  * A shorter budget for a server that *answers* but with a 5xx, which is what a
@@ -107,6 +109,13 @@ const WebviewBrowser: React.FC<BrowserPaneProps> = ({ initialUrl, directory, tab
   // changes and would otherwise report whatever it was when they were built.
   const viewportRef = React.useRef(viewport);
   viewportRef.current = viewport;
+  /**
+   * Errors and warnings the page logged, reported with the next snapshot.
+   *
+   * A page that looks right and is throwing looks identical to one that is
+   * fine, and finding out otherwise used to mean opening DevTools by hand.
+   */
+  const consoleProblemsRef = React.useRef<Array<{ level: string; message: string; source: string }>>([]);
   const [colorScheme, setColorScheme] = React.useState<BrowserColorScheme>('system');
   const [stageSize, setStageSize] = React.useState({ width: 0, height: 0 });
   const stageRef = React.useRef<HTMLDivElement | null>(null);
@@ -273,6 +282,23 @@ const WebviewBrowser: React.FC<BrowserPaneProps> = ({ initialUrl, directory, tab
       setShowDeviceBar(true);
     };
 
+    if (action === 'browser.back' || action === 'browser.forward') {
+      const goingBack = action === 'browser.back';
+      const canMove = goingBack ? webview.canGoBack() : webview.canGoForward();
+      if (!canMove) {
+        throw new Error(goingBack
+          ? 'There is nothing to go back to in this tab'
+          : 'There is nothing to go forward to in this tab');
+      }
+      if (goingBack) webview.goBack();
+      else webview.goForward();
+      await new Promise((resolve) => setTimeout(resolve, 150));
+      await waitForIdle();
+      let title = '';
+      try { title = webview.getTitle() || ''; } catch { title = ''; }
+      return { url: toDisplayUrl(webview.getURL()), title };
+    }
+
     if (action === 'browser.resize') {
       if (!isViewportMode(parameters.viewport)) throw new Error('viewport is required');
       applyViewportParameter();
@@ -316,7 +342,7 @@ const WebviewBrowser: React.FC<BrowserPaneProps> = ({ initialUrl, directory, tab
     const buildScript = (): string | null => {
       switch (action) {
         case 'browser.snapshot':
-          return buildSnapshotScript();
+          return buildSnapshotScript({ selector: asOptionalString(parameters.selector) });
         case 'browser.click':
           return buildClickScript({
             selector: asOptionalString(parameters.selector),
@@ -355,7 +381,12 @@ const WebviewBrowser: React.FC<BrowserPaneProps> = ({ initialUrl, directory, tab
     // A snapshot has to say which layout it describes, or the agent cannot tell
     // a mobile rendering from a desktop one.
     if (action === 'browser.snapshot') {
-      return { ...record, viewport: viewportSummary(viewportRef.current) };
+      const problems = consoleProblemsRef.current;
+      return {
+        ...record,
+        viewport: viewportSummary(viewportRef.current),
+        ...(problems.length > 0 ? { consoleProblems: [...problems] } : {}),
+      };
     }
     // A click or a submit commonly starts a navigation; let it land so the
     // agent's next snapshot sees the page the action produced.
@@ -376,6 +407,34 @@ const WebviewBrowser: React.FC<BrowserPaneProps> = ({ initialUrl, directory, tab
     const host = annotationHost;
     return () => { void cancelAnnotationSession(host); };
   }, [annotationHost]);
+
+  React.useEffect(() => {
+    if (!webviewElement) return;
+    const onConsoleMessage = (event: Event) => {
+      const detail = event as unknown as { level?: number; message?: string; sourceId?: string; line?: number };
+      // 2 is warning, 3 is error; anything quieter is the page talking to itself.
+      if (typeof detail.level !== 'number' || detail.level < 2) return;
+      const source = detail.sourceId ? `${detail.sourceId}${detail.line ? `:${detail.line}` : ''}` : '';
+      consoleProblemsRef.current.push({
+        level: detail.level >= 3 ? 'error' : 'warning',
+        message: String(detail.message ?? '').slice(0, 400),
+        source,
+      });
+      if (consoleProblemsRef.current.length > CONSOLE_PROBLEM_LIMIT) {
+        consoleProblemsRef.current.splice(0, consoleProblemsRef.current.length - CONSOLE_PROBLEM_LIMIT);
+      }
+    };
+    // Each page gets its own record; carrying the last one over would blame a
+    // new page for the previous page's failures.
+    const onStartLoading = () => { consoleProblemsRef.current = []; };
+
+    webviewElement.addEventListener('console-message', onConsoleMessage);
+    webviewElement.addEventListener('did-start-loading', onStartLoading);
+    return () => {
+      webviewElement.removeEventListener('console-message', onConsoleMessage);
+      webviewElement.removeEventListener('did-start-loading', onStartLoading);
+    };
+  }, [webviewElement]);
 
   // Popups open in place; a detached window would escape the panel entirely.
   React.useEffect(() => {

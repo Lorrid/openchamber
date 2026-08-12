@@ -370,6 +370,11 @@ export const createOpenChamberControlService = (dependencies) => {
       if (text) parameters.text = text;
     }
 
+    if (action === 'browser.snapshot') {
+      const selector = asNonEmptyString(input.selector);
+      if (selector) parameters.selector = selector;
+    }
+
     if (action === 'browser.inspect') {
       const selector = asNonEmptyString(input.selector);
       if (!selector) throw new OpenChamberControlError('selector is required for browser.inspect', 400);

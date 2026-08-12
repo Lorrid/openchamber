@@ -107,7 +107,7 @@ export const describeViewport = (viewport: BrowserViewport): string => {
  * layout" should not have to invent a width, and a number it invented tells the
  * user nothing about what was actually checked.
  */
-export const VIEWPORT_MODES = ['mobile', 'tablet', 'desktop', 'fill'] as const;
+const VIEWPORT_MODES = ['mobile', 'tablet', 'desktop', 'fill'] as const;
 export type BrowserViewportMode = (typeof VIEWPORT_MODES)[number];
 
 const MODE_PRESETS: Record<Exclude<BrowserViewportMode, 'fill'>, string> = {

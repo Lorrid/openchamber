@@ -46,8 +46,50 @@ const HELPERS = `
     var placeholder = element.getAttribute('placeholder');
     return placeholder ? placeholder.trim().slice(0, MAX_LABEL_CHARS) : '';
   };
+  var isUnique = function (selector) {
+    try {
+      return document.querySelectorAll(selector).length === 1;
+    } catch (error) {
+      return false;
+    }
+  };
+
+  /**
+   * Names an element by what it is, falling back to where it sits.
+   *
+   * A positional chain like 'main > section:nth-of-type(3) > div > a' survives
+   * only until the markup shifts, and says nothing about what it points at.
+   * Anything the page states about identity — an id, a test id, an accessible
+   * name — outlives edits and reads as the thing it selects. The chain remains
+   * as the last resort, because something always has to work.
+   */
   var cssPath = function (element) {
-    if (element.id) return '#' + CSS.escape(element.id);
+    var tag = element.tagName.toLowerCase();
+
+    if (element.id) {
+      var byId = '#' + CSS.escape(element.id);
+      if (isUnique(byId)) return byId;
+    }
+    var stableAttrs = ['data-testid', 'data-test-id', 'data-test', 'name', 'aria-label'];
+    for (var a = 0; a < stableAttrs.length; a += 1) {
+      var value = element.getAttribute(stableAttrs[a]);
+      if (!value) continue;
+      var raw = String(value);
+      // A value containing a quote would need escaping for no real gain: such
+      // attributes are rare, and the positional chain still covers them.
+      if (raw.indexOf('"') !== -1) continue;
+      var byAttr = tag + '[' + stableAttrs[a] + '="' + raw + '"]';
+      if (isUnique(byAttr)) return byAttr;
+    }
+    var className = typeof element.className === 'string' ? element.className.trim() : '';
+    if (className) {
+      var classes = className.split(/\\s+/).filter(Boolean);
+      for (var c = 0; c < classes.length; c += 1) {
+        var byClass = tag + '.' + CSS.escape(classes[c]);
+        if (isUnique(byClass)) return byClass;
+      }
+    }
+
     var parts = [];
     var node = element;
     var depth = 0;
@@ -65,6 +107,25 @@ const HELPERS = `
       depth += 1;
     }
     return parts.join(' > ');
+  };
+
+  /** What a screen reader would announce, or '' when there is nothing to say. */
+  var accessibleName = function (element) {
+    var aria = element.getAttribute('aria-label');
+    if (aria && aria.trim()) return aria.trim();
+    var labelled = element.getAttribute('aria-labelledby');
+    if (labelled) {
+      var source = document.getElementById(labelled.split(/\\s+/)[0]);
+      if (source && (source.innerText || '').trim()) return source.innerText.trim();
+    }
+    var title = element.getAttribute('title');
+    if (title && title.trim()) return title.trim();
+    var alt = element.getAttribute('alt');
+    if (alt && alt.trim()) return alt.trim();
+    var text = (element.innerText || element.textContent || '').replace(/\\s+/g, ' ').trim();
+    if (text) return text;
+    var value = element.getAttribute('value');
+    return value && String(value).trim() ? String(value).trim() : '';
   };
   var findByText = function (needle) {
     var wanted = String(needle).replace(/\\s+/g, ' ').trim().toLowerCase();
@@ -85,8 +146,22 @@ const HELPERS = `
 
 const wrap = (body: string): string => `(() => {\n${HELPERS}\n${body}\n})()`;
 
-export const buildSnapshotScript = (): string => wrap(`
-  var interactive = document.querySelectorAll('a[href], button, input, select, textarea, [role="button"], [role="link"], [role="tab"], [contenteditable="true"]');
+/**
+ * `selector` narrows the snapshot to one subtree.
+ *
+ * A long page truncates against the caps no matter how they are tuned, which
+ * leaves the agent hunting. Scoping answers that directly: ask about the part
+ * you mean and the caps stop mattering.
+ */
+export const buildSnapshotScript = ({ selector }: { selector?: string } = {}): string => wrap(`
+  var scopeSelector = ${JSON.stringify(selector ?? '')};
+  var root = document;
+  if (scopeSelector) {
+    try { root = document.querySelector(scopeSelector); }
+    catch (error) { return { ok: false, error: 'Invalid selector: ' + scopeSelector }; }
+    if (!root) return { ok: false, error: 'No element matches ' + scopeSelector };
+  }
+  var interactive = root.querySelectorAll('a[href], button, input, select, textarea, [role="button"], [role="link"], [role="tab"], [contenteditable="true"]');
   var elements = [];
   var visibleTotal = 0;
   for (var i = 0; i < interactive.length; i += 1) {
@@ -115,6 +190,10 @@ export const buildSnapshotScript = (): string => wrap(`
     var labelText = label(element);
     if (labelText) entry.label = labelText;
     if (element.disabled === true) entry.disabled = true;
+    // Flagged rather than described: reporting the accessible name of every
+    // element would cost more than it tells, while its absence on something
+    // clickable is a defect worth naming.
+    if (!accessibleName(element)) entry.missingAccessibleName = true;
     elements.push(entry);
   }
   var body = document.body ? (document.body.innerText || '') : '';
@@ -124,6 +203,7 @@ export const buildSnapshotScript = (): string => wrap(`
     ok: true,
     url: String(location.href),
     title: String(document.title || ''),
+    scope: scopeSelector || 'document',
     scrollY: Math.round(window.scrollY),
     maxScrollY: Math.max(0, Math.round(docEl.scrollHeight - window.innerHeight)),
     text: text.slice(0, ${MAX_TEXT_CHARS}),
