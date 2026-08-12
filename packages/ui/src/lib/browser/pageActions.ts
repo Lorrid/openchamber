@@ -104,6 +104,10 @@ export const buildSnapshotScript = (): string => wrap(`
       tag: element.tagName.toLowerCase(),
       bounds: { x: Math.round(rect.x), y: Math.round(rect.y), width: Math.round(rect.width), height: Math.round(rect.height) }
     };
+    // The list covers the whole document so anything can be clicked without
+    // scrolling to it first, which means bounds alone do not say what is on
+    // screen — a negative y reads as a bug otherwise.
+    if (rect.bottom > 0 && rect.top < window.innerHeight) entry.inViewport = true;
     var type = element.getAttribute('type');
     if (type) entry.type = type;
     var role = element.getAttribute('role');
@@ -115,10 +119,13 @@ export const buildSnapshotScript = (): string => wrap(`
   }
   var body = document.body ? (document.body.innerText || '') : '';
   var text = body.replace(/\\n{3,}/g, '\\n\\n').trim();
+  var docEl = document.documentElement;
   var result = {
     ok: true,
     url: String(location.href),
     title: String(document.title || ''),
+    scrollY: Math.round(window.scrollY),
+    maxScrollY: Math.max(0, Math.round(docEl.scrollHeight - window.innerHeight)),
     text: text.slice(0, ${MAX_TEXT_CHARS}),
     elements: elements
   };
@@ -190,22 +197,103 @@ export const buildTypeScript = ({ selector, value, submit }: { selector: string;
   return { ok: true, selector: cssPath(target), url: String(location.href) };
 `);
 
+/**
+ * Scrolling, reported after it has actually happened.
+ *
+ * Two things made this lie. Pages commonly set `scroll-behavior: smooth`, which
+ * turns a programmatic scroll into an animation — so the position read straight
+ * afterwards is the position before the scroll, and the result said nothing
+ * moved. And a scroll that is already at the end is indistinguishable from one
+ * that failed unless the limits are reported too. An agent reading "scrollY: 0"
+ * from a scroll that worked learns a superstition it will apply for the rest of
+ * the session.
+ */
 export const buildScrollScript = ({ selector, direction }: { selector?: string; direction?: string }): string => wrap(`
   var selector = ${JSON.stringify(selector ?? '')};
   var direction = ${JSON.stringify(direction ?? '')};
+
+  var settle = function (extra) {
+    return new Promise(function (resolve) {
+      requestAnimationFrame(function () {
+        requestAnimationFrame(function () {
+          var doc = document.documentElement;
+          var maxScrollY = Math.max(0, doc.scrollHeight - window.innerHeight);
+          var scrollY = Math.round(window.scrollY);
+          var result = { ok: true, scrollY: scrollY, maxScrollY: Math.round(maxScrollY) };
+          result.atTop = scrollY <= 1;
+          result.atBottom = scrollY >= maxScrollY - 1;
+          for (var key in extra) {
+            if (Object.prototype.hasOwnProperty.call(extra, key)) result[key] = extra[key];
+          }
+          resolve(result);
+        });
+      });
+    });
+  };
+
   if (selector) {
     var target = null;
     try { target = document.querySelector(selector); }
     catch (error) { return { ok: false, error: 'Invalid selector: ' + selector }; }
     if (!target) return { ok: false, error: 'No element matches ' + selector };
-    target.scrollIntoView({ block: 'center' });
-    return { ok: true, scrolledTo: cssPath(target), scrollY: Math.round(window.scrollY) };
+    // Instant on purpose: the page's own smooth scrolling would still be
+    // animating when the next action runs against it.
+    target.scrollIntoView({ block: 'center', behavior: 'instant' });
+    return settle({ scrolledTo: cssPath(target) });
   }
+
+  var doc = document.documentElement;
   var page = Math.round(window.innerHeight * 0.85);
-  if (direction === 'down') window.scrollBy(0, page);
-  else if (direction === 'up') window.scrollBy(0, -page);
-  else if (direction === 'top') window.scrollTo(0, 0);
-  else if (direction === 'bottom') window.scrollTo(0, document.body ? document.body.scrollHeight : 0);
+  var bottom = Math.max(0, doc.scrollHeight - window.innerHeight);
+  if (direction === 'down') window.scrollTo({ top: window.scrollY + page, behavior: 'instant' });
+  else if (direction === 'up') window.scrollTo({ top: window.scrollY - page, behavior: 'instant' });
+  else if (direction === 'top') window.scrollTo({ top: 0, behavior: 'instant' });
+  else if (direction === 'bottom') window.scrollTo({ top: bottom, behavior: 'instant' });
   else return { ok: false, error: 'Unknown scroll direction: ' + direction };
-  return { ok: true, direction: direction, scrollY: Math.round(window.scrollY) };
+  return settle({ direction: direction });
+`);
+
+/** Properties that answer "how does this look", without dumping the whole cascade. */
+const INSPECTED_STYLE_PROPS = [
+  'color', 'background-color', 'background-image', 'opacity',
+  'font-family', 'font-size', 'font-weight', 'line-height', 'letter-spacing', 'text-align',
+  'border-radius', 'border-width', 'border-style', 'border-color', 'box-shadow',
+  'display', 'position', 'width', 'height', 'padding', 'margin', 'gap',
+  'flex-direction', 'justify-content', 'align-items', 'z-index', 'overflow', 'visibility',
+];
+
+/**
+ * Reads how one element actually renders.
+ *
+ * The snapshot describes structure, which leaves questions of appearance
+ * answerable only by reading the source and hoping the build agrees. Computed
+ * styles come from the live page, so a colour reported from here is the colour
+ * on screen — and unlike a screenshot it is readable by an agent that cannot
+ * see images.
+ */
+export const buildInspectScript = ({ selector }: { selector: string }): string => wrap(`
+  var selector = ${JSON.stringify(selector)};
+  var target = null;
+  try { target = document.querySelector(selector); }
+  catch (error) { return { ok: false, error: 'Invalid selector: ' + selector }; }
+  if (!target) return { ok: false, error: 'No element matches ' + selector };
+
+  var computed = window.getComputedStyle(target);
+  var styles = {};
+  var props = ${JSON.stringify(INSPECTED_STYLE_PROPS)};
+  for (var i = 0; i < props.length; i += 1) {
+    var value = computed.getPropertyValue(props[i]);
+    if (value) styles[props[i]] = String(value).trim();
+  }
+
+  var rect = target.getBoundingClientRect();
+  return {
+    ok: true,
+    selector: cssPath(target),
+    tag: target.tagName.toLowerCase(),
+    label: label(target),
+    bounds: { x: Math.round(rect.x), y: Math.round(rect.y), width: Math.round(rect.width), height: Math.round(rect.height) },
+    inViewport: rect.bottom > 0 && rect.top < window.innerHeight,
+    styles: styles
+  };
 `);

@@ -20,6 +20,7 @@ import { registerBrowserController } from '@/lib/browser/controlClient';
 import { resolveBrowsableUrl, toDisplayUrl } from '@/lib/browser/devTunnel';
 import {
   buildClickScript,
+  buildInspectScript,
   buildScrollScript,
   buildSnapshotScript,
   buildTypeScript,
@@ -308,25 +309,38 @@ const WebviewBrowser: React.FC<BrowserPaneProps> = ({ initialUrl, directory, tab
 
     await waitForIdle();
 
-    const script = action === 'browser.snapshot'
-      ? buildSnapshotScript()
-      : action === 'browser.click'
-        ? buildClickScript({
-          selector: typeof parameters.selector === 'string' ? parameters.selector : undefined,
-          text: typeof parameters.text === 'string' ? parameters.text : undefined,
-        })
-        : action === 'browser.type'
-          ? buildTypeScript({
+    const asOptionalString = (value: unknown): string | undefined => (
+      typeof value === 'string' && value ? value : undefined
+    );
+
+    const buildScript = (): string | null => {
+      switch (action) {
+        case 'browser.snapshot':
+          return buildSnapshotScript();
+        case 'browser.click':
+          return buildClickScript({
+            selector: asOptionalString(parameters.selector),
+            text: asOptionalString(parameters.text),
+          });
+        case 'browser.type':
+          return buildTypeScript({
             selector: String(parameters.selector ?? ''),
             value: String(parameters.value ?? ''),
             submit: parameters.submit === true,
-          })
-          : action === 'browser.scroll'
-            ? buildScrollScript({
-              selector: typeof parameters.selector === 'string' ? parameters.selector : undefined,
-              direction: typeof parameters.direction === 'string' ? parameters.direction : undefined,
-            })
-            : null;
+          });
+        case 'browser.inspect':
+          return buildInspectScript({ selector: String(parameters.selector ?? '') });
+        case 'browser.scroll':
+          return buildScrollScript({
+            selector: asOptionalString(parameters.selector),
+            direction: asOptionalString(parameters.direction),
+          });
+        default:
+          return null;
+      }
+    };
+
+    const script = buildScript();
 
     if (!script) throw new Error(`Unsupported browser action: ${action}`);
 
