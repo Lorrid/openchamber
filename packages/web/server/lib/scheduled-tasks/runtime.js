@@ -621,20 +621,37 @@ export const createScheduledTasksRuntime = (deps) => {
     }
   };
 
+  /**
+   * Arm a timer only for a future occurrence. Scheduling a past nextRunAt
+   * (delay 0 + jitter) re-enters the claim path immediately and can spin —
+   * especially for once tasks where the claim cannot advance nextRunAt.
+   */
+  const scheduleFutureRun = (projectID, taskID, nextRunAt, fromMs = Date.now()) => {
+    if (!Number.isFinite(nextRunAt)) {
+      return false;
+    }
+    const base = Number.isFinite(fromMs) ? fromMs : Date.now();
+    if (nextRunAt <= base) {
+      return false;
+    }
+    scheduleTask(projectID, taskID, nextRunAt);
+    return true;
+  };
+
   const rearmFromTaskOrCompute = (projectID, taskID, fallbackTask, fromMs) => {
     const latest = (tasksByProject.get(projectID)?.get(taskID)) || fallbackTask;
     if (!latest?.enabled) {
       return;
     }
+    const base = Number.isFinite(fromMs) ? fromMs : Date.now();
     const persistedNext = latest.state?.nextRunAt;
-    if (Number.isFinite(persistedNext)) {
-      scheduleTask(projectID, taskID, persistedNext);
+    // Prefer a still-future persisted slot; never re-arm a past occurrence
+    // (that created silent once-task loser loops and claim-failed retry spam).
+    if (scheduleFutureRun(projectID, taskID, persistedNext, base)) {
       return;
     }
-    const computedNext = computeNextRunAt(latest, fromMs);
-    if (Number.isFinite(computedNext)) {
-      scheduleTask(projectID, taskID, computedNext);
-    }
+    const computedNext = computeNextRunAt(latest, base);
+    scheduleFutureRun(projectID, taskID, computedNext, base);
   };
 
   const runTask = async (projectID, taskID, reason, scheduledFor) => {
@@ -674,7 +691,9 @@ export const createScheduledTasksRuntime = (deps) => {
           lastStatus: 'running',
           lastError: undefined,
           updatedAt: runStartedAt,
-          ...(Number.isFinite(nextAfterClaim) ? { nextRunAt: nextAfterClaim } : {}),
+          // Always set nextRunAt so a past once-slot is cleared when there is
+          // no following occurrence (omitting the key would leave the past value).
+          nextRunAt: Number.isFinite(nextAfterClaim) ? nextAfterClaim : undefined,
         };
 
         // Duplicate protection is solely lastScheduledFor within slack of this
@@ -723,9 +742,13 @@ export const createScheduledTasksRuntime = (deps) => {
         if (!claimResult?.updated) {
           if (claimResult?.task) {
             updateInMemoryTask(projectID, claimResult.task);
-            if (claimResult.task.enabled && Number.isFinite(claimResult.task.state?.nextRunAt)) {
-              scheduleTask(projectID, taskID, claimResult.task.state.nextRunAt);
-            }
+            // Loser must not schedule a past nextRunAt (once-task spin).
+            rearmFromTaskOrCompute(
+              projectID,
+              taskID,
+              claimResult.task,
+              Math.max(Date.now(), scheduledFor + 1),
+            );
           }
           return { ok: false, skipped: true, reason: 'occurrence-claimed' };
         }
@@ -832,8 +855,13 @@ export const createScheduledTasksRuntime = (deps) => {
         stateResult = await projectConfigRuntime.updateScheduledTaskState(projectID, taskID, statePatch);
         if (stateResult.task) {
           updateInMemoryTask(projectID, stateResult.task);
-          if (stateResult.task.enabled && Number.isFinite(stateResult.task.state?.nextRunAt)) {
-            scheduleTask(projectID, taskID, stateResult.task.state.nextRunAt);
+          if (stateResult.task.enabled) {
+            scheduleFutureRun(
+              projectID,
+              taskID,
+              stateResult.task.state?.nextRunAt,
+              finishedAt,
+            );
           }
         }
       } catch (persistError) {
@@ -844,13 +872,53 @@ export const createScheduledTasksRuntime = (deps) => {
           reason,
           error: message,
         });
-        rearmFromTaskOrCompute(projectID, taskID, latestTask, finishedAt);
+
+        // Keep in-memory status terminal so this process does not advertise
+        // a stuck "running" task after the session already finished.
+        const recoveredTask = {
+          ...latestTask,
+          state: {
+            ...(latestTask.state || {}),
+            lastStatus: status,
+            lastDurationMs: durationMs,
+            lastError: status === 'error' ? errorMessage : undefined,
+            lastSessionId: status === 'success' ? sessionID : undefined,
+            nextRunAt: Number.isFinite(nextRunAt) ? nextRunAt : undefined,
+            updatedAt: finishedAt,
+          },
+        };
+        updateInMemoryTask(projectID, recoveredTask);
+
+        // Best-effort single retry so persisted lastStatus does not stay 'running'.
+        try {
+          const retry = await projectConfigRuntime.updateScheduledTaskState(projectID, taskID, statePatch);
+          if (retry.task) {
+            updateInMemoryTask(projectID, retry.task);
+            stateResult = retry;
+            if (retry.task.enabled) {
+              scheduleFutureRun(projectID, taskID, retry.task.state?.nextRunAt, finishedAt);
+            }
+          }
+        } catch (retryError) {
+          logger.warn?.('[ScheduledTasks] run completion state retry failed', {
+            projectID,
+            taskID,
+            reason,
+            error: safeErrorMessage(retryError),
+          });
+          stateResult = { task: recoveredTask };
+          rearmFromTaskOrCompute(projectID, taskID, recoveredTask, finishedAt);
+        }
+
+        // The session already ran — surface persist failure without treating a
+        // successful dispatch as a hard run failure (manual runNow would 500).
         return {
-          ok: false,
-          status: 'error',
+          ok: status === 'success',
+          status,
           sessionID,
-          task: null,
-          error: message,
+          task: stateResult.task || recoveredTask,
+          error: status === 'error' ? errorMessage : undefined,
+          persistError: message,
           reason: 'completion-state-failed',
         };
       }

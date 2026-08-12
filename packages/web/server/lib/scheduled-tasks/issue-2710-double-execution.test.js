@@ -54,13 +54,20 @@ const createSharedProjectConfigRuntime = (initialTask) => {
   let currentTask = structuredClone(initialTask);
 
   const applyPatch = (patch) => {
+    const nextState = {
+      ...(currentTask.state || {}),
+      ...patch,
+      updatedAt: Date.now(),
+    };
+    // Mirror normalizeState: explicit undefined clears optional numeric fields.
+    for (const key of ['nextRunAt', 'lastRunAt', 'lastDurationMs', 'lastScheduledFor', 'lastError', 'lastSessionId']) {
+      if (Object.prototype.hasOwnProperty.call(patch, key) && patch[key] === undefined) {
+        delete nextState[key];
+      }
+    }
     currentTask = {
       ...currentTask,
-      state: {
-        ...(currentTask.state || {}),
-        ...patch,
-        updatedAt: Date.now(),
-      },
+      state: nextState,
     };
     return currentTask;
   };
@@ -254,12 +261,41 @@ describe('issue 2710: daily scheduled task double execution at the configured ti
     await runtime.start();
     await vi.advanceTimersByTimeAsync(HOUR + 3_000);
 
-    expect(completionWrites).toBeGreaterThan(0);
+    // Initial completion write + best-effort retry.
+    expect(completionWrites).toBeGreaterThanOrEqual(2);
     expect(sdk.sessionCreates.length).toBe(1);
     expect(runtime.getStatus().runningScheduledTasksCount).toBe(0);
 
     const manual = await runtime.runNow('p1', 'task-1');
-    expect(manual.ok || manual.reason === 'completion-state-failed' || manual.reason === 'start-state-failed').toBeTruthy();
+    expect(manual.ok).toBe(true);
+    expect(manual.sessionID).toBeTruthy();
+    expect(runtime.getStatus().runningScheduledTasksCount).toBe(0);
+
+    runtime.stop();
+  });
+
+  it('manual run completion write failure returns session and clears running status', async () => {
+    vi.setSystemTime(UTC(2026, 0, 1, 14, 0, 0));
+    const projectConfigRuntime = createSharedProjectConfigRuntime(
+      makeTask({ kind: 'daily', times: ['15:00'] }),
+    );
+    const runtime = createScheduledTasksRuntime(createRuntimeDeps(projectConfigRuntime));
+    await runtime.start();
+
+    const originalUpdate = projectConfigRuntime.updateScheduledTaskState;
+    projectConfigRuntime.updateScheduledTaskState = vi.fn(async (pid, tid, patch) => {
+      if (patch?.lastStatus === 'success' || patch?.lastStatus === 'error') {
+        throw new Error('timeout acquiring project config lock for p1');
+      }
+      return originalUpdate(pid, tid, patch);
+    });
+
+    const manual = await runtime.runNow('p1', 'task-1');
+    expect(manual.ok).toBe(true);
+    expect(manual.sessionID).toBeTruthy();
+    expect(manual.reason).toBe('completion-state-failed');
+    expect(manual.persistError).toMatch(/timeout acquiring project config lock/);
+    expect(manual.task?.state?.lastStatus).toBe('success');
     expect(runtime.getStatus().runningScheduledTasksCount).toBe(0);
 
     runtime.stop();
@@ -335,5 +371,74 @@ describe('issue 2710: daily scheduled task double execution at the configured ti
 
     runtimeA.stop();
     runtimeB.stop();
+  });
+
+  it('once-task loser does not spin-rearm a past nextRunAt while the winner runs', async () => {
+    vi.setSystemTime(UTC(2026, 0, 1, 8, 0, 0));
+
+    let releaseFetch;
+    const fetchGate = new Promise((resolve) => {
+      releaseFetch = resolve;
+    });
+    globalThis.fetch = vi.fn(async () => {
+      await fetchGate;
+      return { ok: true, text: async () => '' };
+    });
+
+    const { runtimes, projectConfigRuntime } = await startInstances(2, makeTask({
+      kind: 'once',
+      date: '2026-01-01',
+      time: '09:00',
+    }));
+
+    await vi.advanceTimersByTimeAsync(HOUR + 3_000);
+
+    // Winner claimed and is blocked in prompt_async; exactly one session.
+    expect(sdk.sessionCreates.length).toBe(1);
+    const claimsAfterFire = projectConfigRuntime.updateScheduledTaskStateIf.mock.calls.length;
+    expect(claimsAfterFire).toBeGreaterThanOrEqual(1);
+
+    // Advance through many jitter windows. Loser must not keep re-entering claim.
+    await vi.advanceTimersByTimeAsync(60_000);
+    expect(projectConfigRuntime.updateScheduledTaskStateIf.mock.calls.length).toBe(claimsAfterFire);
+    expect(sdk.sessionCreates.length).toBe(1);
+
+    releaseFetch();
+    await Promise.resolve();
+    await vi.advanceTimersByTimeAsync(5_000);
+
+    expect(sdk.sessionCreates.length).toBe(1);
+    expect(runtimes.every((runtime) => runtime.getStatus().runningScheduledTasksCount === 0)).toBe(true);
+
+    runtimes.forEach((runtime) => runtime.stop());
+  });
+
+  it('claim-failed re-arms the next occurrence, not an immediate retry of the past slot', async () => {
+    vi.setSystemTime(UTC(2026, 0, 1, 14, 0, 0));
+    const projectConfigRuntime = createSharedProjectConfigRuntime(
+      makeTask({ kind: 'daily', times: ['15:00'] }),
+    );
+
+    let claimAttempts = 0;
+    projectConfigRuntime.updateScheduledTaskStateIf = vi.fn(async () => {
+      claimAttempts += 1;
+      throw new Error('timeout acquiring project config lock for p1');
+    });
+
+    const runtime = createScheduledTasksRuntime(createRuntimeDeps(projectConfigRuntime));
+    await runtime.start();
+
+    await vi.advanceTimersByTimeAsync(HOUR + 3_000);
+    expect(claimAttempts).toBe(1);
+
+    // Must not immediately retry the same past occurrence on a ~jitter cadence.
+    await vi.advanceTimersByTimeAsync(30_000);
+    expect(claimAttempts).toBe(1);
+
+    // Next calendar occurrence (tomorrow 15:00) may attempt once more.
+    await vi.advanceTimersByTimeAsync(24 * HOUR);
+    expect(claimAttempts).toBe(2);
+
+    runtime.stop();
   });
 });

@@ -27,13 +27,25 @@ in shared project config under the project write lock:
   read-modify-write is serialized across processes, not only within one process.
 - Lock timeout / filesystem errors on claim, manual-start, or completion state
   writes always release the in-process running slot (via `finally`) and best-effort
-  re-arm the next occurrence; they must not leave the task permanently "running"
-  or reject unhandled from the queue pump.
+  re-arm the **next future** occurrence; they must not leave the task permanently
+  "running" or reject unhandled from the queue pump.
+- Re-arm helpers only schedule a persisted `nextRunAt` when it is still in the
+  future. A past slot (common for `once` after claim, which cannot advance
+  `nextRunAt`) falls back to `computeNextRunAt` — which returns null for a
+  consumed/past once occurrence — so a losing instance stops instead of
+  spinning delay-0 timers against the project lock.
+- On completion-write failure after a session already ran, in-memory status is
+  set to a terminal value and a single persist retry is attempted so
+  `lastStatus` does not stay `running`. Manual `runNow` still returns the
+  `sessionID` as a successful dispatch (`ok` follows run status, with
+  `persistError` set) rather than a hard 500.
 - The claim predicate rejects a duplicate solely via `lastScheduledFor` within
   slack of this occurrence. It does not consult advanced on-disk `nextRunAt`
   (that field is routinely overwritten by a second instance syncing inside
   `TASK_DUE_SLACK_MS`, including on later days when `lastScheduledFor` is already
   set from a prior claim).
+- Claiming always writes `nextRunAt` (including `undefined`) so a past once-slot
+  is cleared when there is no following occurrence.
 
 Manual `runNow` does not claim a schedule occurrence.
 
