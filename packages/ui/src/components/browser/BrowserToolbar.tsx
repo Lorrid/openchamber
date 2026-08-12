@@ -62,6 +62,8 @@ export type BrowserToolbarProps = {
   zoomPercent?: number;
   onClearCookies?: () => void;
   onClearCache?: () => void;
+  onToggleDeviceBar?: () => void;
+  isDeviceBarOpen?: boolean;
 };
 
 export const BrowserToolbar: React.FC<BrowserToolbarProps> = ({
@@ -85,6 +87,8 @@ export const BrowserToolbar: React.FC<BrowserToolbarProps> = ({
   zoomPercent = 100,
   onClearCookies,
   onClearCache,
+  onToggleDeviceBar,
+  isDeviceBarOpen,
 }) => {
   const { t } = useI18n();
 
@@ -147,6 +151,14 @@ export const BrowserToolbar: React.FC<BrowserToolbarProps> = ({
       ) : null}
       {onClearCache ? (
         <ToolbarButton icon="database-2" label={t('contextPanel.browser.clearCache')} onClick={onClearCache} />
+      ) : null}
+      {onToggleDeviceBar ? (
+        <ToolbarButton
+          icon="smartphone"
+          label={t('contextPanel.browser.deviceToolbar')}
+          onClick={onToggleDeviceBar}
+          pressed={isDeviceBarOpen}
+        />
       ) : null}
       {onAnnotate ? (
         <ToolbarButton

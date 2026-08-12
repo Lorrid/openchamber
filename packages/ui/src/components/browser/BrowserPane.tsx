@@ -4,6 +4,7 @@ import { toast } from '@/components/ui';
 import { useThemeSystem } from '@/contexts/useThemeSystem';
 import { invokeDesktopCommand } from '@/lib/desktopNative';
 import { useI18n } from '@/lib/i18n';
+import { cn } from '@/lib/utils';
 import { openExternalUrl } from '@/lib/url';
 import { useUIStore } from '@/stores/useUIStore';
 import { BLANK_URL, isLoopbackUrl, isStartingServerFailure, normalizeBrowserUrl } from '@/lib/browser/url';
@@ -24,6 +25,8 @@ import {
   buildTypeScript,
 } from '@/lib/browser/pageActions';
 import { BrowserToolbar } from './BrowserToolbar';
+import { BrowserDeviceBar, type BrowserColorScheme } from './BrowserDeviceBar';
+import { FILL_VIEWPORT, fitViewport, type BrowserViewport } from '@/lib/browser/viewport';
 import { BrowserEmptyState } from './BrowserEmptyState';
 import { useAnnotationAttach, useAnnotationOverlayLabels } from './useAnnotationAttach';
 import { useWebviewNavigation } from './useWebviewNavigation';
@@ -90,6 +93,11 @@ const WebviewBrowser: React.FC<BrowserPaneProps> = ({ initialUrl, directory, tab
   const [isAnnotating, setIsAnnotating] = React.useState(false);
   const [isWaitingForServer, setIsWaitingForServer] = React.useState(false);
   const [zoomLevel, setZoomLevel] = React.useState(0);
+  const [showDeviceBar, setShowDeviceBar] = React.useState(false);
+  const [viewport, setViewport] = React.useState<BrowserViewport>(FILL_VIEWPORT);
+  const [colorScheme, setColorScheme] = React.useState<BrowserColorScheme>('system');
+  const [stageSize, setStageSize] = React.useState({ width: 0, height: 0 });
+  const stageRef = React.useRef<HTMLDivElement | null>(null);
   /** When the current run of retries began, per URL. */
   const retryRef = React.useRef<{ url: string; startedAt: number } | null>(null);
   /** Set once this tab has seen a page that was not a startup error. */
@@ -351,6 +359,36 @@ const WebviewBrowser: React.FC<BrowserPaneProps> = ({ initialUrl, directory, tab
       .catch(() => toast.error(t('contextPanel.browser.clearFailed')));
   }, [t]);
 
+  // The stage is measured rather than assumed: the panel is resizable, and a
+  // viewport that fitted a moment ago may not fit now.
+  React.useEffect(() => {
+    const stage = stageRef.current;
+    if (!stage || typeof ResizeObserver === 'undefined') return;
+    const observer = new ResizeObserver((entries) => {
+      const rect = entries[0]?.contentRect;
+      if (rect) setStageSize({ width: rect.width, height: rect.height });
+    });
+    observer.observe(stage);
+    return () => observer.disconnect();
+  }, []);
+
+  const applyColorScheme = React.useCallback((scheme: BrowserColorScheme) => {
+    setColorScheme(scheme);
+    const webview = webviewRef.current;
+    if (!webview) return;
+    let webContentsId = -1;
+    try {
+      webContentsId = webview.getWebContentsId();
+    } catch {
+      return;
+    }
+    void invokeDesktopCommand('desktop_browser_set_color_scheme', { webContentsId, scheme })
+      .catch((error: unknown) => {
+        setColorScheme('system');
+        toast.error(error instanceof Error ? error.message : t('contextPanel.browser.device.schemeFailed'));
+      });
+  }, [t]);
+
   const handleReload = React.useCallback(() => {
     try {
       if (isLoading) webviewRef.current?.stop();
@@ -439,6 +477,7 @@ const WebviewBrowser: React.FC<BrowserPaneProps> = ({ initialUrl, directory, tab
   }, [status]);
 
   const failed = navigation.status.kind === 'failed' && !isWaitingForServer ? navigation.status : null;
+  const layout = fitViewport(viewport, stageSize);
 
   return (
     <div className="absolute inset-0 flex flex-col bg-background">
@@ -463,15 +502,45 @@ const WebviewBrowser: React.FC<BrowserPaneProps> = ({ initialUrl, directory, tab
         zoomPercent={Math.round(Math.pow(1.2, zoomLevel) * 100)}
         onClearCookies={() => clearBrowsingData('cookies')}
         onClearCache={() => clearBrowsingData('cache')}
+        onToggleDeviceBar={() => setShowDeviceBar((current) => !current)}
+        isDeviceBarOpen={showDeviceBar}
       />
-      <div className="relative min-h-0 flex-1 bg-background">
+      {showDeviceBar ? (
+        <BrowserDeviceBar
+          viewport={viewport}
+          onViewportChange={setViewport}
+          colorScheme={colorScheme}
+          onColorSchemeChange={applyColorScheme}
+          scale={layout?.scale ?? 1}
+        />
+      ) : null}
+      <div
+        ref={stageRef}
+        className={cn(
+          'relative min-h-0 flex-1 bg-background',
+          // A sized viewport sits on a backdrop so its edges are visible; at
+          // fill there is nothing to frame.
+          layout && 'flex items-center justify-center overflow-hidden bg-[var(--surface-muted)]',
+        )}
+      >
         {initialSrc !== null ? (
           <webview
             ref={attachWebview}
             src={initialSrc}
             partition="persist:openchamber-browser"
             allowpopups
-            style={{ width: '100%', height: '100%', border: 'none' }}
+            style={layout
+              ? {
+                // Laid out at the chosen size and scaled visually: the page must
+                // measure itself at the width being tested, not at the panel's.
+                width: `${layout.width}px`,
+                height: `${layout.height}px`,
+                transform: `scale(${layout.scale})`,
+                border: 'none',
+                flex: 'none',
+                boxShadow: '0 2px 18px rgba(0,0,0,.28)',
+              }
+              : { width: '100%', height: '100%', border: 'none' }}
           />
         ) : null}
         {initialSrc !== null && !startUrl && !navigation.url && !isLoading ? (

@@ -3791,6 +3791,41 @@ const handleInvoke = async (browserWindow, command, args = {}) => {
       return { closed: client.close({ baseUrl, port }) };
     }
 
+    /**
+     * Forces prefers-color-scheme for one previewed page.
+     *
+     * nativeTheme.themeSource is app-wide and would drag OpenChamber's own
+     * appearance along with it, so this goes through the page's own emulation
+     * instead. The debugger session has to stay attached: emulation is part of
+     * that session and resets the moment it detaches.
+     */
+    case 'desktop_browser_set_color_scheme': {
+      const wcId = Number.isFinite(args.webContentsId) ? Math.trunc(args.webContentsId) : null;
+      if (wcId === null || wcId < 0) throw new Error('webContentsId is required');
+      const scheme = args.scheme === 'light' || args.scheme === 'dark' ? args.scheme : 'system';
+      const target = webContents.fromId(wcId);
+      if (!target || target.isDestroyed()) throw new Error('WebContents not found');
+
+      if (!target.debugger.isAttached()) {
+        try {
+          target.debugger.attach('1.3');
+        } catch {
+          // DevTools owns the only debugger session a page can have.
+          throw new Error('Close DevTools for this page before changing its appearance');
+        }
+      }
+
+      await target.debugger.sendCommand('Emulation.setEmulatedMedia', scheme === 'system'
+        ? { features: [] }
+        : { features: [{ name: 'prefers-color-scheme', value: scheme }] });
+
+      if (scheme === 'system') {
+        // Nothing left to emulate; give the session back so DevTools can attach.
+        try { target.debugger.detach(); } catch { /* already gone */ }
+      }
+      return { scheme };
+    }
+
     // Scoped to the browser panel's own partition, so clearing it can never
     // touch OpenChamber's session or any other window's storage.
     case 'desktop_browser_clear_data': {
