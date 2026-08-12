@@ -736,6 +736,54 @@ export const createScheduledTasksRuntime = (deps) => {
             error: message,
           });
           rearmFromTaskOrCompute(projectID, taskID, task, Math.max(runStartedAt, scheduledFor + 1));
+
+          // Best-effort record so once tasks are not left enabled-but-inert with
+          // no UI signal. Do not clobber a winner that claimed this occurrence.
+          const claimFailurePatch = {
+            lastStatus: 'error',
+            lastError: `Scheduled claim failed: ${message}`,
+            updatedAt: Date.now(),
+          };
+          try {
+            if (typeof projectConfigRuntime.updateScheduledTaskStateIf === 'function') {
+              const recorded = await projectConfigRuntime.updateScheduledTaskStateIf(
+                projectID,
+                taskID,
+                (candidate) => {
+                  const lastScheduledFor = candidate.state?.lastScheduledFor;
+                  if (
+                    Number.isFinite(lastScheduledFor)
+                    && Math.abs(lastScheduledFor - scheduledFor) <= TASK_DUE_SLACK_MS
+                  ) {
+                    return false;
+                  }
+                  return true;
+                },
+                claimFailurePatch,
+              );
+              if (recorded.task) {
+                updateInMemoryTask(projectID, recorded.task);
+              }
+            } else {
+              const recorded = await projectConfigRuntime.updateScheduledTaskState(
+                projectID,
+                taskID,
+                claimFailurePatch,
+              );
+              if (recorded.task) {
+                updateInMemoryTask(projectID, recorded.task);
+              }
+            }
+          } catch {
+            updateInMemoryTask(projectID, {
+              ...task,
+              state: {
+                ...(task.state || {}),
+                ...claimFailurePatch,
+              },
+            });
+          }
+
           return { ok: false, skipped: true, reason: 'claim-failed', error: message };
         }
 

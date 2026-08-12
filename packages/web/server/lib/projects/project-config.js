@@ -551,11 +551,17 @@ export const createProjectConfigRuntime = (deps) => {
     writeLocks.set(key, chained);
 
     await previous;
-    const fileLock = await acquireProjectFileLock(projectID);
+    // Acquire sits outside the mutate try — if it throws (10s lock timeout),
+    // we must still release the in-process chain or every later write for this
+    // project hangs forever on await previous.
     try {
-      return await mutate();
+      const fileLock = await acquireProjectFileLock(projectID);
+      try {
+        return await mutate();
+      } finally {
+        await fileLock.release();
+      }
     } finally {
-      await fileLock.release();
       release();
       const current = writeLocks.get(key);
       if (current === chained) {

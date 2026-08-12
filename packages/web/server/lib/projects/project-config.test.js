@@ -696,6 +696,51 @@ describe('project-config loop reconciliation', () => {
     }
   }, 15_000);
 
+  it('releases the write chain after a lock timeout so a later write can complete', async () => {
+    const { runtime, cleanup } = await createRuntime();
+    const fsPromises = await import('fs/promises');
+    try {
+      const projectID = 'lock-timeout-recover';
+      const configPath = runtime.resolveProjectConfigPath(projectID);
+      const lockPath = `${configPath}.lock`;
+      await fsPromises.mkdir(path.dirname(configPath), { recursive: true });
+      await writeFile(lockPath, JSON.stringify({
+        pid: process.pid,
+        at: Date.now(),
+      }));
+
+      await expect(runtime.upsertScheduledTask(projectID, {
+        name: 'blocked-then-recover',
+        enabled: true,
+        schedule: { kind: 'daily', time: '11:00', timezone: 'UTC' },
+        execution: { prompt: 'Run', providerID: 'openai', modelID: 'gpt-4.1' },
+      })).rejects.toThrow(/timeout acquiring project config lock/);
+
+      // Remove the hostile lock. A wedged in-process chain would hang forever here.
+      await fsPromises.unlink(lockPath);
+
+      const created = await Promise.race([
+        runtime.upsertScheduledTask(projectID, {
+          name: 'after-timeout',
+          enabled: true,
+          schedule: { kind: 'daily', time: '12:00', timezone: 'UTC' },
+          execution: { prompt: 'Run after timeout', providerID: 'openai', modelID: 'gpt-4.1' },
+        }),
+        new Promise((_, reject) => {
+          setTimeout(() => reject(new Error('second write hung after lock timeout')), 3_000);
+        }),
+      ]);
+
+      expect(created.created).toBe(true);
+      expect(created.task.name).toBe('after-timeout');
+      const listed = await runtime.listScheduledTasks(projectID);
+      expect(listed).toHaveLength(1);
+      expect(listed[0].name).toBe('after-timeout');
+    } finally {
+      await cleanup();
+    }
+  }, 20_000);
+
   it('recovers from an unparseable lock using mtime age', async () => {
     const { runtime, cleanup } = await createRuntime();
     const fsPromises = await import('fs/promises');

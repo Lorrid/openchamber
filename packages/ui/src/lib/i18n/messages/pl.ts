@@ -359,6 +359,7 @@ export const dict: Record<I18nKey, string> = {
   'sessions.scheduledTasks.dialog.toast.deleted': 'Zaplanowane zadanie usunięte',
   'sessions.scheduledTasks.dialog.toast.deleteFailed': 'Nie udało się usunąć zadania',
   'sessions.scheduledTasks.dialog.toast.started': 'Zadanie uruchomione',
+  'sessions.scheduledTasks.dialog.toast.startedPersistWarning': 'Zadanie zostało uruchomione, ale nie udało się zapisać jego stanu. Może nadal być pokazywane jako uruchomione do następnego udanego uruchomienia.',
   'sessions.scheduledTasks.dialog.toast.runFailed': 'Nie udało się uruchomić zadania',
   'sessions.scheduledTasks.dialog.confirm.deleteTask': 'Usunąć zaplanowane zadanie "{taskName}"?',
   'sessions.scheduledTasks.dialog.schedule.daily': 'Codziennie {time}',

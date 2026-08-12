@@ -231,6 +231,7 @@ export const dict = {
   'sessions.scheduledTasks.dialog.toast.deleted': 'Scheduled task deleted',
   'sessions.scheduledTasks.dialog.toast.deleteFailed': 'Failed to delete task',
   'sessions.scheduledTasks.dialog.toast.started': 'Task started',
+  'sessions.scheduledTasks.dialog.toast.startedPersistWarning': 'Task started, but its status could not be saved. It may still show as running until the next successful run.',
   'sessions.scheduledTasks.dialog.toast.runFailed': 'Failed to run task',
   'sessions.scheduledTasks.dialog.confirm.deleteTask': 'Delete scheduled task "{taskName}"?',
   'sessions.scheduledTasks.dialog.schedule.daily': 'Daily {time}',

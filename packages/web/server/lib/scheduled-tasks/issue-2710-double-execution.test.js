@@ -420,9 +420,14 @@ describe('issue 2710: daily scheduled task double execution at the configured ti
     );
 
     let claimAttempts = 0;
-    projectConfigRuntime.updateScheduledTaskStateIf = vi.fn(async () => {
-      claimAttempts += 1;
-      throw new Error('timeout acquiring project config lock for p1');
+    const originalClaim = projectConfigRuntime.updateScheduledTaskStateIf;
+    projectConfigRuntime.updateScheduledTaskStateIf = vi.fn(async (pid, tid, predicate, patch) => {
+      // Claim patches set lastScheduledFor; failure-recording patches set lastStatus error.
+      if (Object.prototype.hasOwnProperty.call(patch || {}, 'lastScheduledFor')) {
+        claimAttempts += 1;
+        throw new Error('timeout acquiring project config lock for p1');
+      }
+      return originalClaim(pid, tid, predicate, patch);
     });
 
     const runtime = createScheduledTasksRuntime(createRuntimeDeps(projectConfigRuntime));
@@ -438,6 +443,45 @@ describe('issue 2710: daily scheduled task double execution at the configured ti
     // Next calendar occurrence (tomorrow 15:00) may attempt once more.
     await vi.advanceTimersByTimeAsync(24 * HOUR);
     expect(claimAttempts).toBe(2);
+
+    runtime.stop();
+  });
+
+  it('once claim failure records an error status instead of leaving the task silently inert', async () => {
+    vi.setSystemTime(UTC(2026, 0, 1, 8, 0, 0));
+    const projectConfigRuntime = createSharedProjectConfigRuntime(makeTask({
+      kind: 'once',
+      date: '2026-01-01',
+      time: '09:00',
+    }));
+
+    const originalClaim = projectConfigRuntime.updateScheduledTaskStateIf;
+    projectConfigRuntime.updateScheduledTaskStateIf = vi.fn(async (pid, tid, predicate, patch) => {
+      if (Object.prototype.hasOwnProperty.call(patch || {}, 'lastScheduledFor')) {
+        throw new Error('timeout acquiring project config lock for p1');
+      }
+      return originalClaim(pid, tid, predicate, patch);
+    });
+
+    const runtime = createScheduledTasksRuntime(createRuntimeDeps(projectConfigRuntime));
+    await runtime.start();
+    await vi.advanceTimersByTimeAsync(HOUR + 3_000);
+
+    expect(sdk.sessionCreates.length).toBe(0);
+    const tasks = await projectConfigRuntime.listScheduledTasks('p1');
+    expect(tasks[0].state.lastStatus).toBe('error');
+    expect(tasks[0].state.lastError).toMatch(/Scheduled claim failed/);
+    expect(tasks[0].enabled).toBe(true);
+
+    // No silent delay-0 spin after the failed once claim.
+    const errorWrites = projectConfigRuntime.updateScheduledTaskStateIf.mock.calls
+      .filter(([, , , patch]) => patch?.lastStatus === 'error')
+      .length;
+    await vi.advanceTimersByTimeAsync(30_000);
+    const errorWritesAfter = projectConfigRuntime.updateScheduledTaskStateIf.mock.calls
+      .filter(([, , , patch]) => patch?.lastStatus === 'error')
+      .length;
+    expect(errorWritesAfter).toBe(errorWrites);
 
     runtime.stop();
   });
