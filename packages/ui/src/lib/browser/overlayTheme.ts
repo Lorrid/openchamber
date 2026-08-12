@@ -18,6 +18,8 @@ const FALLBACK: BrowserAnnotationOverlayTheme = {
   primaryContrast: 'rgb(255, 255, 255)',
   surface: 'rgb(24, 24, 27)',
   surfaceElevated: 'rgb(32, 32, 36)',
+  glassSurface: 'rgba(32, 32, 36, 0.64)',
+  glassFilter: 'blur(26px) saturate(1.16)',
   border: 'rgba(255, 255, 255, 0.14)',
   text: 'rgb(244, 244, 245)',
   mutedText: 'rgba(244, 244, 245, 0.62)',
@@ -25,6 +27,7 @@ const FALLBACK: BrowserAnnotationOverlayTheme = {
 
 type Probe = {
   readonly read: (value: string) => string;
+  readonly readVariable: (name: string) => string;
   readonly dispose: () => void;
 };
 
@@ -41,6 +44,9 @@ const createProbe = (): Probe | null => {
       const resolved = window.getComputedStyle(element).backgroundColor;
       return resolved && resolved !== 'rgba(0, 0, 0, 0)' ? resolved : '';
     },
+    readVariable: (name: string): string => (
+      window.getComputedStyle(document.documentElement).getPropertyValue(name).trim()
+    ),
     dispose: () => element.remove(),
   };
 };
@@ -59,8 +65,17 @@ export const resolveAnnotationOverlayTheme = (colorScheme: 'light' | 'dark'): Br
       probe.read(`color-mix(in srgb, var(${token}) ${percent}%, transparent)`) || fallback
     );
 
+    // The same recipe the app's tooltips and popovers use, resolved here
+    // because the overlay cannot reach our stylesheet from inside the page.
+    const glassOpacity = probe.readVariable('--oc-glass-tooltip-opacity') || '62%';
+    const blur = probe.readVariable('--oc-glass-blur') || '26px';
+    const saturation = probe.readVariable('--oc-glass-saturation') || '1.16';
+
     return {
       colorScheme,
+      glassSurface: probe.read(`color-mix(in srgb, var(--surface-elevated) ${glassOpacity}, transparent)`)
+        || FALLBACK.glassSurface,
+      glassFilter: `blur(${blur}) saturate(${saturation})`,
       primary: read('--primary', FALLBACK.primary),
       primarySoft: mix('--primary', 16, FALLBACK.primarySoft),
       primaryFaint: mix('--primary', 10, FALLBACK.primaryFaint),

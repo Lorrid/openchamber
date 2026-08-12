@@ -1220,7 +1220,7 @@ export const dict: Record<I18nKey, string> = {
   'contextPanel.browser.annotate.noSession': '注釈を添付する前にチャットセッションを開いてください',
   'contextPanel.browser.annotate.noPage': '注釈を付ける前にページを読み込んでください',
   'contextPanel.browser.annotate.failed': 'このページに注釈を付けられませんでした',
-  'contextPanel.browser.annotate.tool.select': '選択',
+  'contextPanel.browser.annotate.tool.element': '要素',
   'contextPanel.browser.annotate.tool.region': '範囲',
   'contextPanel.browser.annotate.tool.draw': '描画',
   'contextPanel.browser.annotate.commentPlaceholder': '変更内容を記述...',

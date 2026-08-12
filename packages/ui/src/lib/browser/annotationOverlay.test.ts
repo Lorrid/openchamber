@@ -15,13 +15,15 @@ const theme: BrowserAnnotationOverlayTheme = {
   primaryContrast: 'rgb(255, 255, 255)',
   surface: 'rgb(10, 10, 10)',
   surfaceElevated: 'rgb(20, 20, 20)',
+  glassSurface: 'rgba(20, 20, 20, 0.64)',
+  glassFilter: 'blur(26px) saturate(1.16)',
   border: 'rgb(40, 40, 40)',
   text: 'rgb(240, 240, 240)',
   mutedText: 'rgb(160, 160, 160)',
 };
 
 const labels: BrowserAnnotationOverlayLabels = {
-  select: 'Select',
+  select: 'Element',
   marquee: 'Region',
   draw: 'Draw',
   commentPlaceholder: 'Describe the change...',

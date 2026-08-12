@@ -62,7 +62,7 @@ export const useAnnotationAttach = (directory: string) => {
 export const useAnnotationOverlayLabels = (): BrowserAnnotationOverlayLabels => {
   const { t } = useI18n();
   return React.useMemo(() => ({
-    select: t('contextPanel.browser.annotate.tool.select'),
+    select: t('contextPanel.browser.annotate.tool.element'),
     marquee: t('contextPanel.browser.annotate.tool.region'),
     draw: t('contextPanel.browser.annotate.tool.draw'),
     commentPlaceholder: t('contextPanel.browser.annotate.commentPlaceholder'),

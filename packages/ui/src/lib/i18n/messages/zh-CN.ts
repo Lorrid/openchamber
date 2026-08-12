@@ -1224,7 +1224,7 @@ export const dict: Record<I18nKey, string> = {
   'contextPanel.browser.annotate.noSession': '附加标注前请先打开聊天会话',
   'contextPanel.browser.annotate.noPage': '标注前请先加载页面',
   'contextPanel.browser.annotate.failed': '无法标注此页面',
-  'contextPanel.browser.annotate.tool.select': '选择',
+  'contextPanel.browser.annotate.tool.element': '元素',
   'contextPanel.browser.annotate.tool.region': '区域',
   'contextPanel.browser.annotate.tool.draw': '绘制',
   'contextPanel.browser.annotate.commentPlaceholder': '描述所需更改...',

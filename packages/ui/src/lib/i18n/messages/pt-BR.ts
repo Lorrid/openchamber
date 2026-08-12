@@ -1224,7 +1224,7 @@ export const dict: Record<I18nKey, string> = {
   "contextPanel.browser.annotate.noSession": "Abra uma sessão de chat antes de anexar uma anotação",
   "contextPanel.browser.annotate.noPage": "Carregue uma página antes de anotar",
   "contextPanel.browser.annotate.failed": "Não foi possível anotar esta página",
-  "contextPanel.browser.annotate.tool.select": "Selecionar",
+  "contextPanel.browser.annotate.tool.element": "Elemento",
   "contextPanel.browser.annotate.tool.region": "Região",
   "contextPanel.browser.annotate.tool.draw": "Desenhar",
   "contextPanel.browser.annotate.commentPlaceholder": "Descreva a mudança...",

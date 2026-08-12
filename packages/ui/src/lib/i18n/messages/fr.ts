@@ -2894,7 +2894,7 @@ export const dict = {
   'contextPanel.browser.annotate.noSession': 'Ouvrez une session de discussion avant de joindre une annotation',
   'contextPanel.browser.annotate.noPage': 'Chargez une page avant d’annoter',
   'contextPanel.browser.annotate.failed': 'Impossible d’annoter cette page',
-  'contextPanel.browser.annotate.tool.select': 'Sélection',
+  'contextPanel.browser.annotate.tool.element': 'Élément',
   'contextPanel.browser.annotate.tool.region': 'Zone',
   'contextPanel.browser.annotate.tool.draw': 'Dessin',
   'contextPanel.browser.annotate.commentPlaceholder': 'Décrivez le changement...',

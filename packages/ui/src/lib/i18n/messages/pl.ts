@@ -1538,7 +1538,7 @@ export const dict: Record<I18nKey, string> = {
   'contextPanel.browser.annotate.noSession': 'Otwórz sesję czatu przed dołączeniem adnotacji',
   'contextPanel.browser.annotate.noPage': 'Wczytaj stronę przed dodaniem adnotacji',
   'contextPanel.browser.annotate.failed': 'Nie udało się dodać adnotacji do tej strony',
-  'contextPanel.browser.annotate.tool.select': 'Zaznacz',
+  'contextPanel.browser.annotate.tool.element': 'Element',
   'contextPanel.browser.annotate.tool.region': 'Obszar',
   'contextPanel.browser.annotate.tool.draw': 'Rysuj',
   'contextPanel.browser.annotate.commentPlaceholder': 'Opisz zmianę...',

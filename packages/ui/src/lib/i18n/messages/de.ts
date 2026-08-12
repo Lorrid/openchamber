@@ -1074,7 +1074,7 @@ export const dict = {
   'contextPanel.browser.annotate.noSession': 'Öffne eine Chat-Sitzung, bevor du eine Annotation anhängst',
   'contextPanel.browser.annotate.noPage': 'Lade eine Seite, bevor du annotierst',
   'contextPanel.browser.annotate.failed': 'Diese Seite konnte nicht annotiert werden',
-  'contextPanel.browser.annotate.tool.select': 'Auswählen',
+  'contextPanel.browser.annotate.tool.element': 'Element',
   'contextPanel.browser.annotate.tool.region': 'Bereich',
   'contextPanel.browser.annotate.tool.draw': 'Zeichnen',
   'contextPanel.browser.annotate.commentPlaceholder': 'Änderung beschreiben...',

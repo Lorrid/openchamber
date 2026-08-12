@@ -1224,7 +1224,7 @@ export const dict: Record<I18nKey, string> = {
   'contextPanel.browser.annotate.noSession': '주석을 첨부하기 전에 채팅 세션을 여세요',
   'contextPanel.browser.annotate.noPage': '주석을 달기 전에 페이지를 불러오세요',
   'contextPanel.browser.annotate.failed': '이 페이지에 주석을 달 수 없습니다',
-  'contextPanel.browser.annotate.tool.select': '선택',
+  'contextPanel.browser.annotate.tool.element': '요소',
   'contextPanel.browser.annotate.tool.region': '영역',
   'contextPanel.browser.annotate.tool.draw': '그리기',
   'contextPanel.browser.annotate.commentPlaceholder': '변경 사항을 설명하세요...',

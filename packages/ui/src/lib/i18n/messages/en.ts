@@ -1223,7 +1223,7 @@ export const dict = {
   'contextPanel.browser.annotate.noSession': 'Open a chat session before attaching an annotation',
   'contextPanel.browser.annotate.noPage': 'Load a page before annotating',
   'contextPanel.browser.annotate.failed': 'Could not annotate this page',
-  'contextPanel.browser.annotate.tool.select': 'Select',
+  'contextPanel.browser.annotate.tool.element': 'Element',
   'contextPanel.browser.annotate.tool.region': 'Region',
   'contextPanel.browser.annotate.tool.draw': 'Draw',
   'contextPanel.browser.annotate.commentPlaceholder': 'Describe the change...',

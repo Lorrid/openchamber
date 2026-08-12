@@ -31,6 +31,10 @@ export type BrowserAnnotationOverlayTheme = {
   readonly primaryContrast: string;
   readonly surface: string;
   readonly surfaceElevated: string;
+  /** Translucent elevated surface, matching the app's floating panels. */
+  readonly glassSurface: string;
+  /** A ready `backdrop-filter` value; '' when the theme has no glass. */
+  readonly glassFilter: string;
   readonly border: string;
   readonly text: string;
   readonly mutedText: string;
@@ -211,11 +215,11 @@ export const buildAnnotationOverlayScript = (
     '.layer{position:fixed;inset:0;pointer-events:none}',
     '.box{position:fixed;left:0;top:0;display:none;pointer-events:none;border:1.5px solid ' + THEME.primary + ';background:' + THEME.primarySoft + ';border-radius:2px}',
     '.label{position:fixed;left:0;top:0;display:none;pointer-events:none;padding:1px 6px;border-radius:4px;background:' + THEME.primary + ';color:' + THEME.primaryContrast + ';font-size:11px;line-height:17px;white-space:nowrap;font-weight:600}',
-    '.tools{position:fixed;top:14px;left:50%;transform:translateX(-50%);display:flex;gap:2px;padding:4px;border-radius:999px;border:1px solid ' + THEME.border + ';background:' + THEME.surfaceElevated + ';box-shadow:0 6px 20px rgba(0,0,0,.24);pointer-events:auto}',
+    '.tools{position:fixed;top:14px;left:50%;transform:translateX(-50%);display:flex;gap:2px;padding:4px;border-radius:999px;border:1px solid ' + THEME.border + ';background:' + THEME.glassSurface + ';-webkit-backdrop-filter:' + THEME.glassFilter + ';backdrop-filter:' + THEME.glassFilter + ';box-shadow:0 6px 20px rgba(0,0,0,.24);pointer-events:auto}',
     '.tools button{appearance:none;border:none;background:transparent;color:' + THEME.mutedText + ';border-radius:999px;padding:5px 14px;font-size:12px;line-height:18px;font-weight:500;cursor:pointer;white-space:nowrap}',
     '.tools button:hover{background:' + THEME.primaryFaint + '}',
     '.tools button[aria-pressed="true"]{background:' + THEME.primarySoft + ';color:' + THEME.primary + ';font-weight:600}',
-    '.editor{position:fixed;left:0;top:0;display:none;align-items:center;gap:8px;width:min(420px,calc(100vw - 24px));padding:6px;padding-left:16px;border-radius:22px;border:1px solid ' + THEME.border + ';background:' + THEME.surfaceElevated + ';box-shadow:0 8px 28px rgba(0,0,0,.3);pointer-events:auto}',
+    '.editor{position:fixed;left:0;top:0;display:none;align-items:center;gap:8px;width:min(420px,calc(100vw - 24px));padding:6px;padding-left:16px;border-radius:22px;border:1px solid ' + THEME.border + ';background:' + THEME.glassSurface + ';-webkit-backdrop-filter:' + THEME.glassFilter + ';backdrop-filter:' + THEME.glassFilter + ';box-shadow:0 8px 28px rgba(0,0,0,.3);pointer-events:auto}',
     '.editor textarea{flex:1;min-width:0;resize:none;border:none;background:transparent;color:' + THEME.text + ';font-size:13px;line-height:20px;outline:none;padding:6px 0;min-height:32px;max-height:104px;display:block}',
     '.editor textarea::placeholder{color:' + THEME.mutedText + '}',
     '.editor button{appearance:none;border:none;background:' + THEME.primary + ';color:' + THEME.primaryContrast + ';border-radius:999px;padding:8px 18px;font-size:12px;line-height:18px;font-weight:600;cursor:pointer;white-space:nowrap}',
