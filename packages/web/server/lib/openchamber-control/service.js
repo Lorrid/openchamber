@@ -1,12 +1,13 @@
 import path from 'node:path';
 import { createOpencodeClient } from '@opencode-ai/sdk/v2';
 import { OpenChamberControlError, asControlError } from './error.js';
-import { OPENCHAMBER_CONTROL_ACTIONS } from './actions.js';
+import { OPENCHAMBER_ALL_ACTIONS } from './actions.js';
 
 const DEFAULT_WAIT_TIMEOUT_SECONDS = 600;
 const MAX_WAIT_TIMEOUT_SECONDS = 86_400;
 const WAIT_POLL_INTERVAL_MS = 500;
-const CONTROL_ACTIONS = new Set(OPENCHAMBER_CONTROL_ACTIONS);
+// One service, both capabilities: which tool asked is the caller's concern.
+const CONTROL_ACTIONS = new Set(OPENCHAMBER_ALL_ACTIONS);
 const SCHEDULE_TASK_ID_ACTIONS = new Set([
   'schedule.run',
   'schedule.delete',

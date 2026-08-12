@@ -1,3 +1,12 @@
+/**
+ * Two capabilities, two tools.
+ *
+ * Controlling sessions and driving a page are different intents, and a single
+ * tool description covering both is vaguer than either — which is how a model
+ * ends up calling the wrong one. Separate tools also mean turning one off
+ * removes it entirely, parameters included, rather than leaving its inputs
+ * visible in a shared schema.
+ */
 export const OPENCHAMBER_CONTROL_ACTION_DEFINITIONS = Object.freeze([
   { action: 'projects.list', title: 'List configured projects', description: 'List configured projects; no parameters' },
   { action: 'models.list', title: 'Show model preferences', description: 'Show default, favorite, and recent model preferences; no parameters' },
@@ -13,6 +22,21 @@ export const OPENCHAMBER_CONTROL_ACTION_DEFINITIONS = Object.freeze([
   { action: 'schedule.run', title: 'Run a scheduled task', description: 'Run taskId; scope with projectId or directory' },
   { action: 'schedule.delete', title: 'Delete a scheduled task', description: 'Delete taskId; scope with projectId or directory' },
   { action: 'schedule.toggle', title: 'Enable or disable a scheduled task', description: 'Enable or disable taskId; requires the disabled boolean' },
+]);
+
+const OPENCHAMBER_CONTROL_ACTIONS = Object.freeze(
+  OPENCHAMBER_CONTROL_ACTION_DEFINITIONS.map(({ action }) => action),
+);
+
+export const OPENCHAMBER_AGENT_TOOL_ACTION_DEFINITIONS = Object.freeze(
+  OPENCHAMBER_CONTROL_ACTION_DEFINITIONS.filter(({ agentExposed }) => agentExposed !== false),
+);
+
+export const OPENCHAMBER_AGENT_TOOL_ACTIONS = Object.freeze(
+  OPENCHAMBER_AGENT_TOOL_ACTION_DEFINITIONS.map(({ action }) => action),
+);
+
+export const OPENCHAMBER_WEB_ACTION_DEFINITIONS = Object.freeze([
   { action: 'browser.open', title: 'Open a page in the browser panel', description: 'Open url in the in-app browser panel; use it to look at the running app. Set viewport to mobile, tablet or desktop to lay the page out at that size' },
   { action: 'browser.snapshot', title: 'Read the open page', description: 'Read the open page: url, title, visible text, and interactive elements with the selectors the other browser actions accept. Pass selector to read only that part of a long page. Reports any errors the page logged' },
   { action: 'browser.click', title: 'Click on the open page', description: 'Click an element; give selector, or text to match a link or button by its visible label' },
@@ -24,14 +48,12 @@ export const OPENCHAMBER_CONTROL_ACTION_DEFINITIONS = Object.freeze([
   { action: 'browser.resize', title: 'Change the page viewport', description: 'Lay the open page out at a different size; viewport is mobile, tablet, desktop, or fill to use the whole panel' },
 ]);
 
-export const OPENCHAMBER_CONTROL_ACTIONS = Object.freeze(
-  OPENCHAMBER_CONTROL_ACTION_DEFINITIONS.map(({ action }) => action),
+export const OPENCHAMBER_WEB_ACTIONS = Object.freeze(
+  OPENCHAMBER_WEB_ACTION_DEFINITIONS.map(({ action }) => action),
 );
 
-export const OPENCHAMBER_AGENT_TOOL_ACTION_DEFINITIONS = Object.freeze(
-  OPENCHAMBER_CONTROL_ACTION_DEFINITIONS.filter(({ agentExposed }) => agentExposed !== false),
-);
-
-export const OPENCHAMBER_AGENT_TOOL_ACTIONS = Object.freeze(
-  OPENCHAMBER_AGENT_TOOL_ACTION_DEFINITIONS.map(({ action }) => action),
-);
+/** Everything the callback route will dispatch, whichever tool asked. */
+export const OPENCHAMBER_ALL_ACTIONS = Object.freeze([
+  ...OPENCHAMBER_CONTROL_ACTIONS,
+  ...OPENCHAMBER_WEB_ACTIONS,
+]);

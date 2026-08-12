@@ -114,6 +114,46 @@ describe('managed agent tool runtime', () => {
     expect(source).not.toContain(preparedEnv.OPENCHAMBER_AGENT_TOOL_TOKEN);
   });
 
+  it('emits both tools, each carrying only its own actions and inputs', async () => {
+    const { runtime, dataDir } = await createRuntime();
+    await runtime.prepareManagedOpenCodeEnv();
+    const pluginPath = path.join(dataDir, 'agent-tool', 'openchamber-plugin.js');
+    const pluginModule = await import(`${pathToFileURL(pluginPath).href}?both=${Date.now()}`);
+    const { tool } = await pluginModule.OpenChamberPlugin();
+
+    const controlActions = tool.openchamber.args.action.enum;
+    const webActions = tool.openchamber_web.args.action.enum;
+    expect(webActions).toContain('browser.open');
+    expect(controlActions).not.toContain('browser.open');
+    expect(webActions).not.toContain('session.create');
+
+    // Turning one tool off has to remove its inputs too, not just its actions.
+    expect(Object.keys(tool.openchamber_web.args.parameters.properties)).toContain('url');
+    expect(Object.keys(tool.openchamber.args.parameters.properties)).not.toContain('url');
+    expect(Object.keys(tool.openchamber.args.parameters.properties)).toContain('sessionId');
+  });
+
+  it('omits a tool the user turned off', async () => {
+    const { runtime, dataDir } = await createRuntime();
+    await runtime.prepareManagedOpenCodeEnv({ includeControl: false, includeWeb: true });
+    const pluginPath = path.join(dataDir, 'agent-tool', 'openchamber-plugin.js');
+    const pluginModule = await import(`${pathToFileURL(pluginPath).href}?web=${Date.now()}`);
+    const { tool } = await pluginModule.OpenChamberPlugin();
+
+    expect(Object.keys(tool)).toEqual(['openchamber_web']);
+  });
+
+  it('refuses to inject a plugin with no tools in it', async () => {
+    const { runtime } = await createRuntime();
+    let failed = false;
+    try {
+      await runtime.prepareManagedOpenCodeEnv({ includeControl: false, includeWeb: false });
+    } catch {
+      failed = true;
+    }
+    expect(failed).toBe(true);
+  });
+
   it('executes actions through the shared control service', async () => {
     const executeAction = vi.fn(async () => ({ projects: [] }));
     const { runtime } = await createRuntime({ executeAction });

@@ -3,15 +3,29 @@ import { pathToFileURL } from 'node:url';
 import {
   OPENCHAMBER_AGENT_TOOL_ACTION_DEFINITIONS,
   OPENCHAMBER_AGENT_TOOL_ACTIONS,
+  OPENCHAMBER_WEB_ACTION_DEFINITIONS,
+  OPENCHAMBER_WEB_ACTIONS,
 } from '../openchamber-control/actions.js';
 
 const TOOL_SCHEMA_VERSION = 1;
-const ACTIONS = new Set(OPENCHAMBER_AGENT_TOOL_ACTIONS);
+// Everything either managed tool may ask for; the agent allowlist stays
+// narrower than the full control surface.
+const ACTIONS = new Set([...OPENCHAMBER_AGENT_TOOL_ACTIONS, ...OPENCHAMBER_WEB_ACTIONS]);
 const AGENT_TOOL_ACTION_TITLES = Object.fromEntries(
-  OPENCHAMBER_AGENT_TOOL_ACTION_DEFINITIONS.map(({ action, title }) => [action, title]),
+  [...OPENCHAMBER_AGENT_TOOL_ACTION_DEFINITIONS, ...OPENCHAMBER_WEB_ACTION_DEFINITIONS]
+    .map(({ action, title }) => [action, title]),
 );
 
-const PLUGIN_PARAMETER_PROPERTIES = {
+/**
+ * Each tool carries only the inputs its own actions take.
+ *
+ * A shared parameter object would leave a disabled capability's inputs visible
+ * in the other tool's schema, which is both misleading and paid for in context
+ * on every call.
+ */
+const WEB_PARAMETER_NAMES = ['url', 'selector', 'text', 'value', 'submit', 'direction', 'viewport'];
+
+const ALL_PARAMETER_PROPERTIES = {
   projectId: { type: 'string', description: 'Configured project ID; do not combine with directory' },
   directory: { type: 'string', description: 'Absolute checkout or session directory; defaults to the current session directory' },
   sessionId: { type: 'string' },
@@ -53,6 +67,19 @@ const PLUGIN_PARAMETER_PROPERTIES = {
   viewport: { type: 'string', enum: ['mobile', 'tablet', 'desktop', 'fill'], description: 'Page layout size; snapshots report which one is in effect' },
 };
 
+const pickParameters = (names) => Object.fromEntries(
+  Object.entries(ALL_PARAMETER_PROPERTIES).filter(([name]) => names.includes(name)),
+);
+
+const CONTROL_PARAMETER_PROPERTIES = pickParameters(
+  Object.keys(ALL_PARAMETER_PROPERTIES).filter((name) => !WEB_PARAMETER_NAMES.includes(name)),
+);
+const WEB_PARAMETER_PROPERTIES = pickParameters(WEB_PARAMETER_NAMES);
+
+const CONTROL_TOOL_DESCRIPTION = "Control OpenChamber projects, sessions, and scheduled tasks on the user's behalf. Sessions and scheduled tasks you create are for the user to follow and interact with; never use this tool to delegate parts of your own current task. Use one action per call. Scope with projectId or directory; omit both to use the current session directory. Session dispatches return immediately by default and you receive no notification when a dispatched session finishes, so never promise to report back on it; the user follows it in OpenChamber; a dispatched session needs no follow-up from you. If the user later asks how it went, use session.messages (add wait to block until it is idle, lastAssistant for just the final answer) — session.send always sends a NEW prompt and never just waits. Set wait only when the user asks or the next step requires the completed result. Session and worktree deletion are unavailable.";
+
+const WEB_TOOL_DESCRIPTION = "Look at and interact with a web page in OpenChamber's browser panel, so you can check your own work rather than describing what you expect. Use one action per call. Open a page, snapshot it to read its text and its interactive elements, then click, type or scroll using the selectors the snapshot returned; snapshots also report any errors the page logged. Pass a selector to browser.snapshot to read one part of a long page. browser.inspect returns computed styles when the question is how something renders. Set viewport to check a layout at mobile, tablet or desktop size. The page runs with the user's real logins, so treat what you see as their live session.";
+
 const asNonEmptyString = (value) => {
   if (typeof value !== 'string') return null;
   const trimmed = value.trim();
@@ -75,14 +102,19 @@ const isLoopbackAddress = (value) => {
     || address === '::ffff:127.0.0.1';
 };
 
-const createPluginSource = () => String.raw`
-export const OpenChamberPlugin = async () => ({
-  tool: {
-    openchamber: {
-      description: "Control OpenChamber projects, sessions, and scheduled tasks on the user's behalf. Sessions and scheduled tasks you create are for the user to follow and interact with; never use this tool to delegate parts of your own current task. Use one action per call. Scope with projectId or directory; omit both to use the current session directory. Session dispatches return immediately by default and you receive no notification when a dispatched session finishes, so never promise to report back on it; the user follows it in OpenChamber; a dispatched session needs no follow-up from you. If the user later asks how it went, use session.messages (add wait to block until it is idle, lastAssistant for just the final answer) — session.send always sends a NEW prompt and never just waits. Set wait only when the user asks or the next step requires the completed result. Session and worktree deletion are unavailable.",
+/**
+ * One template, one entry per enabled capability.
+ *
+ * Both tools speak to the same callback with the same envelope; only the action
+ * set, the inputs and the description differ. Generating them from one template
+ * keeps the transport, metadata and failure handling identical, which is what
+ * the caller depends on.
+ */
+const createToolEntry = ({ name, description, actions, definitions, parameters }) => String.raw`    ${name}: {
+      description: ${JSON.stringify(description)},
       args: {
-        action: { type: "string", enum: ${JSON.stringify(OPENCHAMBER_AGENT_TOOL_ACTIONS)}, oneOf: ${JSON.stringify(OPENCHAMBER_AGENT_TOOL_ACTION_DEFINITIONS.map(({ action, description }) => ({ const: action, description })))}, description: "OpenChamber action to perform" },
-        parameters: { type: "object", properties: ${JSON.stringify(PLUGIN_PARAMETER_PROPERTIES)}, additionalProperties: false, description: "Inputs for the action; use an empty object when none are needed" },
+        action: { type: "string", enum: ${JSON.stringify(actions)}, oneOf: ${JSON.stringify(definitions.map((entry) => ({ const: entry.action, description: entry.description })))}, description: "OpenChamber action to perform" },
+        parameters: { type: "object", properties: ${JSON.stringify(parameters)}, additionalProperties: false, description: "Inputs for the action; use an empty object when none are needed" },
       },
       async execute(input, context) {
         const args = { ...(input.parameters ?? {}), action: input.action }
@@ -91,7 +123,7 @@ export const OpenChamberPlugin = async () => ({
         context.metadata({
           title,
           metadata: {
-            openchamber: {
+            ${name}: {
               schemaVersion: ${TOOL_SCHEMA_VERSION},
               action: args.action,
               description: title,
@@ -126,7 +158,7 @@ export const OpenChamberPlugin = async () => ({
           context.metadata({
             title,
             metadata: {
-              openchamber: {
+              ${name}: {
                 schemaVersion: ${TOOL_SCHEMA_VERSION},
                 action: args.action,
                 description: title,
@@ -142,9 +174,35 @@ export const OpenChamberPlugin = async () => ({
         }
       },
     },
-  },
+`;
+
+const createPluginSource = ({ includeControl, includeWeb }) => {
+  const entries = [];
+  if (includeControl) {
+    entries.push(createToolEntry({
+      name: 'openchamber',
+      description: CONTROL_TOOL_DESCRIPTION,
+      actions: OPENCHAMBER_AGENT_TOOL_ACTIONS,
+      definitions: OPENCHAMBER_AGENT_TOOL_ACTION_DEFINITIONS,
+      parameters: CONTROL_PARAMETER_PROPERTIES,
+    }));
+  }
+  if (includeWeb) {
+    entries.push(createToolEntry({
+      name: 'openchamber_web',
+      description: WEB_TOOL_DESCRIPTION,
+      actions: OPENCHAMBER_WEB_ACTIONS,
+      definitions: OPENCHAMBER_WEB_ACTION_DEFINITIONS,
+      parameters: WEB_PARAMETER_PROPERTIES,
+    }));
+  }
+
+  return `export const OpenChamberPlugin = async () => ({
+  tool: {
+${entries.join('')}  },
 })
 `;
+};
 
 const mergePluginConfig = (rawConfig, pluginUrl) => {
   const errors = [];
@@ -177,13 +235,16 @@ export const createAgentToolRuntime = (dependencies) => {
   const pluginPath = path.join(pluginDirectory, 'openchamber-plugin.js');
   let activeToken = null;
 
-  const prepareManagedOpenCodeEnv = async () => {
+  const prepareManagedOpenCodeEnv = async ({ includeControl = true, includeWeb = true } = {}) => {
     const port = getActivePort();
     if (!Number.isInteger(port) || port <= 0) {
       throw new Error('OpenChamber listener port is unavailable for managed tool injection');
     }
+    if (!includeControl && !includeWeb) {
+      throw new Error('At least one OpenChamber managed tool must be enabled to inject the plugin');
+    }
     await fsPromises.mkdir(pluginDirectory, { recursive: true });
-    await fsPromises.writeFile(pluginPath, createPluginSource(), { mode: 0o600 });
+    await fsPromises.writeFile(pluginPath, createPluginSource({ includeControl, includeWeb }), { mode: 0o600 });
     activeToken = crypto.randomBytes(32).toString('base64url');
     const pluginUrl = pathToFileURL(pluginPath).href;
     return {
