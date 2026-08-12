@@ -2878,6 +2878,7 @@ export const dict = {
   'projectActions.toast.multipleServers': 'Plusieurs serveurs ont démarré — choisissez-en un dans le panneau navigateur',
   'contextPanel.browser.devServers.justStarted': 'Démarrés à l’instant',
   'contextPanel.browser.devServers.unavailable': 'Impossible de vérifier les serveurs de développement actifs.',
+  'contextPanel.browser.devServers.remoteOnly': 'Ils tournent sur la machine qui héberge OpenChamber. Les ouvrir nécessite l’application de bureau.',
   'contextPanel.browser.annotate.toggle': 'Annoter la page',
   'contextPanel.browser.annotate.intro': 'Ceci est une sélection annotée du navigateur intégré.',
   'contextPanel.browser.annotate.attached': 'Annotation jointe à la discussion',

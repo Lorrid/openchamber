@@ -1207,6 +1207,7 @@ export const dict = {
   'projectActions.toast.multipleServers': 'Several servers started — pick one in the browser panel',
   'contextPanel.browser.devServers.justStarted': 'Just started',
   'contextPanel.browser.devServers.unavailable': 'Could not check for running dev servers.',
+  'contextPanel.browser.devServers.remoteOnly': 'These run on the machine hosting OpenChamber. Opening them needs the desktop app.',
   'contextPanel.browser.annotate.toggle': 'Annotate page',
   'contextPanel.browser.annotate.intro': 'This is an annotated selection from the in-app browser.',
   'contextPanel.browser.annotate.attached': 'Annotation attached to chat',

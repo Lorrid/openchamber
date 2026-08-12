@@ -34,14 +34,19 @@ describe('browser control broker', () => {
     await expect(broker.request('browser.open', { url: 'http://a/' })).rejects.toThrow(BrowserControlError);
   });
 
-  test('says the browser is unreachable rather than that the action failed', async () => {
+  test('describes the environment rather than telling the agent what to do', async () => {
     const { broker } = createBroker({ listeners: 0 });
     try {
-      await broker.request('browser.open', {});
+      await broker.request('browser.snapshot', {});
       throw new Error('expected rejection');
     } catch (error) {
       expect(error.status).toBe(503);
-      expect(error.message).toContain('client is connected');
+      // The agent reads this, not the user: it must state the limitation and
+      // where the capability exists, without issuing an instruction the agent
+      // cannot carry out.
+      expect(error.message).toContain('desktop application');
+      expect(error.message).toContain('Nothing was changed');
+      expect(error.message).not.toContain('Ask the user to open');
     }
   });
 
@@ -115,5 +120,47 @@ describe('browser control broker', () => {
     const controller = new AbortController();
     controller.abort();
     await expect(broker.request('browser.snapshot', {}, { signal: controller.signal })).rejects.toThrow('cancelled');
+  });
+});
+
+/**
+ * Whether a page can be driven depends on which client is connected, not on the
+ * server: a desktop shell and a browser tab can be attached to one server at
+ * once, and either may arrive or leave at any moment. The broker is told how
+ * many clients could actually perform each action.
+ */
+describe('client capability', () => {
+  const createCapabilityBroker = (capableFor) => {
+    const emitted = [];
+    let sequence = 0;
+    const broker = createBrowserControlBroker({
+      emitRequest: (payload) => {
+        emitted.push(payload);
+        return capableFor(payload.action);
+      },
+      createId: () => { sequence += 1; return `req-${sequence}`; },
+    });
+    return { broker, emitted };
+  };
+
+  test('opening a page works with a client that cannot drive one', async () => {
+    // A browser tab can display a page even though it cannot be controlled.
+    const { broker, emitted } = createCapabilityBroker((action) => (action === 'browser.open' ? 1 : 0));
+    const inflight = broker.request('browser.open', { url: 'http://localhost:3000/' });
+    broker.resolve(emitted[0].requestId, { ok: true, data: { opened: true } });
+    expect(await inflight).toEqual({ opened: true });
+  });
+
+  test('driving a page fails immediately when no client can', async () => {
+    const { broker } = createCapabilityBroker((action) => (action === 'browser.open' ? 1 : 0));
+    await expect(broker.request('browser.click', { selector: '#a' })).rejects.toThrow('desktop application');
+  });
+
+  test('driving a page works as soon as a capable client is connected', async () => {
+    // No restart, no setting: a desktop client attaching is enough.
+    const { broker, emitted } = createCapabilityBroker(() => 1);
+    const inflight = broker.request('browser.snapshot', {});
+    broker.resolve(emitted[0].requestId, { ok: true, data: { url: 'http://localhost:3000/' } });
+    expect(await inflight).toEqual({ url: 'http://localhost:3000/' });
   });
 });

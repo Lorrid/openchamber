@@ -1196,8 +1196,13 @@ const openChamberSessionService = createOpenChamberSessionService({
 const browserControlBroker = createBrowserControlBroker({
   createId: () => `browser-${crypto.randomUUID()}`,
   emitRequest: (request) => {
+    // Opening a page only needs a panel to open it in; everything else needs a
+    // client that can actually drive one. Counting the right clients is what
+    // lets the broker say "not here" instead of timing out.
+    const needsBrowserView = request.action !== 'browser.open';
     let delivered = 0;
     for (const client of uiOpenChamberEventClients) {
+      if (needsBrowserView && client.openchamberBrowserCapable !== true) continue;
       try {
         writeSseEvent(client, {
           type: 'openchamber:browser-control-request',

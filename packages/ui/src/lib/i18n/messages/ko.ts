@@ -1208,6 +1208,7 @@ export const dict: Record<I18nKey, string> = {
   'projectActions.toast.multipleServers': '여러 서버가 시작되었습니다. 브라우저 패널에서 선택하세요',
   'contextPanel.browser.devServers.justStarted': '방금 시작됨',
   'contextPanel.browser.devServers.unavailable': '실행 중인 개발 서버를 확인하지 못했습니다.',
+  'contextPanel.browser.devServers.remoteOnly': '이 서버들은 OpenChamber가 실행 중인 컴퓨터에 있습니다. 열려면 데스크톱 앱이 필요합니다.',
   'contextPanel.browser.annotate.toggle': '페이지에 주석 달기',
   'contextPanel.browser.annotate.intro': '앱 내 브라우저에서 주석을 단 선택 영역입니다.',
   'contextPanel.browser.annotate.attached': '주석을 채팅에 첨부했습니다',

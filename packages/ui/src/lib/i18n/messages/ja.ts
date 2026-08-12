@@ -1204,6 +1204,7 @@ export const dict: Record<I18nKey, string> = {
   'projectActions.toast.multipleServers': '複数のサーバーが起動しました。ブラウザパネルで選んでください',
   'contextPanel.browser.devServers.justStarted': '起動したばかり',
   'contextPanel.browser.devServers.unavailable': '実行中の開発サーバーを確認できませんでした。',
+  'contextPanel.browser.devServers.remoteOnly': 'これらは OpenChamber を動かしているマシン上で動作しています。開くにはデスクトップアプリが必要です。',
   'contextPanel.browser.annotate.toggle': 'ページに注釈を付ける',
   'contextPanel.browser.annotate.intro': 'これはアプリ内ブラウザで注釈を付けた選択範囲です。',
   'contextPanel.browser.annotate.attached': '注釈をチャットに添付しました',

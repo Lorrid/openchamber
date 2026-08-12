@@ -1220,6 +1220,7 @@ export const dict: Record<I18nKey, string> = {
   'projectActions.toast.multipleServers': '啟動了多個伺服器 — 請在瀏覽器面板中選擇',
   'contextPanel.browser.devServers.justStarted': '剛剛啟動',
   'contextPanel.browser.devServers.unavailable': '無法檢查執行中的開發伺服器。',
+  'contextPanel.browser.devServers.remoteOnly': '它們執行在託管 OpenChamber 的那台機器上。要開啟它們需要桌面應用程式。',
   'contextPanel.browser.annotate.toggle': '標註頁面',
   'contextPanel.browser.annotate.intro': '這是來自應用程式內建瀏覽器的標註選取範圍。',
   'contextPanel.browser.annotate.attached': '標註已附加至聊天',

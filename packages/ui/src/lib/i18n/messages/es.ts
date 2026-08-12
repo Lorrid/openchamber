@@ -1208,6 +1208,7 @@ export const dict: Record<I18nKey, string> = {
   "projectActions.toast.multipleServers": "Se iniciaron varios servidores: elige uno en el panel del navegador",
   "contextPanel.browser.devServers.justStarted": "Recién iniciados",
   "contextPanel.browser.devServers.unavailable": "No se pudieron comprobar los servidores de desarrollo activos.",
+  "contextPanel.browser.devServers.remoteOnly": "Se ejecutan en la máquina que aloja OpenChamber. Abrirlos requiere la aplicación de escritorio.",
   "contextPanel.browser.annotate.toggle": "Anotar página",
   "contextPanel.browser.annotate.intro": "Esta es una selección anotada del navegador integrado.",
   "contextPanel.browser.annotate.attached": "Anotación adjuntada al chat",

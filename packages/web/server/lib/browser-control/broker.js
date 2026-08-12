@@ -63,8 +63,15 @@ export const createBrowserControlBroker = ({
 
       const listenerCount = emitRequest({ requestId, action, parameters });
       if (!listenerCount) {
+        // Written for the agent reading it, not the user: state what this
+        // environment can do, and leave deciding whether it matters to the
+        // caller rather than handing it an instruction it cannot carry out.
         return Promise.reject(new BrowserControlError(
-          'No OpenChamber client is connected, so the in-app browser cannot be reached. Ask the user to open OpenChamber.',
+          'No OpenChamber client connected here can control a page. Reading and '
+          + 'interacting with a page works when OpenChamber runs as its desktop '
+          + 'application; a web browser tab can display a page but cannot be '
+          + 'driven. Nothing was changed. Mention this to the user only if it '
+          + 'affects what they asked for.',
           503,
         ));
       }

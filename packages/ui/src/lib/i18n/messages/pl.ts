@@ -1522,6 +1522,7 @@ export const dict: Record<I18nKey, string> = {
   'projectActions.toast.multipleServers': 'Uruchomiło się kilka serwerów — wybierz jeden w panelu przeglądarki',
   'contextPanel.browser.devServers.justStarted': 'Właśnie uruchomione',
   'contextPanel.browser.devServers.unavailable': 'Nie udało się sprawdzić działających serwerów deweloperskich.',
+  'contextPanel.browser.devServers.remoteOnly': 'Działają na komputerze, na którym uruchomiony jest OpenChamber. Do ich otwarcia potrzebna jest aplikacja desktopowa.',
   'contextPanel.browser.annotate.toggle': 'Dodaj adnotację do strony',
   'contextPanel.browser.annotate.intro': 'To jest opatrzony adnotacją fragment z wbudowanej przeglądarki.',
   'contextPanel.browser.annotate.attached': 'Adnotacja dołączona do czatu',

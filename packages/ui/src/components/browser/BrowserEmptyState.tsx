@@ -6,7 +6,8 @@ import { OpenChamberLogo } from '@/components/ui/OpenChamberLogo';
 import { useI18n } from '@/lib/i18n';
 import { fetchDevServers, mergeDevServerCandidates, type DevServerDiscovery } from '@/lib/browser/devServers';
 import { clearAnnouncedDevServers, useAnnouncedDevServers } from '@/lib/browser/announcedServers';
-import { browserUrlLabel } from '@/lib/browser/url';
+import { browserUrlLabel, isLoopbackUrl } from '@/lib/browser/url';
+import { getRuntimeApiBaseUrl } from '@/lib/runtime-switch';
 
 /**
  * What the panel shows before anything is loaded.
@@ -30,6 +31,23 @@ const pathLabel = (url: string): string => {
 /** Re-checked while the panel is open: a project's servers appear seconds apart. */
 const REFRESH_INTERVAL_MS = 2_000;
 
+/**
+ * True when the listed servers are on another machine and this client has no
+ * way to reach them. The desktop shell tunnels a local port for exactly this
+ * case; a browser tab has no equivalent, and its `localhost` is its own.
+ */
+const isUnreachableFromHere = (): boolean => {
+  if (typeof window === 'undefined') return false;
+  if (window.__OPENCHAMBER_ELECTRON__) return false;
+  const baseUrl = getRuntimeApiBaseUrl();
+  if (!baseUrl) return false;
+  try {
+    return !isLoopbackUrl(new URL(baseUrl, window.location.href).toString());
+  } catch {
+    return false;
+  }
+};
+
 export const BrowserEmptyState: React.FC<{
   onOpen: (url: string) => void;
   directory?: string;
@@ -37,6 +55,7 @@ export const BrowserEmptyState: React.FC<{
   const { t } = useI18n();
   const [discovery, setDiscovery] = React.useState<DevServerDiscovery>({ kind: 'loading' });
   const announced = useAnnouncedDevServers(directory);
+  const [remoteOnly] = React.useState(isUnreachableFromHere);
 
   React.useEffect(() => {
     let active = true;
@@ -80,6 +99,11 @@ export const BrowserEmptyState: React.FC<{
               ? t('contextPanel.browser.devServers.justStarted')
               : t('contextPanel.browser.devServers.title')}
           </span>
+          {remoteOnly ? (
+            <span className="pb-1 text-left typography-micro text-muted-foreground">
+              {t('contextPanel.browser.devServers.remoteOnly')}
+            </span>
+          ) : null}
           {candidates.map((candidate) => (
             <Button
               key={candidate.port}

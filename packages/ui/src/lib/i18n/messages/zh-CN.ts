@@ -1208,6 +1208,7 @@ export const dict: Record<I18nKey, string> = {
   'projectActions.toast.multipleServers': '启动了多个服务器 — 请在浏览器面板中选择',
   'contextPanel.browser.devServers.justStarted': '刚刚启动',
   'contextPanel.browser.devServers.unavailable': '无法检查正在运行的开发服务器。',
+  'contextPanel.browser.devServers.remoteOnly': '它们运行在托管 OpenChamber 的那台机器上。要打开它们需要桌面应用。',
   'contextPanel.browser.annotate.toggle': '标注页面',
   'contextPanel.browser.annotate.intro': '这是来自应用内浏览器的标注选区。',
   'contextPanel.browser.annotate.attached': '标注已附加到聊天',

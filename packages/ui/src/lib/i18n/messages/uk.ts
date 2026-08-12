@@ -1208,6 +1208,7 @@ export const dict: Record<I18nKey, string> = {
   "projectActions.toast.multipleServers": "Запустилося кілька серверів — оберіть у панелі браузера",
   "contextPanel.browser.devServers.justStarted": "Щойно запущені",
   "contextPanel.browser.devServers.unavailable": "Не вдалося перевірити запущені dev-сервери.",
+  "contextPanel.browser.devServers.remoteOnly": "Вони працюють на машині, де запущено OpenChamber. Щоб їх відкрити, потрібен десктопний застосунок.",
   "contextPanel.browser.annotate.toggle": "Анотувати сторінку",
   "contextPanel.browser.annotate.intro": "Це анотований фрагмент із вбудованого браузера.",
   "contextPanel.browser.annotate.attached": "Анотацію додано до чату",
