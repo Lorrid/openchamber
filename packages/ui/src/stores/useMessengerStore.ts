@@ -573,11 +573,6 @@ interface MessengerState {
     project: ProjectEntry,
     worktree: { path: string; branch?: string; label?: string },
   ) => Promise<void>;
-  notifyWorktreeMerged: (
-    project: ProjectEntry,
-    worktree: { path: string; branch?: string; label?: string },
-    summary?: string | null,
-  ) => Promise<void>;
   /** Resolve the Discord thread URL for a worktree (null when none is bound). */
   fetchWorktreeDiscordUrl: (worktreePath: string) => Promise<string | null>;
   startOnboarding: (type: MessengerType) => void;
@@ -2992,21 +2987,6 @@ export const useMessengerStore = create<MessengerState>()(
           await postJson('/api/messenger/bridge/worktree-removed', {
             project: { id: project.id, path: project.path, label: project.label ?? project.path },
             worktree,
-            discord: buildDiscordBridgePayload(conn, get().projectMappings),
-          });
-        } catch {
-          // best-effort
-        }
-      },
-
-      notifyWorktreeMerged: async (project, worktree, summary = null) => {
-        const conn = get().connections.find((c) => c.type === 'discord');
-        if (!conn?.botToken || conn.syncWorktrees === false) return;
-        try {
-          await postJson('/api/messenger/bridge/worktree-merged', {
-            project: { id: project.id, path: project.path, label: project.label ?? project.path },
-            worktree,
-            summary,
             discord: buildDiscordBridgePayload(conn, get().projectMappings),
           });
         } catch {

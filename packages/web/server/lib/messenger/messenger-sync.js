@@ -1,5 +1,4 @@
 import crypto from 'node:crypto';
-import fs from 'node:fs';
 import express, { Router } from 'express';
 import {
   createDiscordListenerRegistry,
@@ -15,7 +14,6 @@ import {
   createTelegramForumTopic,
   telegramMemberCanManageTopics,
 } from './telegram-api.js';
-import { markdownToTelegramHtml } from './telegram-format.js';
 import { normalizeTelegramChatIds, normalizeTelegramAccessSettings } from './telegram-access.js';
 import { createMessengerOpencodeBridge } from './messenger-opencode-bridge.js';
 import { createDiscordAgentRouter } from './discord-agent-api.js';
@@ -737,23 +735,6 @@ export function createMessengerSyncRouter({
       },
     }),
   );
-
-  // Messenger configuration
-  router.get('/config', (_req, res) => {
-    res.json({
-      supportedMessengers: ['discord', 'telegram'],
-      discord: {
-        features: ['channels', 'threads', 'embeds', 'reactions', 'files'],
-        maxMessageLength: 2000,
-        formatting: 'markdown-discord',
-      },
-      telegram: {
-        features: ['chats', 'forum-topics', 'inline-keyboards'],
-        maxMessageLength: 4096,
-        formatting: 'plain-text',
-      },
-    });
-  });
 
   // Test connection endpoint
   router.post('/test', async (req, res) => {
@@ -1483,192 +1464,84 @@ export function createMessengerSyncRouter({
   });
 
   /**
-   * Per-messenger default verbosity (`quiet` | `normal` | `verbose`). This is
-   * the same value the in-chat `/verbosity default <level>` command writes, so
-   * the OpenChamber UI and the messengers stay in sync. A per-conversation
-   * `/verbosity <level>` override always wins over this default.
+   * Per-messenger bridge defaults. Each of these mirrors an in-chat command
+   * (`/verbosity default`, `/permissions default`, `/notify`, `/critique`,
+   * `/interrupt`), so the OpenChamber UI and the messengers never drift. A
+   * per-conversation override always wins over the stored default.
    *
-   * POST body: { type: 'discord' | 'telegram', level }  (level null clears it)
-   * GET query: ?type=discord
-   */
-  router.post('/bridge/verbosity', (req, res) => {
-    if (!bridge) return res.status(503).json({ ok: false, error: 'bridge unavailable' });
-    const { type, level } = req.body ?? {};
-    if (type !== 'discord' && type !== 'telegram') {
-      return res.status(400).json({ ok: false, error: "type must be 'discord' or 'telegram'" });
-    }
-    if (level == null || level === '') {
-      bridge.store.setVerbosityDefault(type, null);
-      return res.json({ ok: true, type, level: null });
-    }
-    const parsed = parseVerbosityLevel(level);
-    if (!parsed) {
-      return res
-        .status(400)
-        .json({ ok: false, error: `level must be one of: ${VERBOSITY_LEVELS.join(', ')}` });
-    }
-    bridge.store.setVerbosityDefault(type, parsed);
-    return res.json({ ok: true, type, level: parsed });
-  });
-
-  router.get('/bridge/verbosity', (req, res) => {
-    if (!bridge) return res.status(503).json({ ok: false, error: 'bridge unavailable' });
-    const type = typeof req.query?.type === 'string' ? req.query.type : '';
-    if (type === 'discord' || type === 'telegram') {
-      return res.json({ ok: true, type, level: bridge.store.getVerbosityDefault?.(type) ?? null });
-    }
-    return res.json({
-      ok: true,
-      levels: VERBOSITY_LEVELS,
-      verbosity: {
-        discord: bridge.store.getVerbosityDefault?.('discord') ?? null,
-        telegram: bridge.store.getVerbosityDefault?.('telegram') ?? null,
-      },
-    });
-  });
-
-  /**
-   * Per-messenger default tool permission mode (`ask` | `yolo` | `agent`).
-   * Same value as `/yolo default <mode>` / `/permissions default <mode>`, so
-   * the OpenChamber UI and Discord stay in sync. A per-conversation
-   * `/permissions <mode>` override always wins over this default.
+   * Write-only by design: the UI reads every current value from
+   * `/bridge/status`, so there is no matching GET.
    *
-   * POST body: { type: 'discord', mode }  (mode null clears it)
-   * GET query: ?type=discord
+   * POST body: { type: 'discord' | 'telegram', <field>: value }
    */
-  router.post('/bridge/permission-mode', (req, res) => {
-    if (!bridge) return res.status(503).json({ ok: false, error: 'bridge unavailable' });
-    const { type, mode } = req.body ?? {};
-    if (type !== 'discord' && type !== 'telegram') {
-      return res.status(400).json({ ok: false, error: "type must be 'discord' or 'telegram'" });
-    }
-    if (mode == null || mode === '') {
-      bridge.store.setPermissionModeDefault(type, null);
-      return res.json({ ok: true, type, mode: null });
-    }
-    const parsed = parsePermissionMode(mode);
-    if (!parsed) {
-      return res
-        .status(400)
-        .json({ ok: false, error: `mode must be one of: ${PERMISSION_MODES.join(', ')}` });
-    }
-    bridge.store.setPermissionModeDefault(type, parsed);
-    return res.json({ ok: true, type, mode: parsed });
-  });
+  const BRIDGE_DEFAULT_ROUTES = [
+    {
+      path: '/bridge/verbosity',
+      field: 'level',
+      // null/'' clears the default and falls back to the bridge's built-in level.
+      parse: (raw) =>
+        raw == null || raw === ''
+          ? { value: null }
+          : parseVerbosityLevel(raw)
+            ? { value: parseVerbosityLevel(raw) }
+            : { error: `level must be one of: ${VERBOSITY_LEVELS.join(', ')}` },
+      write: (store, type, value) => store.setVerbosityDefault(type, value),
+      read: (store, type) => store.getVerbosityDefault?.(type) ?? null,
+    },
+    {
+      path: '/bridge/permission-mode',
+      field: 'mode',
+      parse: (raw) =>
+        raw == null || raw === ''
+          ? { value: null }
+          : parsePermissionMode(raw)
+            ? { value: parsePermissionMode(raw) }
+            : { error: `mode must be one of: ${PERMISSION_MODES.join(', ')}` },
+      write: (store, type, value) => store.setPermissionModeDefault(type, value),
+      read: (store, type) => store.getPermissionModeDefault?.(type) ?? null,
+    },
+    {
+      path: '/bridge/notify-on-complete',
+      field: 'enabled',
+      parse: (raw) => ({ value: Boolean(raw) }),
+      write: (store, type, value) => store.setNotifyOnComplete?.(type, value),
+      read: (store, type) => store.getNotifyOnComplete?.(type) ?? false,
+    },
+    {
+      // Opt-in for uploading diffs to critique.work (external service) — gates
+      // the agent diff instructions, /diff, /undo and /redo. Off by default;
+      // the UI shows a code-sharing disclaimer next to the toggle.
+      path: '/bridge/critique',
+      field: 'enabled',
+      parse: (raw) => ({ value: Boolean(raw) }),
+      write: (store, type, value) => store.setCritiqueEnabled?.(type, value),
+      read: (store, type) => store.getCritiqueEnabled?.(type) ?? false,
+    },
+    {
+      path: '/bridge/interrupt-timeout',
+      field: 'timeoutMs',
+      parse: (raw) => ({ value: normalizeMessengerInterruptTimeoutMs(raw) }),
+      write: (store, type, value) => store.setInterruptTimeoutMs?.(type, value),
+      read: (store, type) => store.getInterruptTimeoutMs?.(type) ?? MESSENGER_INTERRUPT_TIMEOUT_DEFAULT_MS,
+    },
+  ];
 
-  router.get('/bridge/permission-mode', (req, res) => {
-    if (!bridge) return res.status(503).json({ ok: false, error: 'bridge unavailable' });
-    const type = typeof req.query?.type === 'string' ? req.query.type : '';
-    if (type === 'discord' || type === 'telegram') {
-      return res.json({
-        ok: true,
-        type,
-        mode: bridge.store.getPermissionModeDefault?.(type) ?? null,
-      });
-    }
-    return res.json({
-      ok: true,
-      modes: PERMISSION_MODES,
-      permissionMode: {
-        discord: bridge.store.getPermissionModeDefault?.('discord') ?? null,
-        telegram: bridge.store.getPermissionModeDefault?.('telegram') ?? null,
-      },
+  for (const route of BRIDGE_DEFAULT_ROUTES) {
+    router.post(route.path, (req, res) => {
+      if (!bridge) return res.status(503).json({ ok: false, error: 'bridge unavailable' });
+      const { type } = req.body ?? {};
+      if (type !== 'discord' && type !== 'telegram') {
+        return res.status(400).json({ ok: false, error: "type must be 'discord' or 'telegram'" });
+      }
+      const parsed = route.parse(req.body?.[route.field]);
+      if (parsed.error) {
+        return res.status(400).json({ ok: false, error: parsed.error });
+      }
+      route.write(bridge.store, type, parsed.value);
+      return res.json({ ok: true, type, [route.field]: route.read(bridge.store, type) });
     });
-  });
+  }
 
-  router.post('/bridge/notify-on-complete', (req, res) => {
-    if (!bridge) return res.status(503).json({ ok: false, error: 'bridge unavailable' });
-    const { type, enabled } = req.body ?? {};
-    if (type !== 'discord' && type !== 'telegram') {
-      return res.status(400).json({ ok: false, error: "type must be 'discord' or 'telegram'" });
-    }
-    bridge.store.setNotifyOnComplete?.(type, Boolean(enabled));
-    return res.json({ ok: true, type, enabled: bridge.store.getNotifyOnComplete?.(type) ?? false });
-  });
-
-  router.get('/bridge/notify-on-complete', (req, res) => {
-    if (!bridge) return res.status(503).json({ ok: false, error: 'bridge unavailable' });
-    const type = typeof req.query?.type === 'string' ? req.query.type : '';
-    if (type === 'discord' || type === 'telegram') {
-      return res.json({ ok: true, type, enabled: bridge.store.getNotifyOnComplete?.(type) ?? false });
-    }
-    return res.json({
-      ok: true,
-      notifyOnComplete: {
-        discord: bridge.store.getNotifyOnComplete?.('discord') ?? false,
-        telegram: bridge.store.getNotifyOnComplete?.('telegram') ?? false,
-      },
-    });
-  });
-
-  /**
-   * Opt-in for uploading diffs to critique.work (external service) from the
-   * bridge — gates the agent diff instructions, /diff, /undo and /redo.
-   * Off by default; the UI shows a code-sharing disclaimer next to the toggle.
-   *
-   * POST body: { type: 'discord', enabled }  GET query: ?type=discord
-   */
-  router.post('/bridge/critique', (req, res) => {
-    if (!bridge) return res.status(503).json({ ok: false, error: 'bridge unavailable' });
-    const { type, enabled } = req.body ?? {};
-    if (type !== 'discord' && type !== 'telegram') {
-      return res.status(400).json({ ok: false, error: "type must be 'discord' or 'telegram'" });
-    }
-    bridge.store.setCritiqueEnabled?.(type, Boolean(enabled));
-    return res.json({ ok: true, type, enabled: bridge.store.getCritiqueEnabled?.(type) ?? false });
-  });
-
-  router.get('/bridge/critique', (req, res) => {
-    if (!bridge) return res.status(503).json({ ok: false, error: 'bridge unavailable' });
-    const type = typeof req.query?.type === 'string' ? req.query.type : '';
-    if (type === 'discord' || type === 'telegram') {
-      return res.json({ ok: true, type, enabled: bridge.store.getCritiqueEnabled?.(type) ?? false });
-    }
-    return res.json({
-      ok: true,
-      critique: {
-        discord: bridge.store.getCritiqueEnabled?.('discord') ?? false,
-        telegram: bridge.store.getCritiqueEnabled?.('telegram') ?? false,
-      },
-    });
-  });
-
-  router.post('/bridge/interrupt-timeout', (req, res) => {
-    if (!bridge) return res.status(503).json({ ok: false, error: 'bridge unavailable' });
-    const { type, timeoutMs } = req.body ?? {};
-    if (type !== 'discord' && type !== 'telegram') {
-      return res.status(400).json({ ok: false, error: "type must be 'discord' or 'telegram'" });
-    }
-    const normalized = normalizeMessengerInterruptTimeoutMs(timeoutMs);
-    bridge.store.setInterruptTimeoutMs?.(type, normalized);
-    return res.json({ ok: true, type, timeoutMs: bridge.store.getInterruptTimeoutMs?.(type) ?? normalized });
-  });
-
-  router.get('/bridge/interrupt-timeout', (req, res) => {
-    if (!bridge) return res.status(503).json({ ok: false, error: 'bridge unavailable' });
-    const type = typeof req.query?.type === 'string' ? req.query.type : '';
-    const bounds = {
-      min: MESSENGER_INTERRUPT_TIMEOUT_MIN_MS,
-      max: MESSENGER_INTERRUPT_TIMEOUT_MAX_MS,
-      default: MESSENGER_INTERRUPT_TIMEOUT_DEFAULT_MS,
-    };
-    if (type === 'discord' || type === 'telegram') {
-      return res.json({
-        ok: true,
-        type,
-        timeoutMs: bridge.store.getInterruptTimeoutMs?.(type) ?? MESSENGER_INTERRUPT_TIMEOUT_DEFAULT_MS,
-        bounds,
-      });
-    }
-    return res.json({
-      ok: true,
-      interruptTimeoutMs: {
-        discord: bridge.store.getInterruptTimeoutMs?.('discord') ?? MESSENGER_INTERRUPT_TIMEOUT_DEFAULT_MS,
-        telegram: bridge.store.getInterruptTimeoutMs?.('telegram') ?? MESSENGER_INTERRUPT_TIMEOUT_DEFAULT_MS,
-      },
-      bounds,
-    });
-  });
 
   /**
    * Read the persisted Discord block + its project→channel bindings array.
@@ -2151,21 +2024,6 @@ export function createMessengerSyncRouter({
   });
 
   /**
-   * Worktree merged (UI integrate flow or Discord command) → post summary, archive thread.
-   */
-  router.post('/bridge/worktree-merged', async (req, res) => {
-    const { project, worktree, summary } = req.body ?? {};
-    if (!worktree?.path) {
-      return res.status(400).json({ ok: false, error: 'worktree.path required' });
-    }
-    if (!bridge?.worktreeSync) {
-      return res.json({ ok: false, error: 'worktree sync is not available on this server' });
-    }
-    const result = await bridge.worktreeSync.handleWorktreeMerged({ project, worktree, summary });
-    res.json(result);
-  });
-
-  /**
    * Lookup the Discord URL for a worktree path (UI "Open in Discord" link).
    */
   router.get('/bridge/worktree-discord-url', async (req, res) => {
@@ -2183,106 +2041,14 @@ export function createMessengerSyncRouter({
     return res.json({ ok: true, discordUrl, path: worktreePath });
   });
 
-  /**
-   * Refresh the pinned worktree index message for a project channel.
-   */
-  router.post('/bridge/worktree-refresh-index', async (req, res) => {
-    const { project } = req.body ?? {};
-    if (!project?.path) {
-      return res.status(400).json({ ok: false, error: 'project.path required' });
-    }
-    if (!bridge?.worktreeSync) {
-      return res.json({ ok: false, error: 'worktree sync is not available on this server' });
-    }
-    const config = await bridge.worktreeSync.loadDiscordConfig();
-    const result = await bridge.worktreeSync.refreshProjectHub({
-      config,
-      projectRoot: project.path,
-      projectLabel: project.label ?? null,
-    });
-    res.json(result);
-  });
+  // Per-project bridge defaults (model, agent, auto-worktrees) are written by
+  // the in-chat `/model default`, `/agent default` and `/toggle-worktrees`
+  // commands. Scheduled prompts live in OpenChamber's per-project scheduler
+  // (`/api/projects/:projectId/scheduled-tasks`), which the Discord /schedule
+  // command targets directly — no messenger-specific endpoints for either.
 
-  /**
-   * Bootstrap a new OpenChamber project from a Discord conversation
-   * (or programmatically). Body: { action: 'clone'|'path'|'new', url?, path?, label? }.
-   * Returns { ok, project } on success or { ok: false, error } on failure.
-   * Powers the in-chat dialogue ("clone <url>" etc.) AND can be used by the
-   * Settings UI directly.
-   */
-  /**
-   * Per-project bridge defaults (model, agent, auto-worktrees). The same layer the
-   * `/model default <p/m>`, `/agent default <name>` and `/toggle-worktrees`
-   * commands write to
-   * from Discord — exposed here so the OpenChamber UI's project
-   * settings can read/write the same values.
-   *
-   * POST body: { projectPath, projectLabel?, modelDefault?, agentDefault?, autoWorktreeDefault? }
-   *   Omit a field to leave it unchanged. Pass null to clear it.
-   * Returns: { ok, project: { projectPath, projectLabel, modelDefault, agentDefault } }
-   */
-  // Scheduled prompts live in OpenChamber's per-project scheduler
-  // (`/api/projects/:projectId/scheduled-tasks`) — the Discord /schedule
-  // command and the agent-facing instructions both target that API directly,
-  // so there are no messenger-specific scheduling endpoints here.
 
-  router.post('/bridge/project-defaults', (req, res) => {
-    if (!bridge) return res.status(503).json({ ok: false, error: 'bridge unavailable' });
-    const { projectPath, projectLabel, modelDefault, agentDefault, autoWorktreeDefault } = req.body ?? {};
-    if (!projectPath) {
-      return res.status(400).json({ ok: false, error: 'projectPath required' });
-    }
-    if (modelDefault != null && modelDefault !== '' && !/^[^/]+\/[^/]+$/.test(String(modelDefault))) {
-      return res.status(400).json({ ok: false, error: 'modelDefault must be in "provider/model" form' });
-    }
-    if (
-      autoWorktreeDefault !== undefined &&
-      autoWorktreeDefault !== null &&
-      typeof autoWorktreeDefault !== 'boolean'
-    ) {
-      return res.status(400).json({ ok: false, error: 'autoWorktreeDefault must be boolean or null' });
-    }
-    bridge.store.setProjectDefaults({
-      projectPath,
-      projectLabel,
-      modelDefault,
-      agentDefault,
-      autoWorktreeDefault:
-        autoWorktreeDefault === undefined ? undefined : autoWorktreeDefault === null ? null : autoWorktreeDefault ? 1 : 0,
-    });
-    const updated = bridge.store.getProjectDefaults(projectPath);
-    res.json({ ok: true, project: updated });
-  });
 
-  router.get('/bridge/project-defaults', (req, res) => {
-    if (!bridge) return res.status(503).json({ ok: false, error: 'bridge unavailable' });
-    const projectPath = typeof req.query?.projectPath === 'string' ? req.query.projectPath : '';
-    if (projectPath) {
-      const single = bridge.store.getProjectDefaults(projectPath);
-      return res.json({ ok: true, project: single ?? null });
-    }
-    res.json({ ok: true, projects: bridge.store.listProjectDefaults() });
-  });
-
-  router.post('/bridge/bootstrap-project', async (req, res) => {
-    if (!projectBootstrap) {
-      return res
-        .status(503)
-        .json({ ok: false, error: 'project bootstrap is not wired in this server' });
-    }
-    const { action, url, path: targetPath, label } = req.body ?? {};
-    if (!action || !['clone', 'path', 'new'].includes(action)) {
-      return res
-        .status(400)
-        .json({ ok: false, error: "action must be one of 'clone' | 'path' | 'new'" });
-    }
-    try {
-      const result = await projectBootstrap({ action, url, path: targetPath, label });
-      return res.json(result);
-    } catch (err) {
-      return res.json({ ok: false, error: err?.message ?? 'bootstrap failed' });
-    }
-  });
 
   router.post('/discord/listener/start', async (req, res) => {
     const {
@@ -2540,16 +2306,6 @@ export function createMessengerSyncRouter({
       guildPolicies,
       syncWorktrees,
     } = req.body ?? {};
-    // TEMP DEBUG: capture what the browser actually posts when toggling reply modes
-    try {
-      fs.appendFileSync('/tmp/discord-save-config.log', JSON.stringify({
-        at: new Date().toISOString(),
-        hasToken: Boolean(botToken),
-        defaultReplyMode,
-        policyKeys: guildPolicies && typeof guildPolicies === 'object' ? Object.keys(guildPolicies) : null,
-        guildPolicies,
-      }) + '\n');
-    } catch {}
     try {
       // Merge with the previous discord block so this best-effort save (fired
       // by the frontend right after listener start) doesn't clobber the
@@ -2639,64 +2395,7 @@ export function createMessengerSyncRouter({
     }
   });
 
-  /**
-   * Read saved Discord listener config from settings.json.
-   * Returns the discord config object (without botToken for safety) or null.
-   */
-  router.get('/discord/load-config', async (req, res) => {
-    try {
-      const settings = await readSettings();
-      const config = settings?.discord ? { ...settings.discord } : null;
-      // Omit the token from the response — it's sensitive. The frontend has it in localStorage.
-      if (config) {
-        const hasToken = Boolean(config.botToken);
-        config.botToken = undefined;
-        res.json({ ok: true, config, hasToken });
-      } else {
-        res.json({ ok: true, config: null, hasToken: false });
-      }
-    } catch (err) {
-      res.status(500).json({ error: err?.message ?? 'load failed' });
-    }
-  });
 
-  /**
-   * Start the Discord listener from saved config (settings.json).
-   * Used for auto-start on server boot.
-   */
-  router.post('/discord/auto-start', async (req, res) => {
-    try {
-      const settings = await readSettings();
-      const discord = settings?.discord;
-      if (!discord?.botToken) {
-        return res.json({ ok: false, reason: 'not-configured' });
-      }
-      if (discord.listenerEnabled === false) {
-        return res.json({ ok: false, reason: 'listener-disabled' });
-      }
-      const result = discordListener.start(discord.botToken, {
-        guildId: discord.guildId || undefined,
-        autoReply: discord.autoReply !== false,
-        scopeToGuild: Boolean(discord.scopeToGuild),
-        // Match boot auto-start in server/index.js: always bridge inbound
-        // messages. A stale settings.bridgeEnabled:false must not leave the
-        // gateway Connected-but-silent after restart.
-        bridgeEnabled: Boolean(bridge),
-        // Restore the persisted project→channel bindings so each Discord
-        // channel keeps routing to its own project after a server restart.
-        // Without this, every channel fell back to the first project until
-        // the user re-opened Settings and re-sent a manual start.
-        resolveProject: buildResolveProject(discord.projectBindings),
-        trustedBotIds: normalizeTrustedBotIds(discord.trustedBotIds),
-        registerDynamicSlashCommands: Boolean(discord.registerDynamicSlashCommands),
-        defaultReplyMode: discord.defaultReplyMode,
-        guildPolicies: discord.guildPolicies,
-      });
-      res.json({ ok: true, ...result });
-    } catch (err) {
-      res.status(500).json({ error: err?.message ?? 'auto-start failed' });
-    }
-  });
 
   /**
    * Fetch the last N messages from a Discord channel or thread via REST.
@@ -3656,90 +3355,8 @@ export function createMessengerSyncRouter({
     }
   });
 
-  /**
-   * Start the Telegram listener from saved config (settings.json).
-   * Used for auto-start on server boot.
-   */
-  router.post('/telegram/auto-start', async (req, res) => {
-    try {
-      const { telegram } = await loadTelegramSettings();
-      if (!telegram?.botToken) {
-        return res.json({ ok: false, reason: 'not-configured' });
-      }
-      if (telegram.listenerEnabled === false) {
-        return res.json({ ok: false, reason: 'listener-disabled' });
-      }
-      const owners = resolveTelegramOwnerFields(telegram, telegram);
-      const result = telegramListener.start(telegram.botToken, {
-        autoReply: telegram.autoReply !== false,
-        defaultUserId: owners.defaultUserId,
-        ownerUserIds: owners.ownerUserIds,
-        allowedChatIds: telegram.allowedChatIds,
-        defaultReplyMode: telegram.defaultReplyMode,
-        chatPolicies:
-          telegram.chatPolicies && typeof telegram.chatPolicies === 'object'
-            ? telegram.chatPolicies
-            : {},
-        resolveProject: buildTelegramResolveProject(telegram.projectBindings),
-      });
-      res.json({ ok: true, ...result });
-    } catch (err) {
-      res.status(500).json({ error: err?.message ?? 'auto-start failed' });
-    }
-  });
 
-  // Webhook for incoming messages from messengers
-  router.post('/webhook/:type', (req, res) => {
-    const { type } = req.params;
-    const payload = req.body;
 
-    if (!payload) {
-      return res.status(400).json({ error: 'Empty payload' });
-    }
-
-    broadcastEvent(`messenger.${type}.message`, {
-      type,
-      ...payload,
-      receivedAt: new Date().toISOString(),
-    });
-
-    res.json({ ok: true });
-  });
-
-  // Format adapter - converts between internal format and messenger-specific format
-  router.post('/format', (req, res) => {
-    const { target, content, format } = req.body ?? {};
-
-    if (!target || !content) {
-      return res.status(400).json({ error: 'target and content required' });
-    }
-
-    const formatted = adaptMessageFormat(content, format ?? 'markdown', target);
-    res.json({ formatted, target });
-  });
 
   return { router, discordListener, telegramListener };
-}
-
-/**
- * Adapts message content between different formatting standards.
- */
-function adaptMessageFormat(content, sourceFormat, targetMessenger) {
-  if (targetMessenger === 'discord') {
-    return adaptToDiscord(content, sourceFormat);
-  }
-  if (targetMessenger === 'telegram') {
-    // Same conversion outbound sends use — Discord markdown → Telegram HTML.
-    return markdownToTelegramHtml(String(content ?? ''));
-  }
-  return content;
-}
-
-function adaptToDiscord(content, _sourceFormat) {
-  let text = content;
-  // Truncate to Discord's 2000 char limit
-  if (text.length > 2000) {
-    text = text.slice(0, 1950) + '\n\n_…truncated_';
-  }
-  return text;
 }

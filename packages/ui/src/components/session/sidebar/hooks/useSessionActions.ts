@@ -4,7 +4,6 @@ import { toast } from '@/components/ui';
 import { copyTextToClipboard } from '@/lib/clipboard';
 import { useI18n } from '@/lib/i18n';
 import { fetchSessionReference } from '@/lib/sessionReference';
-import { getSessionShareUrl, isSessionShared } from '@/stores/useGlobalSessionsStore';
 import type { MainTab } from '@/stores/useUIStore';
 import { useUIStore } from '@/stores/useUIStore';
 import { streamPerfMark } from '@/stores/utils/streamDebug';
@@ -137,22 +136,17 @@ export const useSessionActions = (args: Args) => {
   }, []);
 
   const handleShareSession = React.useCallback(async (session: Session) => {
-    try {
-      const result = await args.shareSession(session.id);
-      const shareUrl = result ? getSessionShareUrl(result) : null;
-      if (!shareUrl) {
-        toast.error(t('sessions.sidebar.session.share.error'));
-        return;
-      }
-      const copied = await copyShareUrl(shareUrl, session.id);
-      toast[copied ? 'success' : 'warning'](t('sessions.sidebar.session.share.successTitle'), {
-        description: t(copied
-          ? 'sessions.sidebar.session.share.successDescription'
-          : 'sessions.sidebar.session.share.copyUrlError'),
-      });
-    } catch {
+    const result = await args.shareSession(session.id);
+    if (!result?.share?.url) {
       toast.error(t('sessions.sidebar.session.share.error'));
+      return;
     }
+    const copied = await copyShareUrl(result.share.url, session.id);
+    toast[copied ? 'success' : 'warning'](t('sessions.sidebar.session.share.successTitle'), {
+      description: t(copied
+        ? 'sessions.sidebar.session.share.successDescription'
+        : 'sessions.sidebar.session.share.copyUrlError'),
+    });
   }, [args, copyShareUrl, t]);
 
   const handleCopyShareUrl = React.useCallback((url: string, sessionId: string) => {
@@ -174,40 +168,25 @@ export const useSessionActions = (args: Args) => {
   }, [t]);
 
   const handleUnshareSession = React.useCallback(async (sessionId: string) => {
-    try {
-      const result = await args.unshareSession(sessionId);
-      if (result && !isSessionShared(result)) {
-        toast.success(t('sessions.sidebar.session.unshare.success'));
-      } else {
-        toast.error(t('sessions.sidebar.session.unshare.error'));
-      }
-    } catch {
+    const result = await args.unshareSession(sessionId);
+    if (result) {
+      toast.success(t('sessions.sidebar.session.unshare.success'));
+    } else {
       toast.error(t('sessions.sidebar.session.unshare.error'));
     }
   }, [args, t]);
 
+  // Copies the messenger session reference (`@session:<id>` style handle) so it
+  // can be pasted into Discord/Telegram; falls back to the raw session id.
   const handleCopySessionReference = React.useCallback(async (session: Session) => {
-    try {
-      const payload = await fetchSessionReference(session.id);
-      const reference = payload?.reference ?? session.id;
-      const result = await copyTextToClipboard(reference);
-      if (!result.ok) {
-        toast.error(t('sessions.sidebar.session.reference.copyError'));
-        return;
-      }
-      setCopiedSessionId(session.id);
-      if (copyTimeout.current) {
-        clearTimeout(copyTimeout.current);
-      }
-      copyTimeout.current = window.setTimeout(() => {
-        setCopiedSessionId(null);
-        copyTimeout.current = null;
-      }, 2000);
-      toast.success(t('sessions.sidebar.session.reference.success'));
-    } catch {
+    const payload = await fetchSessionReference(session.id).catch(() => null);
+    const copied = await copyShareUrl(payload?.reference ?? session.id, session.id);
+    if (!copied) {
       toast.error(t('sessions.sidebar.session.reference.copyError'));
+      return;
     }
-  }, [t]);
+    toast.success(t('sessions.sidebar.session.reference.success'));
+  }, [copyShareUrl, t]);
 
   const collectDescendants = React.useCallback((sessionId: string): Session[] => {
     const collected: Session[] = [];
