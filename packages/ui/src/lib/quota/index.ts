@@ -8,6 +8,7 @@ export {
 } from './utils';
 export {
   USAGE_ADD_PROVIDER_ID,
+  collectConnectedQuotaProviderIds,
   resolveQuotaProviderId,
   type UsageSelectionId,
 } from './providerAliases';

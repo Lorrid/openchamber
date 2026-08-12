@@ -10,6 +10,7 @@ import {
   USAGE_ADD_PROVIDER_ID,
   averageCostPer1kTokens,
   buildPeriodUsageSummary,
+  collectConnectedQuotaProviderIds,
   colorForProviderIndex,
   formatCompactNumber,
   formatPercentDelta,
@@ -27,13 +28,14 @@ import { useQuotaAutoRefresh, useQuotaStore } from '@/stores/useQuotaStore';
 import { useUIStore } from '@/stores/useUIStore';
 import { useConfigStore } from '@/stores/useConfigStore';
 import { cn } from '@/lib/utils';
-import type { QuotaProviderId } from '@/types';
+import type { ProviderResult, QuotaProviderId } from '@/types';
 import { UsageAreaChart } from './UsageAreaChart';
 import { UsageDonutChart } from './UsageDonutChart';
 import { UsageProgressBar } from './UsageProgressBar';
 import {
   getProviderRemainingPercent,
   getProviderUsedPercent,
+  isIncludedUsageProvider,
   isVisibleUsageProvider,
   listProviderWindows,
 } from './usageProviderHelpers';
@@ -71,6 +73,7 @@ export const UsageOverview: React.FC = () => {
   const loadSettings = useQuotaStore((state) => state.loadSettings);
   const setSettingsPage = useUIStore((state) => state.setSettingsPage);
   const setConfigSelectedProvider = useConfigStore((state) => state.setSelectedProvider);
+  const configProviders = useConfigStore((state) => state.providers);
 
   const [periodDays, setPeriodDays] = React.useState<UsagePeriodDays>(7);
   const [metric, setMetric] = React.useState<UsageMetricMode>('cost');
@@ -89,19 +92,43 @@ export const UsageOverview: React.FC = () => {
   }, []);
 
   const hiddenSet = React.useMemo(() => new Set(hiddenProviderIds), [hiddenProviderIds]);
-
-  const activeResults = React.useMemo(
-    () => results.filter((result) => isVisibleUsageProvider(result, hiddenSet)),
-    [hiddenSet, results],
+  const connectedQuotaIds = React.useMemo(
+    () => collectConnectedQuotaProviderIds(configProviders.map((provider) => provider.id)),
+    [configProviders],
   );
+
+  const activeResults = React.useMemo(() => {
+    return QUOTA_PROVIDERS.flatMap((meta): ProviderResult[] => {
+      const result = results.find((entry) => entry.providerId === meta.id);
+      if (!isVisibleUsageProvider(meta.id, {
+        configured: result?.configured,
+        connectedQuotaProviderIds: connectedQuotaIds,
+        hiddenProviderIds: hiddenSet,
+      })) {
+        return [];
+      }
+      return [result ?? {
+        providerId: meta.id,
+        providerName: meta.name,
+        ok: true,
+        configured: false,
+        usage: null,
+        fetchedAt: 0,
+      }];
+    });
+  }, [connectedQuotaIds, hiddenSet, results]);
 
   const availableProviders = React.useMemo(() => {
     return QUOTA_PROVIDERS.filter((provider) => {
       const result = results.find((entry) => entry.providerId === provider.id);
-      if (!result?.configured) return true;
+      const included = isIncludedUsageProvider(provider.id, {
+        configured: result?.configured,
+        connectedQuotaProviderIds: connectedQuotaIds,
+      });
+      if (!included) return true;
       return hiddenSet.has(provider.id);
     });
-  }, [hiddenSet, results]);
+  }, [connectedQuotaIds, hiddenSet, results]);
 
   const periodSummary = React.useMemo(() => {
     void sessionTick;
@@ -362,6 +389,8 @@ export const UsageOverview: React.FC = () => {
                   const remaining = getProviderRemainingPercent(result.usage);
                   const tone = resolveUsageTone(used);
                   const windows = listProviderWindows(result.usage).slice(0, 2);
+                  const statusOk = result.ok
+                    || (connectedQuotaIds.has(result.providerId) && !result.configured);
                   return (
                     <tr
                       key={result.providerId}
@@ -413,12 +442,12 @@ export const UsageOverview: React.FC = () => {
                         <span
                           className={cn(
                             'inline-flex rounded-md px-1.5 py-0.5 typography-micro',
-                            result.ok
+                            statusOk
                               ? 'bg-[var(--status-success-background)] text-[var(--status-success)]'
                               : 'bg-[var(--status-warning-background)] text-[var(--status-warning)]',
                           )}
                         >
-                          {result.ok
+                          {statusOk
                             ? t('settings.usage.overview.providers.status.active')
                             : t('settings.usage.overview.providers.status.error')}
                         </span>
@@ -471,7 +500,10 @@ export const UsageOverview: React.FC = () => {
           <div className="space-y-1">
             {availableProviders.map((provider) => {
               const result = results.find((entry) => entry.providerId === provider.id);
-              const isHiddenConfigured = Boolean(result?.configured) && hiddenSet.has(provider.id);
+              const isHiddenIncluded = isIncludedUsageProvider(provider.id, {
+                configured: result?.configured,
+                connectedQuotaProviderIds: connectedQuotaIds,
+              }) && hiddenSet.has(provider.id);
               return (
                 <div
                   key={provider.id}
@@ -481,7 +513,7 @@ export const UsageOverview: React.FC = () => {
                   <span className="min-w-0 flex-1">
                     <span className="block typography-ui-label text-foreground">{provider.name}</span>
                     <span className="block typography-micro text-muted-foreground">
-                      {isHiddenConfigured
+                      {isHiddenIncluded
                         ? t('settings.usage.overview.available.hiddenConfigured')
                         : t('settings.usage.overview.available.notConfigured')}
                     </span>
@@ -490,7 +522,7 @@ export const UsageOverview: React.FC = () => {
                     size="sm"
                     variant="outline"
                     onClick={() => {
-                      if (isHiddenConfigured) {
+                      if (isHiddenIncluded) {
                         showUsageProvider(provider.id);
                         setSelectedProvider(provider.id);
                         return;
@@ -503,7 +535,7 @@ export const UsageOverview: React.FC = () => {
                       setSettingsPage('providers');
                     }}
                   >
-                    {isHiddenConfigured
+                    {isHiddenIncluded
                       ? t('settings.usage.overview.available.restore')
                       : t('settings.usage.overview.available.connect')}
                   </Button>

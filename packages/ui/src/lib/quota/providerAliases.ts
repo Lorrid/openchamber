@@ -55,5 +55,21 @@ export const resolveQuotaProviderId = (openCodeProviderId: string | null | undef
   return null;
 };
 
+/**
+ * Map OpenCode-connected provider IDs onto Usage/quota provider IDs.
+ * Used so Providers → connected accounts auto-appear in Usage even when
+ * the quota API has not marked them `configured` yet (e.g. missing auth.json).
+ */
+export const collectConnectedQuotaProviderIds = (
+  openCodeProviderIds: Iterable<string>,
+): Set<QuotaProviderId> => {
+  const ids = new Set<QuotaProviderId>();
+  for (const openCodeProviderId of openCodeProviderIds) {
+    const resolved = resolveQuotaProviderId(openCodeProviderId);
+    if (resolved) ids.add(resolved);
+  }
+  return ids;
+};
+
 export const USAGE_ADD_PROVIDER_ID = '__add_provider__' as const;
 export type UsageSelectionId = QuotaProviderId | typeof USAGE_ADD_PROVIDER_ID;

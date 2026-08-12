@@ -5,12 +5,13 @@ import { ProviderLogo } from '@/components/ui/ProviderLogo';
 import { SettingsPageLayout } from '@/components/sections/shared/SettingsPageLayout';
 import { SettingsSection } from '@/components/sections/shared/SettingsSection';
 import { useI18n } from '@/lib/i18n';
-import { QUOTA_PROVIDERS, USAGE_ADD_PROVIDER_ID } from '@/lib/quota';
+import { QUOTA_PROVIDERS, USAGE_ADD_PROVIDER_ID, collectConnectedQuotaProviderIds } from '@/lib/quota';
 import { useQuotaStore } from '@/stores/useQuotaStore';
 import { useUIStore } from '@/stores/useUIStore';
 import { useConfigStore } from '@/stores/useConfigStore';
 import { QuotaCredentials } from './QuotaCredentials';
 import type { QuotaProviderId } from '@/types';
+import { isIncludedUsageProvider } from './usageProviderHelpers';
 
 const CREDENTIAL_PROVIDERS = new Set<QuotaProviderId>(['ollama-cloud', 'cursor']);
 
@@ -22,17 +23,26 @@ export const UsageAddProvider: React.FC = () => {
   const showUsageProvider = useQuotaStore((state) => state.showUsageProvider);
   const setSettingsPage = useUIStore((state) => state.setSettingsPage);
   const setConfigSelectedProvider = useConfigStore((state) => state.setSelectedProvider);
+  const configProviders = useConfigStore((state) => state.providers);
   const [credentialProviderId, setCredentialProviderId] = React.useState<QuotaProviderId | null>(null);
 
   const hiddenSet = React.useMemo(() => new Set(hiddenProviderIds), [hiddenProviderIds]);
+  const connectedQuotaIds = React.useMemo(
+    () => collectConnectedQuotaProviderIds(configProviders.map((provider) => provider.id)),
+    [configProviders],
+  );
 
   const availableProviders = React.useMemo(() => {
     return QUOTA_PROVIDERS.filter((provider) => {
       const result = results.find((entry) => entry.providerId === provider.id);
-      if (!result?.configured) return true;
+      const included = isIncludedUsageProvider(provider.id, {
+        configured: result?.configured,
+        connectedQuotaProviderIds: connectedQuotaIds,
+      });
+      if (!included) return true;
       return hiddenSet.has(provider.id);
     });
-  }, [hiddenSet, results]);
+  }, [connectedQuotaIds, hiddenSet, results]);
 
   const openProvidersSettings = React.useCallback((providerId?: string) => {
     if (providerId) {
@@ -45,7 +55,11 @@ export const UsageAddProvider: React.FC = () => {
 
   const handleSelect = React.useCallback((providerId: QuotaProviderId) => {
     const result = results.find((entry) => entry.providerId === providerId);
-    if (result?.configured && hiddenSet.has(providerId)) {
+    const isHiddenIncluded = isIncludedUsageProvider(providerId, {
+      configured: result?.configured,
+      connectedQuotaProviderIds: connectedQuotaIds,
+    }) && hiddenSet.has(providerId);
+    if (isHiddenIncluded) {
       showUsageProvider(providerId);
       setSelectedProvider(providerId);
       return;
@@ -55,7 +69,7 @@ export const UsageAddProvider: React.FC = () => {
       return;
     }
     openProvidersSettings(providerId);
-  }, [hiddenSet, openProvidersSettings, results, setSelectedProvider, showUsageProvider]);
+  }, [connectedQuotaIds, hiddenSet, openProvidersSettings, results, setSelectedProvider, showUsageProvider]);
 
   const credentialMeta = credentialProviderId
     ? QUOTA_PROVIDERS.find((provider) => provider.id === credentialProviderId)
@@ -85,7 +99,10 @@ export const UsageAddProvider: React.FC = () => {
           <div className="space-y-1">
             {availableProviders.map((provider) => {
               const result = results.find((entry) => entry.providerId === provider.id);
-              const isHiddenConfigured = Boolean(result?.configured) && hiddenSet.has(provider.id);
+              const isHiddenIncluded = isIncludedUsageProvider(provider.id, {
+                configured: result?.configured,
+                connectedQuotaProviderIds: connectedQuotaIds,
+              }) && hiddenSet.has(provider.id);
               return (
                 <button
                   key={provider.id}
@@ -97,7 +114,7 @@ export const UsageAddProvider: React.FC = () => {
                   <span className="min-w-0 flex-1">
                     <span className="block typography-ui-label text-foreground">{provider.name}</span>
                     <span className="block typography-micro text-muted-foreground">
-                      {isHiddenConfigured
+                      {isHiddenIncluded
                         ? t('settings.usage.add.restoreHint')
                         : CREDENTIAL_PROVIDERS.has(provider.id)
                           ? t('settings.usage.add.viaCredentials')

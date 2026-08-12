@@ -1,4 +1,4 @@
-import type { ProviderResult, UsageWindow } from '@/types';
+import type { ProviderResult, QuotaProviderId, UsageWindow } from '@/types';
 import { clampPercent } from '@/lib/quota';
 
 export const getProviderUsedPercent = (
@@ -28,17 +28,43 @@ export const listProviderWindows = (
   return Object.entries(usage.windows).map(([label, window]) => ({ label, window }));
 };
 
+const hasProviderId = (
+  providerIds: ReadonlySet<string> | readonly string[] | undefined,
+  providerId: string,
+): boolean => {
+  if (!providerIds) return false;
+  if ('has' in providerIds) return providerIds.has(providerId);
+  return providerIds.includes(providerId);
+};
+
+export type UsageProviderInclusionOptions = {
+  configured?: boolean;
+  /** Quota IDs mapped from OpenCode-connected providers (Settings → Providers). */
+  connectedQuotaProviderIds?: ReadonlySet<string> | readonly string[];
+};
+
+/** Provider is eligible for Usage (quota-configured and/or OpenCode-connected). */
+export const isIncludedUsageProvider = (
+  providerId: QuotaProviderId,
+  options: UsageProviderInclusionOptions,
+): boolean => {
+  if (options.configured) return true;
+  return hasProviderId(options.connectedQuotaProviderIds, providerId);
+};
+
 export const isActiveProviderResult = (result: ProviderResult | undefined): boolean =>
   Boolean(result?.configured);
 
-/** Configured providers appear in Usage unless the user explicitly removed them. */
+/**
+ * Included providers appear in Usage unless the user explicitly removed them.
+ * OpenCode-connected providers count even when the quota API reports not configured.
+ */
 export const isVisibleUsageProvider = (
-  result: ProviderResult | undefined,
-  hiddenProviderIds: ReadonlySet<string> | readonly string[],
+  providerId: QuotaProviderId,
+  options: UsageProviderInclusionOptions & {
+    hiddenProviderIds: ReadonlySet<string> | readonly string[];
+  },
 ): boolean => {
-  if (!result?.configured) return false;
-  if ('has' in hiddenProviderIds) {
-    return !hiddenProviderIds.has(result.providerId);
-  }
-  return !hiddenProviderIds.includes(result.providerId);
+  if (!isIncludedUsageProvider(providerId, options)) return false;
+  return !hasProviderId(options.hiddenProviderIds, providerId);
 };

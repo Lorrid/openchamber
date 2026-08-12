@@ -6,6 +6,7 @@ import { UsageAreaChart } from './UsageAreaChart';
 import {
   QUOTA_PROVIDERS,
   buildPeriodUsageSummary,
+  collectConnectedQuotaProviderIds,
   colorForProviderIndex,
   formatCompactNumber,
   formatUsd,
@@ -13,6 +14,7 @@ import {
   type UsagePeriodDays,
 } from '@/lib/quota';
 import { useQuotaAutoRefresh, useQuotaStore } from '@/stores/useQuotaStore';
+import { useConfigStore } from '@/stores/useConfigStore';
 import { updateDesktopSettings } from '@/lib/persistence';
 import { ProviderLogo } from '@/components/ui/ProviderLogo';
 import {
@@ -69,6 +71,7 @@ export const UsageProviderDetail: React.FC<UsageProviderDetailProps> = ({ provid
   const selectedModels = useQuotaStore((state) => state.selectedModels);
   const toggleModelSelected = useQuotaStore((state) => state.toggleModelSelected);
   const applyDefaultSelections = useQuotaStore((state) => state.applyDefaultSelections);
+  const configProviders = useConfigStore((state) => state.providers);
 
   const [periodDays, setPeriodDays] = React.useState<UsagePeriodDays>(7);
   const [metric, setMetric] = React.useState<UsageMetricMode>('tokens');
@@ -81,6 +84,11 @@ export const UsageProviderDetail: React.FC<UsageProviderDetailProps> = ({ provid
     void fetchAllQuotas();
   }, [loadSettings, fetchAllQuotas]);
 
+  const connectedQuotaIds = React.useMemo(
+    () => collectConnectedQuotaProviderIds(configProviders.map((provider) => provider.id)),
+    [configProviders],
+  );
+
   const selectedResult = results.find((entry) => entry.providerId === providerId) ?? null;
   const providerMeta = QUOTA_PROVIDERS.find((provider) => provider.id === providerId);
   const providerName = providerMeta?.name ?? providerId;
@@ -90,6 +98,7 @@ export const UsageProviderDetail: React.FC<UsageProviderDetailProps> = ({ provid
     : null;
   const showInDropdown = dropdownProviderIds.includes(providerId);
   const hasCredentialsForm = providerId === 'ollama-cloud' || providerId === 'cursor';
+  const isOpenCodeConnected = connectedQuotaIds.has(providerId);
 
   const handleDropdownToggle = React.useCallback((enabled: boolean) => {
     const next = enabled
@@ -283,7 +292,7 @@ export const UsageProviderDetail: React.FC<UsageProviderDetailProps> = ({ provid
         </div>
       )}
 
-      {selectedResult && !selectedResult.configured && !hasCredentialsForm && (
+      {selectedResult && !selectedResult.configured && !hasCredentialsForm && !isOpenCodeConnected && (
         <div className="mb-8 rounded-lg border border-[var(--status-warning-border)] bg-[var(--status-warning-background)] px-4 py-3">
           <p className="typography-ui-label font-medium text-[var(--status-warning)]">{t('settings.usage.page.state.providerNotConfiguredTitle')}</p>
           <p className="typography-meta text-[var(--status-warning)]/80 mt-1">

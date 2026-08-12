@@ -1,28 +1,59 @@
 import { describe, expect, test } from 'bun:test';
-import type { ProviderResult } from '@/types';
-import { isVisibleUsageProvider } from './usageProviderHelpers';
+import { isIncludedUsageProvider, isVisibleUsageProvider } from './usageProviderHelpers';
 
-const result = (overrides: Partial<ProviderResult>): ProviderResult => ({
-  providerId: 'claude',
-  providerName: 'Claude',
-  ok: true,
-  configured: true,
-  usage: null,
-  fetchedAt: Date.now(),
-  ...overrides,
+describe('isIncludedUsageProvider', () => {
+  test('includes quota-configured providers', () => {
+    expect(isIncludedUsageProvider('claude', { configured: true })).toBe(true);
+  });
+
+  test('includes OpenCode-connected providers mapped to quota IDs', () => {
+    expect(isIncludedUsageProvider('google', {
+      configured: false,
+      connectedQuotaProviderIds: new Set(['google', 'github-copilot']),
+    })).toBe(true);
+  });
+
+  test('excludes providers that are neither configured nor connected', () => {
+    expect(isIncludedUsageProvider('claude', {
+      configured: false,
+      connectedQuotaProviderIds: new Set(['google']),
+    })).toBe(false);
+  });
 });
 
 describe('isVisibleUsageProvider', () => {
   test('shows configured providers by default', () => {
-    expect(isVisibleUsageProvider(result({}), [])).toBe(true);
+    expect(isVisibleUsageProvider('claude', {
+      configured: true,
+      hiddenProviderIds: [],
+    })).toBe(true);
   });
 
-  test('hides configured providers on the denylist', () => {
-    expect(isVisibleUsageProvider(result({}), ['claude'])).toBe(false);
-    expect(isVisibleUsageProvider(result({}), new Set(['claude']))).toBe(false);
+  test('shows connected providers even when quota is not configured', () => {
+    expect(isVisibleUsageProvider('github-copilot', {
+      configured: false,
+      connectedQuotaProviderIds: ['github-copilot'],
+      hiddenProviderIds: [],
+    })).toBe(true);
   });
 
-  test('never shows unconfigured providers', () => {
-    expect(isVisibleUsageProvider(result({ configured: false }), [])).toBe(false);
+  test('hides included providers on the denylist', () => {
+    expect(isVisibleUsageProvider('claude', {
+      configured: true,
+      hiddenProviderIds: ['claude'],
+    })).toBe(false);
+    expect(isVisibleUsageProvider('google', {
+      configured: false,
+      connectedQuotaProviderIds: new Set(['google']),
+      hiddenProviderIds: new Set(['google']),
+    })).toBe(false);
+  });
+
+  test('never shows providers that are neither configured nor connected', () => {
+    expect(isVisibleUsageProvider('claude', {
+      configured: false,
+      connectedQuotaProviderIds: [],
+      hiddenProviderIds: [],
+    })).toBe(false);
   });
 });

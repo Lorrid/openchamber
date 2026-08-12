@@ -7,14 +7,17 @@ import { cn } from '@/lib/utils';
 import {
   QUOTA_PROVIDERS,
   USAGE_ADD_PROVIDER_ID,
+  collectConnectedQuotaProviderIds,
   resolveUsageTone,
 } from '@/lib/quota';
 import { useQuotaStore } from '@/stores/useQuotaStore';
+import { useConfigStore } from '@/stores/useConfigStore';
 import { useI18n } from '@/lib/i18n';
 import { SETTINGS_PANEL_TITLE_CLASS } from '@/components/sections/shared/SettingsSection';
 import {
   getProviderRemainingPercent,
   getProviderUsedPercent,
+  isIncludedUsageProvider,
   isVisibleUsageProvider,
 } from './usageProviderHelpers';
 
@@ -32,27 +35,40 @@ export const UsageSidebar: React.FC<UsageSidebarProps> = ({ onItemSelect }) => {
   const fetchAllQuotas = useQuotaStore((state) => state.fetchAllQuotas);
   const isLoading = useQuotaStore((state) => state.isLoading);
   const loadUsageSettings = useQuotaStore((state) => state.loadSettings);
+  const configProviders = useConfigStore((state) => state.providers);
 
   React.useEffect(() => {
     void loadUsageSettings();
   }, [loadUsageSettings]);
 
   const hiddenSet = React.useMemo(() => new Set(hiddenProviderIds), [hiddenProviderIds]);
+  const connectedQuotaIds = React.useMemo(
+    () => collectConnectedQuotaProviderIds(configProviders.map((provider) => provider.id)),
+    [configProviders],
+  );
 
   const visibleProviders = React.useMemo(() => {
     return QUOTA_PROVIDERS.filter((provider) => {
       const result = results.find((entry) => entry.providerId === provider.id);
-      return isVisibleUsageProvider(result, hiddenSet);
+      return isVisibleUsageProvider(provider.id, {
+        configured: result?.configured,
+        connectedQuotaProviderIds: connectedQuotaIds,
+        hiddenProviderIds: hiddenSet,
+      });
     });
-  }, [hiddenSet, results]);
+  }, [connectedQuotaIds, hiddenSet, results]);
 
   const availableCount = React.useMemo(() => {
     return QUOTA_PROVIDERS.filter((provider) => {
       const result = results.find((entry) => entry.providerId === provider.id);
-      if (!result?.configured) return true;
+      const included = isIncludedUsageProvider(provider.id, {
+        configured: result?.configured,
+        connectedQuotaProviderIds: connectedQuotaIds,
+      });
+      if (!included) return true;
       return hiddenSet.has(provider.id);
     }).length;
-  }, [hiddenSet, results]);
+  }, [connectedQuotaIds, hiddenSet, results]);
 
   const isOverviewSelected = selectedProviderId === null;
   const isAddSelected = selectedProviderId === USAGE_ADD_PROVIDER_ID;
