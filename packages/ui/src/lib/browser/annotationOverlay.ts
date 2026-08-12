@@ -211,14 +211,14 @@ export const buildAnnotationOverlayScript = (
     '.layer{position:fixed;inset:0;pointer-events:none}',
     '.box{position:fixed;left:0;top:0;display:none;pointer-events:none;border:1.5px solid ' + THEME.primary + ';background:' + THEME.primarySoft + ';border-radius:2px}',
     '.label{position:fixed;left:0;top:0;display:none;pointer-events:none;padding:1px 6px;border-radius:4px;background:' + THEME.primary + ';color:' + THEME.primaryContrast + ';font-size:11px;line-height:17px;white-space:nowrap;font-weight:600}',
-    '.tools{position:fixed;top:14px;left:50%;transform:translateX(-50%);display:flex;gap:2px;padding:4px;border-radius:10px;border:1px solid ' + THEME.border + ';background:' + THEME.surfaceElevated + ';box-shadow:0 6px 20px rgba(0,0,0,.24);pointer-events:auto}',
-    '.tools button{appearance:none;border:none;background:transparent;color:' + THEME.text + ';border-radius:7px;padding:5px 12px;font-size:12px;line-height:18px;font-weight:600;cursor:pointer;white-space:nowrap}',
+    '.tools{position:fixed;top:14px;left:50%;transform:translateX(-50%);display:flex;gap:2px;padding:4px;border-radius:999px;border:1px solid ' + THEME.border + ';background:' + THEME.surfaceElevated + ';box-shadow:0 6px 20px rgba(0,0,0,.24);pointer-events:auto}',
+    '.tools button{appearance:none;border:none;background:transparent;color:' + THEME.mutedText + ';border-radius:999px;padding:5px 14px;font-size:12px;line-height:18px;font-weight:500;cursor:pointer;white-space:nowrap}',
     '.tools button:hover{background:' + THEME.primaryFaint + '}',
-    '.tools button[aria-pressed="true"]{background:' + THEME.primary + ';color:' + THEME.primaryContrast + '}',
-    '.editor{position:fixed;left:0;top:0;display:none;align-items:center;gap:6px;width:min(420px,calc(100vw - 24px));padding:6px;padding-left:12px;border-radius:12px;border:1px solid ' + THEME.border + ';background:' + THEME.surfaceElevated + ';box-shadow:0 8px 28px rgba(0,0,0,.3);pointer-events:auto}',
-    '.editor textarea{flex:1;min-width:0;resize:none;border:none;background:transparent;color:' + THEME.text + ';font-size:13px;line-height:20px;outline:none;max-height:96px}',
+    '.tools button[aria-pressed="true"]{background:' + THEME.primarySoft + ';color:' + THEME.primary + ';font-weight:600}',
+    '.editor{position:fixed;left:0;top:0;display:none;align-items:center;gap:8px;width:min(420px,calc(100vw - 24px));padding:6px;padding-left:16px;border-radius:22px;border:1px solid ' + THEME.border + ';background:' + THEME.surfaceElevated + ';box-shadow:0 8px 28px rgba(0,0,0,.3);pointer-events:auto}',
+    '.editor textarea{flex:1;min-width:0;resize:none;border:none;background:transparent;color:' + THEME.text + ';font-size:13px;line-height:20px;outline:none;padding:6px 0;min-height:32px;max-height:104px;display:block}',
     '.editor textarea::placeholder{color:' + THEME.mutedText + '}',
-    '.editor button{appearance:none;border:none;background:' + THEME.primary + ';color:' + THEME.primaryContrast + ';border-radius:8px;padding:7px 14px;font-size:12px;line-height:18px;font-weight:600;cursor:pointer;white-space:nowrap}',
+    '.editor button{appearance:none;border:none;background:' + THEME.primary + ';color:' + THEME.primaryContrast + ';border-radius:999px;padding:8px 18px;font-size:12px;line-height:18px;font-weight:600;cursor:pointer;white-space:nowrap}',
     '.editor button[disabled]{opacity:.5;cursor:default}'
   ].join('');
   shadow.appendChild(style);
@@ -277,9 +277,18 @@ export const buildAnnotationOverlayScript = (
   submit.textContent = LABELS.submit;
   editor.append(comment, submit);
 
+  /**
+   * Grows the box with its content.
+   *
+   * A hidden element reports scrollHeight 0, so measuring one collapses the
+   * field to nothing — which is what left a sliver of a click target and an
+   * invisible caret. Measuring only while visible, and never below the CSS
+   * min-height, keeps it usable.
+   */
   var resizeComment = function () {
+    if (editor.style.display === 'none') return;
     comment.style.height = 'auto';
-    comment.style.height = Math.min(comment.scrollHeight, 96) + 'px';
+    comment.style.height = Math.max(32, Math.min(comment.scrollHeight, 104)) + 'px';
   };
   comment.addEventListener('input', resizeComment);
 
@@ -293,7 +302,10 @@ export const buildAnnotationOverlayScript = (
       editor.style.display = 'none';
       return;
     }
+    var wasHidden = editor.style.display === 'none';
     editor.style.display = 'flex';
+    // Measured now that it is laid out, not while it was still hidden.
+    if (wasHidden) resizeComment();
     var box = editor.getBoundingClientRect();
     var left = lastTargetRect.x + lastTargetRect.width / 2 - box.width / 2;
     var top = lastTargetRect.y + lastTargetRect.height + EDITOR_GAP;
@@ -304,6 +316,16 @@ export const buildAnnotationOverlayScript = (
     }
     left = Math.max(8, Math.min(left, window.innerWidth - box.width - 8));
     editor.style.transform = 'translate(' + Math.round(left) + 'px,' + Math.round(top) + 'px)';
+  };
+
+  /** Focus after layout: focusing a zero-height field puts the caret nowhere. */
+  var focusComment = function () {
+    requestAnimationFrame(function () {
+      try {
+        comment.focus({ preventScroll: true });
+        comment.setSelectionRange(comment.value.length, comment.value.length);
+      } catch (error) { /* field went away */ }
+    });
   };
 
   var hasTargets = function () {
@@ -360,7 +382,7 @@ export const buildAnnotationOverlayScript = (
     selected = { id: nextId('element'), element: element, outline: outline, badge: badge };
     syncSelectionVisuals();
     syncChrome();
-    comment.focus({ preventScroll: true });
+    focusComment();
   };
 
   var setTool = function (next) {
@@ -460,7 +482,7 @@ export const buildAnnotationOverlayScript = (
       svg.appendChild(outline);
       lastTargetRect = rect;
       syncChrome();
-      comment.focus({ preventScroll: true });
+      focusComment();
       return;
     }
 
@@ -480,7 +502,7 @@ export const buildAnnotationOverlayScript = (
     strokes.push({ id: nextId('stroke'), points: points, bounds: bounds });
     lastTargetRect = bounds;
     syncChrome();
-    comment.focus({ preventScroll: true });
+    focusComment();
   };
 
   /**
@@ -580,6 +602,5 @@ export const buildAnnotationOverlayScript = (
   (document.body || document.documentElement).appendChild(host);
   setTool('select');
   syncChrome();
-  resizeComment();
 });`;
 };

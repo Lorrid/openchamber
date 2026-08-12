@@ -22,7 +22,11 @@ const ToolbarButton: React.FC<ToolbarButtonProps> = ({ icon, label, onClick, dis
         type="button"
         variant={pressed ? 'secondary' : 'ghost'}
         size="xs"
-        className="w-6 shrink-0 px-0"
+        className={cn(
+          'w-6 shrink-0 rounded-full px-0 text-muted-foreground',
+          'hover:text-foreground',
+          pressed && 'text-foreground',
+        )}
         onClick={onClick}
         disabled={disabled}
         aria-label={label}
@@ -109,7 +113,7 @@ export const BrowserToolbar: React.FC<BrowserToolbarProps> = ({
           spellCheck={false}
           autoComplete="off"
           className={cn(
-            'h-6 w-full rounded-md border border-border/50 bg-[var(--surface-elevated)] px-2',
+            'h-6 w-full rounded-full border border-border/50 bg-[var(--surface-elevated)] px-3',
             'typography-micro text-foreground outline-none focus:border-[var(--interactive-focus-ring)]',
           )}
           aria-label={t('contextPanel.browser.addressAria')}
@@ -125,7 +129,7 @@ export const BrowserToolbar: React.FC<BrowserToolbarProps> = ({
                   type="button"
                   variant="ghost"
                   size="xs"
-                  className="shrink-0 px-1 typography-micro tabular-nums"
+                  className="shrink-0 rounded-full px-1.5 typography-micro tabular-nums text-muted-foreground"
                   onClick={onZoomReset}
                   aria-label={t('contextPanel.browser.zoomReset')}
                 >
