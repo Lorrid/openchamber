@@ -326,30 +326,6 @@ export interface DiscordHistoryMessage {
   attachmentCount: number;
 }
 
-export type MessengerApprovalDecision = 'approve' | 'approve-always' | 'deny';
-
-export interface MessengerApproval {
-  id: string;
-  type: MessengerType;
-  prompt: string;
-  /** Discord channel_id. */
-  target: string;
-  /** Discord message id. */
-  messageId: string | number | null;
-  sentAt: number;
-  decision: MessengerApprovalDecision | null;
-  decidedAt: number | null;
-  decidedBy: string | null;
-  error: string | null;
-  /** OpenCode session ID that this approval is for (optional). */
-  sessionID?: string;
-  /** OpenCode permission request ID. */
-  requestID?: string;
-  /** Tool name (bash, read, edit, webfetch, external_directory, etc.). */
-  permissionTool?: string;
-  /** Rich permission context rendered for display. */
-  permissionContext?: string;
-}
 
 interface MessengerState {
   connections: MessengerConnection[];
@@ -382,9 +358,6 @@ interface MessengerState {
   discordGuildsRefreshing: boolean;
   /** Soft error from a quiet guild refresh; does not flip connection.status. */
   discordGuildsError: string | null;
-
-  /** Pending + answered approvals, newest first. */
-  approvals: MessengerApproval[];
 
   /**
    * Snapshot of OpenCode↔messenger session bindings (per channel/topic) +
@@ -501,7 +474,6 @@ interface MessengerState {
     chatId: string,
     patch: Partial<TelegramChatPolicy>,
   ) => void;
-  setDiscordDefaultReplyMode: (mode: 'always' | 'mention') => void;
   /**
    * Reconcile UI Discord status with the live server after reload / server
    * rebuild. Persisted store fields intentionally reset listener + verify
@@ -523,29 +495,6 @@ interface MessengerState {
   resyncTelegramStatus: () => Promise<void>;
   loadRecentTelegramMessages: () => Promise<void>;
   ingestTelegramInbound: (msg: MessengerInboundMessage) => void;
-  sendApprovalRequest: (
-    type: MessengerType,
-    prompt: string,
-    opts?: {
-      target?: string;
-      threadId?: string;
-      /** Structured permission data for rich rendering in messenger. */
-      permission?: {
-        id?: string;
-        sessionID?: string;
-        permission?: string;
-        patterns?: string[];
-        metadata?: Record<string, unknown>;
-        always?: string[];
-      };
-    },
-  ) => Promise<MessengerApproval | null>;
-  ingestApprovalDecision: (
-    approvalId: string,
-    decision: MessengerApprovalDecision,
-    by: string | null,
-  ) => void;
-  clearApprovals: () => void;
   setProjectMapping: (mapping: ProjectMessengerMapping) => void;
   removeProjectMapping: (projectId: string) => void;
   /**
@@ -1163,7 +1112,6 @@ export const useMessengerStore = create<MessengerState>()(
       discordDiagnosisRunning: false,
       discordGuildsRefreshing: false,
       discordGuildsError: null,
-      approvals: [],
       bridgeStatus: { enabled: false, bindings: [], active: [] },
       bridgeVerbosity: {},
       bridgePermissionMode: {},
@@ -2219,11 +2167,6 @@ export const useMessengerStore = create<MessengerState>()(
         setTimeout(() => void get().saveTelegramConfig(), 0);
       },
 
-      setDiscordDefaultReplyMode: (mode) => {
-        get().updateConnection('discord', { discordDefaultReplyMode: mode });
-        setTimeout(() => get().saveDiscordConfig(), 0);
-      },
-
       refreshDiscordListenerStatus: async () => {
         const conn = get().connections.find((c) => c.type === 'discord');
         try {
@@ -2726,135 +2669,6 @@ export const useMessengerStore = create<MessengerState>()(
         }
       },
 
-      sendApprovalRequest: async (type, prompt, opts) => {
-        const conn = get().connections.find((c) => c.type === type);
-        if (!conn) return null;
-
-        // Resolve a target channel. Fall back to the first text channel of
-        // the resolved server when defaultChannelId is unset.
-        let target = opts?.target ?? conn.defaultChannelId;
-        if (!target && conn.discordGuildChannels && conn.discordGuildChannels.length > 0) {
-          target = conn.discordGuildChannels[0].id;
-        }
-        const token = conn.botToken;
-        if (!token || !target) {
-          const failed: MessengerApproval = {
-            id: `failed_${Date.now()}`,
-            type,
-            prompt,
-            target: String(target ?? ''),
-            messageId: null,
-            sentAt: Date.now(),
-            decision: null,
-            decidedAt: null,
-            decidedBy: null,
-            error: !token
-              ? 'Bot token is missing'
-              : 'No Discord channel configured — save a Channel ID or Server ID first',
-          };
-          set({ approvals: [failed, ...get().approvals].slice(0, 50) });
-          return null;
-        }
-
-        try {
-          const url = '/api/messenger/discord/send-approval';
-          const perm = opts?.permission;
-          // Build the request body — include structured permission data when available
-          const body: Record<string, unknown> = {
-            token,
-            prompt,
-            ...(perm
-              ? {
-                  permission: {
-                    id: perm.id,
-                    sessionID: perm.sessionID,
-                    permission: perm.permission,
-                    patterns: perm.patterns ?? [],
-                    metadata: perm.metadata ?? {},
-                    always: perm.always ?? [],
-                  },
-                }
-              : {}),
-          };
-          body.channelId = target;
-          const data = await postJson<{
-            ok: boolean;
-            error?: string;
-            approvalId?: string;
-            messageId?: string | number;
-          }>(url, body);
-          if (!data.ok || !data.approvalId) {
-            // Record the failure so the UI can show it instead of swallowing
-            // the click silently.
-            const failed: MessengerApproval = {
-              id: `failed_${Date.now()}`,
-              type,
-              prompt,
-              target: String(target),
-              messageId: null,
-              sentAt: Date.now(),
-              decision: null,
-              decidedAt: null,
-              decidedBy: null,
-              error: data.error ?? 'send-approval failed',
-              sessionID: perm?.sessionID,
-              requestID: perm?.id,
-              permissionTool: perm?.permission,
-            };
-            set({ approvals: [failed, ...get().approvals].slice(0, 50) });
-            return null;
-          }
-          const approval: MessengerApproval = {
-            id: data.approvalId,
-            type,
-            prompt,
-            target: String(target),
-            messageId: data.messageId ?? null,
-            sentAt: Date.now(),
-            decision: null,
-            decidedAt: null,
-            decidedBy: null,
-            error: null,
-            sessionID: perm?.sessionID,
-            requestID: perm?.id,
-            permissionTool: perm?.permission,
-          };
-          set({ approvals: [approval, ...get().approvals].slice(0, 50) });
-          return approval;
-        } catch (e) {
-          // Record a failed approval so the UI can show what went wrong.
-          const approval: MessengerApproval = {
-            id: `failed_${Date.now()}`,
-            type,
-            prompt,
-            target: String(target),
-            messageId: null,
-            sentAt: Date.now(),
-            decision: null,
-            decidedAt: null,
-            decidedBy: null,
-            error: e instanceof Error ? e.message : 'send-approval failed',
-          };
-          set({ approvals: [approval, ...get().approvals].slice(0, 50) });
-          return null;
-        }
-      },
-
-      ingestApprovalDecision: (approvalId, decision, by) => {
-        const list = get().approvals;
-        const idx = list.findIndex((a) => a.id === approvalId);
-        if (idx === -1) return;
-        const next = list.slice();
-        next[idx] = {
-          ...next[idx],
-          decision,
-          decidedAt: Date.now(),
-          decidedBy: by,
-        };
-        set({ approvals: next });
-      },
-
-      clearApprovals: () => set({ approvals: [] }),
 
       setProjectMapping: (mapping) => {
         set({

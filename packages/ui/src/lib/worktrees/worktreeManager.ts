@@ -17,6 +17,7 @@ import type {
   GitWorktreeValidationResult,
 } from '@/lib/api/types';
 import { useSessionUIStore } from '@/sync/session-ui-store';
+import { notifyWorktreeAddedToMessenger, notifyWorktreeRemovedToMessenger } from '@/lib/worktrees/messengerWorktreeNotify';
 import { useSessionWorktreeStore } from '@/sync/session-worktree-store';
 
 type WorktreeListEntry = {
@@ -533,25 +534,10 @@ export async function createWorktree(project: ProjectRef, args: CreateWorktreeAr
   });
 
   // Mirror the new worktree into Discord (thread under the project channel).
-  // Best-effort: dynamic import keeps the messenger store out of the hot path
-  // and the notify no-ops unless Discord worktree sync is configured.
-  void import('@/stores/useMessengerStore')
-    .then(({ useMessengerStore }) => {
-      const notify = useMessengerStore.getState().notifyWorktreeAdded;
-      void notify(
-        {
-          id: project.id,
-          path: metadataProjectDirectory,
-          label: metadataProjectDirectory.split('/').pop() ?? metadataProjectDirectory,
-        },
-        {
-          path: metadata.path,
-          branch: metadata.branch,
-          label: metadata.label,
-        },
-      );
-    })
-    .catch(() => undefined);
+  notifyWorktreeAddedToMessenger(
+    { id: project.id, path: metadataProjectDirectory },
+    { path: metadata.path, branch: metadata.branch, label: metadata.label },
+  );
 
   return metadata;
 }
@@ -621,17 +607,9 @@ export async function removeProjectWorktree(project: ProjectRef, worktree: Workt
   }
 
   // Archive the worktree's Discord thread (best-effort).
-  void import('@/stores/useMessengerStore')
-    .then(({ useMessengerStore }) => {
-      const notify = useMessengerStore.getState().notifyWorktreeRemoved;
-      void notify(
-        { id: project.id, path: project.path, label: project.path.split('/').pop() ?? project.path },
-        {
-          path: worktree.path,
-          branch: worktree.branch,
-          label: worktree.label,
-        },
-      );
-    })
-    .catch(() => undefined);
+  notifyWorktreeRemovedToMessenger(project, {
+    path: worktree.path,
+    branch: worktree.branch,
+    label: worktree.label,
+  });
 }

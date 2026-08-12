@@ -39,6 +39,7 @@ This module provides OpenCode server integration utilities for the web server ru
 - `packages/web/server/lib/opencode/pwa-manifest-routes.js`: PWA manifest route registration with recent-session shortcut resolution and short-lived caching.
 - `packages/web/server/lib/opencode/project-icon-routes.js`: project icon upload/read/discovery route registration and icon storage orchestration.
 - `packages/web/server/lib/opencode/skill-routes.js`: route registration for skill config CRUD, supporting files, and skills catalog scan/install flows.
+- `packages/web/server/lib/opencode/system-skills.js`: OpenChamber-managed system skills (e.g. `create-project`) generated and installed into the user skill dir at server startup.
 - `packages/web/server/lib/opencode/settings-runtime.js`: Settings persistence runtime (disk IO, migrations, normalization, project validation, and persisted update serialization).
 - `packages/web/server/lib/opencode/settings-helpers.js`: Settings payload sanitization/format helpers runtime for response shaping and persisted merge prep.
 - `packages/web/server/lib/opencode/settings-normalization-runtime.js`: path/settings/tunnel normalization and sanitization helpers runtime used by settings/routes/config wiring.
@@ -208,7 +209,7 @@ Transport-triggered health checks share the periodic monitor's failure accountin
 - `createSettingsHelpers(dependencies)`: creates settings helper runtime for settings request/response shaping.
 - Returned API:
   - `normalizePwaAppName(value, fallback?)`
-  - `sanitizeSettingsUpdate(payload)`
+  - `sanitizeSettingsUpdate(payload)`: whitelists persisted keys; the `discord` and `telegram` integration blocks are sanitized field-by-field (tokens kept server-side, `null` clears the block, `bridgeEnabled` is coerced to `true` — per-server/chat policies are the only mute).
   - `mergePersistedSettings(current, changes)`
   - `formatSettingsResponse(settings)`
 
@@ -344,13 +345,17 @@ Transport-triggered health checks share the periodic monitor's failure accountin
   - `initialize(app, initialPort)`
 
 ## Public exports (startup-pipeline-runtime.js)
-- `createStartupPipelineRuntime(dependencies)`: creates runtime for terminal wiring, proxy/bootstrap scheduling, static route registration, and server startup/listen flow.
+- `createStartupPipelineRuntime(dependencies)`: creates runtime for terminal wiring, proxy/bootstrap scheduling, static route registration, and server startup/listen flow. When `createOpenChamberAgentEventsWebSocketRuntime` is provided, the pipeline also creates the messenger events WebSocket runtime (`/api/messenger/ws`) and returns it as `openChamberAgentEventsWebSocketRuntime`; the graceful shutdown runtime closes it before stopping OpenCode.
 - Returned API:
   - `run(options)`
 
 The pipeline binds the OpenChamber listener and publishes its active port
 before starting managed OpenCode. The managed custom tool therefore receives
 an authoritative loopback callback URL even when OpenChamber binds port `0`.
+
+## Public exports (system-skills.js)
+- `buildSystemSkills({ apiBaseUrl })`: returns the OpenChamber system skill definitions (`{ name, frontmatter, body }`) with the local API base URL embedded. Currently ships `create-project` — bootstrap a new project, write its AGENTS.md, and link a Discord channel via `POST /api/messenger/agent/create-project`.
+- `syncSystemSkills({ apiBaseUrl, skillRootDir? })`: installs/refreshes system skills in the user skill dir (`~/.config/opencode/skills`). Files carrying `managed-by: openchamber` frontmatter are rewritten when content changes (e.g. new port); files without the marker are user-owned and never touched. Called from `server/index.js` after the startup pipeline binds the final port.
 
 ## Public exports (openchamber-routes.js)
 - `registerOpenChamberRoutes(app, dependencies)`: registers OpenChamber endpoints:

@@ -1,5 +1,4 @@
 import WebSocket from 'ws';
-import crypto from 'node:crypto';
 import { createDiscordModelWizard } from './discord-model-wizard.js';
 import { createDiscordCommandWizards } from './discord-command-wizards.js';
 import { createDiscordGatewayProxyAgent } from './discord-proxy-agent.js';
@@ -1389,10 +1388,6 @@ export function createDiscordListenerRegistry({ broadcastEvent, bridge = null } 
   }
 
   return { start, stop, status, recent, inspect, updateConfig };
-}
-
-export function generateApprovalId() {
-  return `appr_${Date.now().toString(36)}_${crypto.randomBytes(4).toString('hex')}`;
 }
 
 export { DEFAULT_INTENTS };

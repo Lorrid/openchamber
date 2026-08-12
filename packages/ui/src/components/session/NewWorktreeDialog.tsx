@@ -62,6 +62,7 @@ import type {
 } from '@/lib/api/types';
 import type { ProjectRef } from '@/lib/worktrees/worktreeManager';
 import { useI18n } from '@/lib/i18n';
+import { notifyWorktreeAddedToMessenger } from '@/lib/worktrees/messengerWorktreeNotify';
 
 type Mode = 'new-branch' | 'existing-branch';
 
@@ -926,27 +927,13 @@ export function NewWorktreeDialog({
         onOpenChange(false);
         setIsCreating(false);
 
-        // Re-notify Discord with the session id so the worktree thread binds
-        // this session (the createWorktree call above already ensured the
-        // thread without a session).
-        void import('@/stores/useMessengerStore')
-          .then(({ useMessengerStore }) => {
-            const notify = useMessengerStore.getState().notifyWorktreeAdded;
-            void notify(
-              {
-                id: projectRef.id,
-                path: projectRef.path,
-                label: projectRef.path.split('/').pop() ?? projectRef.path,
-              },
-              {
-                path: metadata.path,
-                branch: metadata.branch,
-                label: metadata.label,
-              },
-              createdSessionId,
-            );
-          })
-          .catch(() => undefined);
+        // Bind the worktree's Discord thread to this session (createWorktree
+        // already ensured the thread itself, without a session).
+        notifyWorktreeAddedToMessenger(
+          projectRef,
+          { path: metadata.path, branch: metadata.branch, label: metadata.label },
+          createdSessionId,
+        );
 
         void sessionActions.updateSessionTitle(session.id, sessionTitle).catch(() => undefined);
 

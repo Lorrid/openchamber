@@ -16,7 +16,7 @@
  */
 
 export const MESSAGE_QUEUE_CHANGED_EVENT = 'openchamber:message-queue-changed';
-export const MESSAGE_QUEUE_DRAINED_EVENT = 'openchamber.message-queue.drained';
+const MESSAGE_QUEUE_DRAINED_EVENT = 'openchamber.message-queue.drained';
 
 const MAX_QUEUE_TARGETS = 50;
 const MAX_MESSAGES_PER_QUEUE = 20;

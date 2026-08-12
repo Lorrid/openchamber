@@ -1,9 +1,6 @@
 import crypto from 'node:crypto';
 import express, { Router } from 'express';
-import {
-  createDiscordListenerRegistry,
-  generateApprovalId,
-} from './discord-listener.js';
+import { createDiscordListenerRegistry } from './discord-listener.js';
 import { createTelegramListenerRegistry } from './telegram-listener.js';
 import {
   telegramApi,
@@ -22,7 +19,6 @@ import { parsePermissionMode, PERMISSION_MODES } from './messenger-permissions.j
 import { normalizeTrustedBotIds } from './discord-access.js';
 import { fetchDiscordBotGuilds } from './discord-guilds.js';
 import { bootstrapProject as bootstrapProjectFn } from '../projects/project-bootstrap.js';
-import { renderPermissionContext, escapeMd } from './messenger-render.js';
 import { discoverSkills } from '../opencode/skills.js';
 import {
   MESSENGER_INTERRUPT_TIMEOUT_DEFAULT_MS,
@@ -2440,78 +2436,6 @@ export function createMessengerSyncRouter({
     }
   });
 
-  /**
-   * Post an approval-request message with two buttons (Approve / Deny) in a
-   * Discord channel. The button custom_ids embed the approvalId so the
-   * gateway listener can route the click back as a structured event.
-   *
-   * Body: { token, channelId, prompt, approvalId?, permission? }
-   * When `permission` is provided, rich context is rendered from its metadata.
-   */
-  router.post('/discord/send-approval', async (req, res) => {
-    const { token, channelId, prompt, approvalId, permission } = req.body ?? {};
-    if (!token || !channelId || !prompt) {
-      return res.status(400).json({ error: 'token, channelId and prompt required' });
-    }
-    const id = approvalId || generateApprovalId();
-
-    // Render rich permission context if provided
-    const permissionContext = permission ? renderPermissionContext(permission) : '';
-    const preamble = `**⚠️ Permission Required**\n**Type:** \`${escapeMd(String(permission?.permission ?? 'approval'))}\``;
-    const bodyContent = permissionContext
-      ? `${preamble}\n\n${permissionContext}\n\n${String(prompt).slice(0, 1000)}`
-      : `**OpenChamber agent needs approval**\n${String(prompt).slice(0, 1600)}`;
-
-    const body = {
-      content: bodyContent.slice(0, 1900),
-      components: [
-        {
-          type: 1, // ACTION_ROW
-          components: [
-            {
-              type: 2, // BUTTON
-              style: 3, // SUCCESS (green)
-              label: 'Approve',
-              custom_id: `openchamber-agent-approve:${id}`,
-            },
-            {
-              type: 2,
-              style: 4, // DANGER (red)
-              label: 'Deny',
-              custom_id: `openchamber-agent-deny:${id}`,
-            },
-          ],
-        },
-      ],
-    };
-    try {
-      const r = await fetch(
-        `https://discord.com/api/v10/channels/${encodeURIComponent(channelId)}/messages`,
-        {
-          method: 'POST',
-          headers: { Authorization: `Bot ${token}`, 'Content-Type': 'application/json' },
-          body: JSON.stringify(body),
-        },
-      );
-      if (!r.ok) {
-        const text = await r.text();
-        return res.json({
-          ok: false,
-          error: `Discord: ${r.status} — ${friendlyDiscordError(r.status, text)}`,
-        });
-      }
-      const data = await r.json();
-      return res.json({
-        ok: true,
-        approvalId: id,
-        messageId: data.id,
-        channelId: data.channel_id ?? channelId,
-        sentAt: new Date().toISOString(),
-      });
-    } catch (err) {
-      return res.json({ ok: false, error: err?.message ?? 'send-approval failed' });
-    }
-  });
 
   /**
    * Discord setup diagnosis.

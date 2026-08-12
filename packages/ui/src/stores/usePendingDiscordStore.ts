@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 
-export type PendingDiscordMessage = {
+type PendingDiscordMessage = {
   messageId: string;
   text: string;
   from: { username?: string | null; firstName?: string | null } | null;

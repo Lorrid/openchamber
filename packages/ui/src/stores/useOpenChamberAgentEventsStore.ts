@@ -2,7 +2,7 @@ import { create } from 'zustand';
 
 export const MESSENGER_UI_EVENTS_WS_PATH = '/api/messenger/ws';
 
-export const MESSENGER_UI_EVENTS_BUFFER_LIMIT = 100;
+const MESSENGER_UI_EVENTS_BUFFER_LIMIT = 100;
 
 export type OpenChamberAgentWsConnectionStatus = 'idle' | 'connecting' | 'open' | 'closed' | 'error';
 
