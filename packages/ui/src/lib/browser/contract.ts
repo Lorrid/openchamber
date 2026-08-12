@@ -57,15 +57,6 @@ export type BrowserElementTarget = {
   readonly ancestry: ReadonlyArray<BrowserElementAncestor>;
 };
 
-/** A style the user changed live on the page while annotating. */
-export type BrowserStyleChange = {
-  readonly targetId: string;
-  readonly property: string;
-  /** Value the element resolved to before the edit; '' when it was unset. */
-  readonly previousValue: string;
-  readonly value: string;
-};
-
 export type BrowserAnnotationElement = {
   readonly id: string;
   readonly element: BrowserElementTarget;
@@ -99,7 +90,6 @@ export type BrowserAnnotationPayload = {
   readonly elements: ReadonlyArray<BrowserAnnotationElement>;
   readonly regions: ReadonlyArray<BrowserAnnotationRegion>;
   readonly strokes: ReadonlyArray<BrowserAnnotationStroke>;
-  readonly styleChanges: ReadonlyArray<BrowserStyleChange>;
 };
 
 export const annotationTargetCount = (payload: BrowserAnnotationPayload): number => (
@@ -159,14 +149,6 @@ export const isBrowserElementTarget = (value: unknown): value is BrowserElementT
   && value.ancestry.every(isAncestor)
 );
 
-const isStyleChange = (value: unknown): value is BrowserStyleChange => (
-  isRecord(value)
-  && typeof value.targetId === 'string'
-  && typeof value.property === 'string'
-  && typeof value.previousValue === 'string'
-  && typeof value.value === 'string'
-);
-
 const isAnnotationElement = (value: unknown): value is BrowserAnnotationElement => (
   isRecord(value) && typeof value.id === 'string' && isBrowserElementTarget(value.element)
 );
@@ -199,6 +181,4 @@ export const isBrowserAnnotationPayload = (value: unknown): value is BrowserAnno
   && value.regions.every(isAnnotationRegion)
   && Array.isArray(value.strokes)
   && value.strokes.every(isAnnotationStroke)
-  && Array.isArray(value.styleChanges)
-  && value.styleChanges.every(isStyleChange)
 );

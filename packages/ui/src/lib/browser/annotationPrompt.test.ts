@@ -26,7 +26,6 @@ const basePayload = (overrides: Partial<BrowserAnnotationPayload> = {}): Browser
   elements: [],
   regions: [],
   strokes: [],
-  styleChanges: [],
   ...overrides,
 });
 
@@ -88,24 +87,6 @@ describe('annotation prompt', () => {
     expect(output).toContain('Element 2: button');
     expect(output).toContain('Region 1: x=0, y=0, width=10, height=10');
     expect(output).toContain('Drawing 1: 2 points');
-  });
-
-  test('lists requested style changes with their previous value', () => {
-    const output = formatBrowserAnnotationPrompt({
-      payload: basePayload({
-        elements: [{ id: 'e1', element: element() }],
-        styleChanges: [
-          { targetId: 'e1', property: 'color', previousValue: 'rgb(0, 0, 0)', value: '#ff0000' },
-          { targetId: 'e1', property: 'border-radius', previousValue: '', value: '12px' },
-        ],
-      }),
-      screenshotAttached: false,
-      intro: 'Selected',
-    });
-
-    expect(output).toContain('Requested visual changes:');
-    expect(output).toContain('- color: rgb(0, 0, 0) -> #ff0000');
-    expect(output).toContain('- border-radius: (unset) -> 12px');
   });
 
   test('includes the comment only when the user wrote one', () => {

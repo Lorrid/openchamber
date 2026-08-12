@@ -1,20 +1,16 @@
 /**
  * Drives one annotation session end to end.
  *
- * The ordering here is the whole point. Style edits made during annotation are
- * left applied when the overlay resolves, precisely so the screenshot shows the
- * state the user is asking for. That means the page is left mutated until we
- * revert it — so the revert is unconditional and runs even when the capture
- * fails or the payload turns out to be malformed. A failed screenshot degrades
- * the annotation; it must never leave `!important` overrides on a page the user
- * keeps browsing.
+ * The overlay resolves only after tearing its own chrome down and waiting for a
+ * repaint, so the capture that follows shows the page and none of our UI. The
+ * page itself is never modified: annotation marks what is there, it does not
+ * edit it.
  */
 import {
   ANNOTATION_TEARDOWN_SCRIPT,
   buildAnnotationOverlayScript,
   type BrowserAnnotationOverlayLabels,
   type BrowserAnnotationOverlayTheme,
-  ANNOTATION_REVERT_HOOK,
 } from './annotationOverlay';
 import { isBrowserAnnotationPayload, type BrowserAnnotationPayload } from './contract';
 import { renderAnnotationScreenshot } from './annotationScreenshot';
@@ -39,11 +35,6 @@ export type AnnotationSessionResult = {
   readonly payload: BrowserAnnotationPayload;
   readonly screenshot: File | null;
 };
-
-const REVERT_SCRIPT = `(() => {
-  var revert = window['${ANNOTATION_REVERT_HOOK}'];
-  if (typeof revert === 'function') revert();
-})();`;
 
 const VIEWPORT_SCRIPT = '({ width: window.innerWidth, height: window.innerHeight })';
 
@@ -81,7 +72,7 @@ export const runAnnotationSession = async ({
   const script = buildAnnotationOverlayScript(theme, labels);
   const raw = await host.executeJavaScript(script, true);
 
-  // Cancelled from inside the page: the overlay already reverted its own edits.
+  // Cancelled from inside the page.
   if (raw === null || raw === undefined) return null;
 
   if (!isBrowserAnnotationPayload(raw)) {
@@ -111,12 +102,5 @@ export const runAnnotationSession = async ({
     return { payload, screenshot };
   } catch {
     return { payload, screenshot: null };
-  } finally {
-    // Unconditional: the page is not ours to leave overridden.
-    try {
-      await host.executeJavaScript(REVERT_SCRIPT, false);
-    } catch {
-      // Page gone; nothing left to revert.
-    }
   }
 };

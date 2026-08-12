@@ -1,7 +1,6 @@
 import { describe, expect, test } from 'bun:test';
 
 import { cancelAnnotationSession, runAnnotationSession, type AnnotationHost, type PageCapture } from './annotationSession';
-import { ANNOTATION_REVERT_HOOK } from './annotationOverlay';
 import type { BrowserAnnotationOverlayLabels, BrowserAnnotationOverlayTheme } from './annotationOverlay';
 
 const theme: BrowserAnnotationOverlayTheme = {
@@ -18,12 +17,8 @@ const theme: BrowserAnnotationOverlayTheme = {
 };
 
 const labels = {
-  select: 'Select', marquee: 'Region', draw: 'Draw', styles: 'Styles',
-  commentPlaceholder: 'Describe', submit: 'Attach', cancel: 'Cancel', clear: 'Clear',
-  text: 'Text', colors: 'Colors', borders: 'Borders', sizing: 'Size',
-  fontSize: 'Size', fontWeight: 'Weight', textColor: 'Color', background: 'Background',
-  borderColor: 'Color', borderWidth: 'Width', borderRadius: 'Radius',
-  width: 'Width', height: 'Height', opacity: 'Opacity',
+  select: 'Select', marquee: 'Region', draw: 'Draw',
+  commentPlaceholder: 'Describe', submit: 'Attach',
 } satisfies BrowserAnnotationOverlayLabels;
 
 const validPayload = {
@@ -49,7 +44,6 @@ const validPayload = {
   }],
   regions: [],
   strokes: [],
-  styleChanges: [{ targetId: 'element-1', property: 'color', previousValue: '', value: '#fff' }],
 };
 
 const capture: PageCapture = { mime: 'image/jpeg', base64: 'AAAA', width: 1000, height: 700 };
@@ -73,9 +67,6 @@ const createHost = (options: {
   return { host, calls };
 };
 
-const revertCalls = (calls: Call[]): number => (
-  calls.filter((call) => call.code.includes(ANNOTATION_REVERT_HOOK) && !call.code.includes('new Promise')).length
-);
 
 describe('annotation session', () => {
   test('returns null when the user cancels inside the page', async () => {
@@ -83,10 +74,14 @@ describe('annotation session', () => {
     expect(await runAnnotationSession({ host, theme, labels })).toBeNull();
   });
 
-  test('does not re-run the revert hook when the overlay cancelled itself', async () => {
-    const { host, calls } = createHost({ overlayResult: null });
+  test('does not capture anything when the overlay was cancelled', async () => {
+    let captures = 0;
+    const { host } = createHost({
+      overlayResult: null,
+      capturePage: async () => { captures += 1; return null; },
+    });
     await runAnnotationSession({ host, theme, labels });
-    expect(revertCalls(calls)).toBe(0);
+    expect(captures).toBe(0);
   });
 
   test('discards a malformed payload and tears the overlay down', async () => {
@@ -96,16 +91,15 @@ describe('annotation session', () => {
     expect(calls.some((call) => call.code.includes('data-openchamber-annotation'))).toBe(true);
   });
 
-  test('reverts live style edits after a successful capture', async () => {
-    const { host, calls } = createHost({ overlayResult: validPayload });
+  test('returns the annotation when the capture succeeds', async () => {
+    const { host } = createHost({ overlayResult: validPayload });
     const result = await runAnnotationSession({ host, theme, labels });
-
     expect(result?.payload.id).toBe('annotation-1');
-    expect(revertCalls(calls)).toBe(1);
   });
 
-  test('still reverts when the capture fails, so the page is never left overridden', async () => {
-    const { host, calls } = createHost({
+  test('keeps the annotation when the capture throws', async () => {
+    // A failed screenshot degrades the annotation; it must not discard it.
+    const { host } = createHost({
       overlayResult: validPayload,
       capturePage: async () => { throw new Error('capture failed'); },
     });
@@ -114,7 +108,6 @@ describe('annotation session', () => {
 
     expect(result?.payload.id).toBe('annotation-1');
     expect(result?.screenshot).toBeNull();
-    expect(revertCalls(calls)).toBe(1);
   });
 
   test('keeps the annotation when capture returns nothing', async () => {

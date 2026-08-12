@@ -10,7 +10,6 @@ import type {
   BrowserAnnotationRegion,
   BrowserAnnotationStroke,
   BrowserElementTarget,
-  BrowserStyleChange,
 } from './contract';
 
 const round = (value: number): number => Math.round(value);
@@ -46,10 +45,6 @@ const describeStroke = (stroke: BrowserAnnotationStroke, index: number): string 
   return `Drawing ${index + 1}: ${stroke.points.length} points over x=${round(bounds.x)}, y=${round(bounds.y)}, width=${round(bounds.width)}, height=${round(bounds.height)}`;
 };
 
-const describeStyleChange = (change: BrowserStyleChange): string => (
-  `- ${change.property}: ${change.previousValue || '(unset)'} -> ${change.value}`
-);
-
 export const formatBrowserAnnotationPrompt = ({
   payload,
   screenshotAttached,
@@ -82,11 +77,6 @@ export const formatBrowserAnnotationPrompt = ({
   if (payload.strokes.length > 0) {
     lines.push('');
     payload.strokes.forEach((stroke, index) => lines.push(describeStroke(stroke, index)));
-  }
-
-  if (payload.styleChanges.length > 0) {
-    lines.push('', 'Requested visual changes:');
-    payload.styleChanges.forEach((change) => lines.push(describeStyleChange(change)));
   }
 
   return lines.filter((line): line is string => typeof line === 'string').join('\n');

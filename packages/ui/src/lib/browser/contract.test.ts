@@ -31,7 +31,6 @@ const payload: BrowserAnnotationPayload = {
   elements: [{ id: 'element-1', element }],
   regions: [{ id: 'region-1', rect: { x: 200, y: 0, width: 50, height: 50 } }],
   strokes: [],
-  styleChanges: [{ targetId: 'element-1', property: 'color', previousValue: 'rgb(0, 0, 0)', value: '#ff0000' }],
 };
 
 describe('navigation status', () => {
@@ -68,7 +67,7 @@ describe('annotation payload validation', () => {
   });
 
   test('accepts a payload with nothing marked but a comment', () => {
-    expect(isBrowserAnnotationPayload({ ...payload, elements: [], regions: [], strokes: [], styleChanges: [] }))
+    expect(isBrowserAnnotationPayload({ ...payload, elements: [], regions: [], strokes: [] }))
       .toBe(true);
   });
 
@@ -83,13 +82,6 @@ describe('annotation payload validation', () => {
     expect(isBrowserAnnotationPayload({
       ...payload,
       strokes: [{ id: 's', points: [{ x: 1 }], bounds: { x: 0, y: 0, width: 1, height: 1 } }],
-    })).toBe(false);
-  });
-
-  test('rejects a style change missing its baseline', () => {
-    expect(isBrowserAnnotationPayload({
-      ...payload,
-      styleChanges: [{ targetId: 'element-1', property: 'color', value: 'red' }],
     })).toBe(false);
   });
 });
