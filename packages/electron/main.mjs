@@ -3791,6 +3791,24 @@ const handleInvoke = async (browserWindow, command, args = {}) => {
       return { closed: client.close({ baseUrl, port }) };
     }
 
+    // Scoped to the browser panel's own partition, so clearing it can never
+    // touch OpenChamber's session or any other window's storage.
+    case 'desktop_browser_clear_data': {
+      const partition = typeof args.partition === 'string' ? args.partition.trim() : '';
+      if (!partition.startsWith('persist:openchamber-browser')) {
+        throw new Error('Unsupported browser partition');
+      }
+      const storages = [];
+      if (args.cookies === true) storages.push('cookies');
+      if (args.cache === true) storages.push('localstorage', 'indexdb', 'websql', 'serviceworkers', 'cachestorage');
+      if (storages.length === 0) return { cleared: false };
+
+      const browserSession = session.fromPartition(partition);
+      await browserSession.clearStorageData({ storages });
+      if (args.cache === true) await browserSession.clearCache();
+      return { cleared: true };
+    }
+
     case 'desktop_browser_capture_page': {
       const wcId = Number.isFinite(args.webContentsId) ? Math.trunc(args.webContentsId) : null;
       if (wcId === null || wcId < 0) throw new Error('webContentsId is required');

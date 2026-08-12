@@ -46,10 +46,18 @@ export type BrowserToolbarProps = {
   canGoBack: boolean;
   canGoForward: boolean;
   isLoading: boolean;
-  /** Annotation and devtools need a real Chromium host; hidden without one. */
+  /** These need a real Chromium host; hidden without one. */
   onAnnotate?: () => void;
   onOpenDevTools?: () => void;
   isAnnotating?: boolean;
+  onHardReload?: () => void;
+  onZoomIn?: () => void;
+  onZoomOut?: () => void;
+  onZoomReset?: () => void;
+  /** Whole percent, e.g. 110. Controls hide at 100 to keep the bar quiet. */
+  zoomPercent?: number;
+  onClearCookies?: () => void;
+  onClearCache?: () => void;
 };
 
 export const BrowserToolbar: React.FC<BrowserToolbarProps> = ({
@@ -66,6 +74,13 @@ export const BrowserToolbar: React.FC<BrowserToolbarProps> = ({
   onAnnotate,
   onOpenDevTools,
   isAnnotating,
+  onHardReload,
+  onZoomIn,
+  onZoomOut,
+  onZoomReset,
+  zoomPercent = 100,
+  onClearCookies,
+  onClearCache,
 }) => {
   const { t } = useI18n();
 
@@ -78,6 +93,9 @@ export const BrowserToolbar: React.FC<BrowserToolbarProps> = ({
         label={isLoading ? t('contextPanel.browser.stop') : t('contextPanel.browser.reload')}
         onClick={onReload}
       />
+      {onHardReload ? (
+        <ToolbarButton icon="restart" label={t('contextPanel.browser.hardReload')} onClick={onHardReload} />
+      ) : null}
       <form
         className="min-w-0 flex-1"
         onSubmit={(event) => {
@@ -97,6 +115,35 @@ export const BrowserToolbar: React.FC<BrowserToolbarProps> = ({
           aria-label={t('contextPanel.browser.addressAria')}
         />
       </form>
+      {onZoomOut && onZoomIn ? (
+        <div className="flex shrink-0 items-center">
+          <ToolbarButton icon="subtract" label={t('contextPanel.browser.zoomOut')} onClick={onZoomOut} />
+          {zoomPercent !== 100 && onZoomReset ? (
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="xs"
+                  className="shrink-0 px-1 typography-micro tabular-nums"
+                  onClick={onZoomReset}
+                  aria-label={t('contextPanel.browser.zoomReset')}
+                >
+                  {zoomPercent}%
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent sideOffset={6}>{t('contextPanel.browser.zoomReset')}</TooltipContent>
+            </Tooltip>
+          ) : null}
+          <ToolbarButton icon="add" label={t('contextPanel.browser.zoomIn')} onClick={onZoomIn} />
+        </div>
+      ) : null}
+      {onClearCookies ? (
+        <ToolbarButton icon="delete-bin" label={t('contextPanel.browser.clearCookies')} onClick={onClearCookies} />
+      ) : null}
+      {onClearCache ? (
+        <ToolbarButton icon="database-2" label={t('contextPanel.browser.clearCache')} onClick={onClearCache} />
+      ) : null}
       {onAnnotate ? (
         <ToolbarButton
           icon="cursor"

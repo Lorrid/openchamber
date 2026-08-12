@@ -18,6 +18,8 @@ declare global {
     canGoForward(): boolean;
     reload(): void;
     reloadIgnoringCache(): void;
+    getZoomLevel(): number;
+    setZoomLevel(level: number): void;
     stop(): void;
     getURL(): string;
     getTitle(): string;

@@ -46,6 +46,11 @@ const isChromiumHost = (): boolean => (
 
 /** How long to keep waiting for a dev server that is still coming up. */
 const DEV_SERVER_WAIT_MS = 40_000;
+/** Chromium's zoom is exponential: factor = 1.2 ^ level. */
+const ZOOM_STEP = 0.5;
+const ZOOM_MIN = -3;
+const ZOOM_MAX = 4;
+const BROWSER_PARTITION = 'persist:openchamber-browser';
 const DEV_SERVER_RETRY_DELAY_MS = 600;
 /**
  * A shorter budget for a server that *answers* but with a 5xx, which is what a
@@ -84,6 +89,7 @@ const WebviewBrowser: React.FC<BrowserPaneProps> = ({ initialUrl, directory, tab
   const [address, setAddress] = React.useState(startUrl);
   const [isAnnotating, setIsAnnotating] = React.useState(false);
   const [isWaitingForServer, setIsWaitingForServer] = React.useState(false);
+  const [zoomLevel, setZoomLevel] = React.useState(0);
   /** When the current run of retries began, per URL. */
   const retryRef = React.useRef<{ url: string; startedAt: number } | null>(null);
   /** Set once this tab has seen a page that was not a startup error. */
@@ -319,6 +325,32 @@ const WebviewBrowser: React.FC<BrowserPaneProps> = ({ initialUrl, directory, tab
     return () => webviewElement.removeEventListener('new-window', onNewWindow);
   }, [loadUrl, webviewElement]);
 
+  const applyZoom = React.useCallback((level: number) => {
+    const next = Math.min(ZOOM_MAX, Math.max(ZOOM_MIN, level));
+    setZoomLevel(next);
+    try {
+      webviewRef.current?.setZoomLevel(next);
+    } catch {
+      // Not attached yet; the next change applies it.
+    }
+  }, []);
+
+  const clearBrowsingData = React.useCallback((what: 'cookies' | 'cache') => {
+    void invokeDesktopCommand('desktop_browser_clear_data', {
+      partition: BROWSER_PARTITION,
+      cookies: what === 'cookies',
+      cache: what === 'cache',
+    })
+      .then(() => {
+        toast.success(t(what === 'cookies'
+          ? 'contextPanel.browser.clearedCookies'
+          : 'contextPanel.browser.clearedCache'));
+        // Cleared storage only shows in a page that reloads without it.
+        try { webviewRef.current?.reloadIgnoringCache(); } catch { /* not attached */ }
+      })
+      .catch(() => toast.error(t('contextPanel.browser.clearFailed')));
+  }, [t]);
+
   const handleReload = React.useCallback(() => {
     try {
       if (isLoading) webviewRef.current?.stop();
@@ -424,6 +456,13 @@ const WebviewBrowser: React.FC<BrowserPaneProps> = ({ initialUrl, directory, tab
         onAnnotate={handleAnnotate}
         isAnnotating={isAnnotating}
         onOpenDevTools={() => { try { webviewRef.current?.openDevTools(); } catch { /* not attached */ } }}
+        onHardReload={() => { try { webviewRef.current?.reloadIgnoringCache(); } catch { /* not attached */ } }}
+        onZoomIn={() => applyZoom(zoomLevel + ZOOM_STEP)}
+        onZoomOut={() => applyZoom(zoomLevel - ZOOM_STEP)}
+        onZoomReset={() => applyZoom(0)}
+        zoomPercent={Math.round(Math.pow(1.2, zoomLevel) * 100)}
+        onClearCookies={() => clearBrowsingData('cookies')}
+        onClearCache={() => clearBrowsingData('cache')}
       />
       <div className="relative min-h-0 flex-1 bg-background">
         {initialSrc !== null ? (
