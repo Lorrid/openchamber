@@ -37,6 +37,7 @@ import { Icon } from "@/components/icon/Icon";
 import {
   EMBEDDED_RUNTIME_BOOTSTRAP_REQUEST,
   EMBEDDED_RUNTIME_BOOTSTRAP_RESPONSE,
+  getActiveEmbeddedSessionChatTab,
   getOrCreateEmbeddedSessionChatURL,
   type EmbeddedSessionChatURLCacheEntry,
   type EmbeddedSessionRuntimeBootstrap,
@@ -670,8 +671,13 @@ export const ContextPanel: React.FC = () => {
 
   }, [activeTab, directoryKey, setSelectedFilePath]);
 
-  const activeChatTabID = activeTab?.mode === 'chat' ? activeTab.id : null;
-  const activeChatSessionID = activeTab?.mode === 'chat' ? getSessionIDFromDedupeKey(activeTab.dedupeKey) : null;
+  const chatTabs = React.useMemo(
+    () => tabs.filter((tab) => tab.mode === 'chat'),
+    [tabs],
+  );
+  const activeChatTabID = isOpen && activeTab?.mode === 'chat' ? activeTab.id : null;
+  const activeChatSessionID = isOpen && activeTab?.mode === 'chat' ? getSessionIDFromDedupeKey(activeTab.dedupeKey) : null;
+  const activeChatTab = getActiveEmbeddedSessionChatTab(chatTabs, activeChatTabID);
 
   React.useEffect(() => {
     if (!isOpen || !directoryKey || !activeChatSessionID || typeof window === 'undefined') {
@@ -711,6 +717,10 @@ export const ContextPanel: React.FC = () => {
       currentTheme,
     });
   }, [currentTheme, darkThemeId, directoryKey, lightThemeId, themeMode]);
+
+  const activeChatSrc = activeChatTab && activeChatSessionID
+    ? getEmbeddedChatSrc(activeChatTab.id, activeChatSessionID, activeChatTab.readOnly)
+    : null;
 
   React.useEffect(() => {
     const liveTabIDs = new Set(tabs.map((tab) => tab.id));
@@ -900,10 +910,6 @@ export const ContextPanel: React.FC = () => {
             ? <React.Suspense fallback={null}><PlanView targetPath={activeTab.targetPath} /></React.Suspense>
             : null;
 
-  const chatTabs = React.useMemo(
-    () => tabs.filter((tab) => tab.mode === 'chat'),
-    [tabs],
-  );
   const browserTabs = React.useMemo(
     () => tabs.filter((tab) => tab.mode === 'browser'),
     [tabs],
@@ -1112,41 +1118,26 @@ export const ContextPanel: React.FC = () => {
             <EditorTreeColumn visible={contextEditorTreeVisible} />
           </div>
         ) : null}
-        {chatTabs.map((tab) => {
-          const sessionID = getSessionIDFromDedupeKey(tab.dedupeKey);
-          if (!sessionID) {
-            return null;
-          }
-
-          const src = getEmbeddedChatSrc(tab.id, sessionID, tab.readOnly);
-          if (!src) {
-            return null;
-          }
-
-          return (
-            <iframe
-              key={tab.id}
-              ref={(node) => {
-                if (!node) {
-                  chatFrameRefs.current.delete(tab.id);
-                  return;
-                }
-                chatFrameRefs.current.set(tab.id, node);
-              }}
-              src={src}
-              title={t('contextPanel.iframe.sessionChatTitle', { sessionID })}
-              className={cn(
-                'absolute inset-0 h-full w-full border-0 bg-background',
-                activeChatTabID === tab.id ? 'block' : 'hidden'
-              )}
-              onLoad={() => {
-                postThemeSyncToEmbeddedChat();
-                postChatSettingsSyncToEmbeddedChat();
-                postEmbeddedVisibilityToChats();
-              }}
-            />
-          );
-        })}
+        {activeChatTab && activeChatSessionID && activeChatSrc ? (
+          <iframe
+            key={activeChatTab.id}
+            ref={(node) => {
+              if (!node) {
+                chatFrameRefs.current.delete(activeChatTab.id);
+                return;
+              }
+              chatFrameRefs.current.set(activeChatTab.id, node);
+            }}
+            src={activeChatSrc}
+            title={t('contextPanel.iframe.sessionChatTitle', { sessionID: activeChatSessionID })}
+            className="absolute inset-0 h-full w-full border-0 bg-background"
+            onLoad={() => {
+              postThemeSyncToEmbeddedChat();
+              postChatSettingsSyncToEmbeddedChat();
+              postEmbeddedVisibilityToChats();
+            }}
+          />
+        ) : null}
         {browserTabs.map((tab) => (
           <div
             key={tab.id}
