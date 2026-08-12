@@ -150,10 +150,6 @@ export async function uploadPatchViaCritique({
   return resultFromProcess(proc);
 }
 
-export function critiqueOgImageUrl(id) {
-  if (!id) return null;
-  return `https://critique.work/og/${id}.png`;
-}
 
 /** Compact agent-facing instructions so Discord sessions auto-share diff URLs. */
 export function buildCritiqueInstructions() {

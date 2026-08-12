@@ -1,8 +1,8 @@
 const ADMINISTRATOR_PERMISSION = 1n << 3n;
 const MANAGE_GUILD_PERMISSION = 1n << 5n;
 
-export const DEFAULT_DISCORD_ALLOW_ROLE = 'OpenChamber';
-export const DEFAULT_DISCORD_BLOCK_ROLE = 'no-openchamber';
+const DEFAULT_DISCORD_ALLOW_ROLE = 'OpenChamber';
+const DEFAULT_DISCORD_BLOCK_ROLE = 'no-openchamber';
 
 function normalizeRoleName(value) {
   return String(value ?? '').trim().toLowerCase();

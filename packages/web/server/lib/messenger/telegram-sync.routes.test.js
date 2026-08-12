@@ -292,40 +292,6 @@ describe('messenger /telegram/runtime-status', () => {
   });
 });
 
-describe('messenger /telegram/auto-start', () => {
-  it('reports not-configured when no telegram block exists', async () => {
-    const readSettings = vi.fn(async () => ({}));
-
-    const res = await request(createApp({ readSettings }).app)
-      .post('/api/messenger/telegram/auto-start')
-      .send({});
-
-    expect(res.body).toMatchObject({ ok: false, reason: 'not-configured' });
-  });
-
-  it('reports listener-disabled when the sticky stop flag is set', async () => {
-    const readSettings = vi.fn(async () => ({
-      telegram: { botToken: SETTINGS_TOKEN, listenerEnabled: false },
-    }));
-
-    const res = await request(createApp({ readSettings }).app)
-      .post('/api/messenger/telegram/auto-start')
-      .send({});
-
-    expect(res.body).toMatchObject({ ok: false, reason: 'listener-disabled' });
-  });
-});
-
-describe('messenger /config', () => {
-  it('lists telegram as a supported messenger', async () => {
-    const res = await request(createApp().app).get('/api/messenger/config');
-
-    expect(res.status).toBe(200);
-    expect(res.body.supportedMessengers).toEqual(['discord', 'telegram']);
-    expect(res.body.telegram.maxMessageLength).toBe(4096);
-  });
-});
-
 describe('messenger /telegram/sync-projects', () => {
   it('requires token and chatId', async () => {
     const res = await request(createApp().app)

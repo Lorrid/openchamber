@@ -14,7 +14,7 @@ import crypto from 'node:crypto';
 
 export const WIZARD_TTL_MS = 10 * 60 * 1000;
 // Discord string-select menus hard-cap at 25 options.
-export const DISCORD_SELECT_MAX = 25;
+const DISCORD_SELECT_MAX = 25;
 // Default real choices per page when prev/next live inside the select
 // (up to two slots reserved for in-menu navigation).
 export const PAGE_SIZE = 23;
@@ -23,7 +23,7 @@ export const PAGE_SIZE_WITH_BUTTON_NAV = DISCORD_SELECT_MAX;
 
 export const PREV_VALUE = '__openchamber_agent_prev';
 export const NEXT_VALUE = '__openchamber_agent_next';
-export const BACK_VALUE = '__openchamber_agent_back';
+const BACK_VALUE = '__openchamber_agent_back';
 
 /**
  * Rewrite deprecated Otto Discord component ids / select values to the

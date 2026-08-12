@@ -2,7 +2,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import os from 'node:os';
 
-export const MESSENGER_NOTIFY_ON_COMPLETE_DEFAULT = false;
+const MESSENGER_NOTIFY_ON_COMPLETE_DEFAULT = false;
 export const MESSENGER_INTERRUPT_TIMEOUT_DEFAULT_MS = 8000;
 export const MESSENGER_INTERRUPT_TIMEOUT_MIN_MS = 1000;
 export const MESSENGER_INTERRUPT_TIMEOUT_MAX_MS = 60000;

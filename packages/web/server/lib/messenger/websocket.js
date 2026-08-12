@@ -2,14 +2,14 @@ import { WebSocketServer } from 'ws';
 import { parseRequestPathname } from '../terminal/terminal-ws-protocol.js';
 import { sendMessageStreamWsFrame } from '../event-stream/protocol.js';
 
-export const MESSENGER_EVENTS_WS_PATH = '/api/messenger/ws';
+const MESSENGER_EVENTS_WS_PATH = '/api/messenger/ws';
 /** @deprecated Legacy paths kept so already-open clients can finish reconnecting. */
-export const MESSENGER_EVENTS_WS_PATH_LEGACY = [
+const MESSENGER_EVENTS_WS_PATH_LEGACY = [
   '/ws/openchamber-agent/events',
   '/ws/otto/events',
 ];
-export const MESSENGER_EVENTS_WS_HEARTBEAT_MS = 30_000;
-export const MESSENGER_EVENTS_REPLAY_LIMIT = 100;
+const MESSENGER_EVENTS_WS_HEARTBEAT_MS = 30_000;
+const MESSENGER_EVENTS_REPLAY_LIMIT = 100;
 
 let hubBroadcastFn = null;
 

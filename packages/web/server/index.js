@@ -92,6 +92,7 @@ import { createPermissionAutoAcceptRuntime } from './lib/permission-auto-accept/
 import { createGracefulShutdownRuntime } from './lib/opencode/shutdown-runtime.js';
 import { createProjectConfigRuntime } from './lib/projects/project-config.js';
 import { createMessengerSyncRouter } from './lib/messenger/messenger-sync.js';
+import { createMessengerAutostart } from './lib/messenger/messenger-autostart.js';
 import { syncSystemSkills } from './lib/opencode/system-skills.js';
 import {
   createOpenChamberAgentEventsWebSocketRuntime,
@@ -1771,9 +1772,6 @@ async function main(options = {}) {
     ensureEventStream: () => ensureGlobalWatcherStarted(),
   });
   app.use('/api/messenger', messengerRouter);
-  // Legacy aliases — same router, kept for in-flight clients / system skills.
-  app.use('/api/openchamber-agent/messenger', messengerRouter);
-  app.use('/api/otto/messenger', messengerRouter);
 
   const previewProxyRuntime = createPreviewProxyRuntime({
     crypto,
@@ -1869,238 +1867,18 @@ async function main(options = {}) {
     console.warn('[SystemSkills] Failed to sync system skills:', error?.message || error);
   }
 
-  // Auto-start Discord Gateway listener if a bot token is saved in settings.
-  // This lets the integration survive server restarts without manual re-start.
-  // The bridge is enabled by default, routing all incoming messages through OpenCode
-  // and streaming responses back into the originating channel/thread.
-  // Includes retry logic and periodic health checks to recover from disconnects.
-  (async () => {
-    const AUTO_START_RETRIES = 5;
-    const AUTO_START_RETRY_DELAY_MS = 3000;
-    const HEALTH_CHECK_INTERVAL_MS = 60_000;
-
-    // Resolve project bindings once, outside the retry loop.
-    let projects = [];
-    try {
-      const settings = await readSettingsFromDiskMigrated();
-      projects = sanitizeProjects(settings?.projects || []);
-    } catch {
-      // ignore — defaults to empty
-    }
-
-    const resolveProject = () => {
-      if (projects.length === 1) {
-        const p = projects[0];
-        return p?.path ? { path: p.path, label: p.label ?? p.path } : null;
-      }
-      return null;
-    };
-
-    // Try auto-start with retries
-    for (let attempt = 1; attempt <= AUTO_START_RETRIES; attempt++) {
-      try {
-        const settings = await readSettingsFromDiskMigrated();
-        const discordConfig = settings?.discord;
-        if (discordConfig?.botToken) {
-          if (discordConfig.listenerEnabled === false) {
-            console.log('[Discord] Listener disabled in saved config — skipping auto-start');
-            break;
-          }
-          const result = discordListener.start(discordConfig.botToken, {
-            guildId: discordConfig.guildId || undefined,
-            autoReply: discordConfig.autoReply !== false,
-            scopeToGuild: Boolean(discordConfig.scopeToGuild),
-            bridgeEnabled: true,
-            resolveProject,
-            trustedBotIds: discordConfig.trustedBotIds,
-            registerDynamicSlashCommands: Boolean(discordConfig.registerDynamicSlashCommands),
-            defaultReplyMode: discordConfig.defaultReplyMode,
-            guildPolicies: discordConfig.guildPolicies,
-          });
-          // Persist the heal: a stale settings.bridgeEnabled:false (from an old
-          // UI localStorage overwrite) must not survive the next boot path that
-          // still reads settings.json (e.g. /discord/auto-start).
-          if (discordConfig.bridgeEnabled === false) {
-            try {
-              await persistSettings({
-                discord: { ...discordConfig, bridgeEnabled: true },
-              });
-            } catch {
-              // best-effort — live listener is already bridged
-            }
-          }
-          console.log(
-            '[Discord] Listener auto-start:',
-            result?.alreadyRunning ? 'already running' : 'started',
-            '(connected=' + result?.connected + ')'
-          );
-          // The bridge needs the shared global event hub running to mirror
-          // OpenCode output into Discord — don't wait for a browser client.
-          void ensureGlobalWatcherStarted().catch((error) => {
-            console.warn('[Discord] Global event watcher startup failed:', error?.message ?? error);
-          });
-          break; // Success — exit retry loop
-        } else {
-          console.log('[Discord] No bot token in saved config — skipping auto-start');
-          break; // No token, nothing to retry
-        }
-      } catch (err) {
-        const isLastAttempt = attempt === AUTO_START_RETRIES;
-        console.warn(
-          `[Discord] Auto-start attempt ${attempt}/${AUTO_START_RETRIES} failed:`, err?.message ?? err,
-          isLastAttempt ? ' — giving up' : ` — retrying in ${AUTO_START_RETRY_DELAY_MS}ms`,
-        );
-        if (isLastAttempt) break;
-        await new Promise((r) => setTimeout(r, AUTO_START_RETRY_DELAY_MS));
-      }
-    }
-
-    // Periodic health check — re-reads settings each tick so Disconnect /
-    // Stop listening are respected (never restart from a stale boot-time
-    // closed-over config). Recovers only when listening is still enabled.
-    const healthCheckTimer = setInterval(async () => {
-      try {
-        const settings = await readSettingsFromDiskMigrated();
-        const cfg = settings?.discord;
-        if (!cfg?.botToken) return;
-
-        if (cfg.listenerEnabled === false) {
-          const status = discordListener.status(cfg.botToken);
-          if (status.running) {
-            console.log('[Discord] Health check: listener disabled in settings — stopping');
-            discordListener.stop(cfg.botToken);
-          }
-          return;
-        }
-
-        const status = discordListener.status(cfg.botToken);
-        if (!status.running || !status.connected) {
-          console.log(
-            '[Discord] Health check: listener not connected (running=' + status.running +
-            ', connected=' + status.connected + ') — restarting...'
-          );
-          discordListener.stop(cfg.botToken);
-          const startResult = discordListener.start(cfg.botToken, {
-            guildId: cfg.guildId || undefined,
-            autoReply: cfg.autoReply !== false,
-            scopeToGuild: Boolean(cfg.scopeToGuild),
-            bridgeEnabled: true,
-            resolveProject,
-            trustedBotIds: cfg.trustedBotIds,
-            registerDynamicSlashCommands: Boolean(cfg.registerDynamicSlashCommands),
-            defaultReplyMode: cfg.defaultReplyMode,
-            guildPolicies: cfg.guildPolicies,
-          });
-          console.log(
-            '[Discord] Health check: restart result — running=' + startResult.running +
-            ', connected=' + startResult.connected
-          );
-        }
-      } catch (err) {
-        console.warn('[Discord] Health check error:', err?.message ?? err);
-      }
-    }, HEALTH_CHECK_INTERVAL_MS);
-    healthCheckTimer.unref();
-  })();
-
-  // Auto-start the Telegram long-poll listener when a bot token is saved in
-  // settings — same restart-survival contract as the Discord block above.
-  (async () => {
-    const AUTO_START_RETRIES = 5;
-    const AUTO_START_RETRY_DELAY_MS = 3000;
-    const HEALTH_CHECK_INTERVAL_MS = 60_000;
-
-    for (let attempt = 1; attempt <= AUTO_START_RETRIES; attempt++) {
-      try {
-        const settings = await readSettingsFromDiskMigrated();
-        const telegramConfig = settings?.telegram;
-        if (telegramConfig?.botToken) {
-          if (telegramConfig.listenerEnabled === false) {
-            console.log('[Telegram] Listener disabled in saved config — skipping auto-start');
-            break;
-          }
-          const result = telegramListener.start(telegramConfig.botToken, {
-            autoReply: telegramConfig.autoReply !== false,
-            defaultUserId: telegramConfig.defaultUserId,
-            ownerUserIds: telegramConfig.ownerUserIds,
-            allowedChatIds: telegramConfig.allowedChatIds,
-            defaultReplyMode: telegramConfig.defaultReplyMode,
-          });
-          if (telegramConfig.bridgeEnabled === false) {
-            try {
-              await persistSettings({
-                telegram: { ...telegramConfig, bridgeEnabled: true },
-              });
-            } catch {
-              // best-effort — live listener is already bridged
-            }
-          }
-          console.log(
-            '[Telegram] Listener auto-start:',
-            result?.alreadyRunning ? 'already running' : 'started',
-            '(connected=' + result?.connected + ')'
-          );
-          // The bridge needs the shared global event hub running to mirror
-          // OpenCode output into Telegram — don't wait for a browser client.
-          void ensureGlobalWatcherStarted().catch((error) => {
-            console.warn('[Telegram] Global event watcher startup failed:', error?.message ?? error);
-          });
-          break; // Success — exit retry loop
-        }
-        console.log('[Telegram] No bot token in saved config — skipping auto-start');
-        break; // No token, nothing to retry
-      } catch (err) {
-        const isLastAttempt = attempt === AUTO_START_RETRIES;
-        console.warn(
-          `[Telegram] Auto-start attempt ${attempt}/${AUTO_START_RETRIES} failed:`, err?.message ?? err,
-          isLastAttempt ? ' — giving up' : ` — retrying in ${AUTO_START_RETRY_DELAY_MS}ms`,
-        );
-        if (isLastAttempt) break;
-        await new Promise((r) => setTimeout(r, AUTO_START_RETRY_DELAY_MS));
-      }
-    }
-
-    // Periodic health check — re-reads settings each tick so Disconnect /
-    // Stop listening are respected (never restart from a stale boot-time
-    // closed-over config). The listener's own backoff recovers transient
-    // poll failures; this only revives a fully stopped loop.
-    const telegramHealthCheckTimer = setInterval(async () => {
-      try {
-        const settings = await readSettingsFromDiskMigrated();
-        const cfg = settings?.telegram;
-        if (!cfg?.botToken) return;
-
-        if (cfg.listenerEnabled === false) {
-          const status = telegramListener.status(cfg.botToken);
-          if (status.running) {
-            console.log('[Telegram] Health check: listener disabled in settings — stopping');
-            telegramListener.stop(cfg.botToken);
-          }
-          return;
-        }
-
-        const status = telegramListener.status(cfg.botToken);
-        if (!status.running) {
-          console.log('[Telegram] Health check: listener not running — restarting...');
-          telegramListener.stop(cfg.botToken);
-          const startResult = telegramListener.start(cfg.botToken, {
-            autoReply: cfg.autoReply !== false,
-            defaultUserId: cfg.defaultUserId,
-            ownerUserIds: cfg.ownerUserIds,
-            allowedChatIds: cfg.allowedChatIds,
-            defaultReplyMode: cfg.defaultReplyMode,
-          });
-          console.log(
-            '[Telegram] Health check: restart result — running=' + startResult.running +
-            ', connected=' + startResult.connected
-          );
-        }
-      } catch (err) {
-        console.warn('[Telegram] Health check error:', err?.message ?? err);
-      }
-    }, HEALTH_CHECK_INTERVAL_MS);
-    telegramHealthCheckTimer.unref();
-  })();
+  // Auto-start Discord/Telegram listeners from saved settings (with retries)
+  // and keep them healthy — owned by the messenger module so the boot-time
+  // start options can't drift from the route handlers. Listeners respect
+  // `listenerEnabled: false` (Disconnect/Stop) via settings re-reads.
+  const messengerAutostart = createMessengerAutostart({
+    readSettings: readSettingsFromDiskMigrated,
+    persistSettings,
+    discordListener,
+    telegramListener,
+    ensureEventStream: () => ensureGlobalWatcherStarted(),
+  });
+  messengerAutostart.start();
 
   // Only opens a relay control socket when the user opted in (config enabled).
   // Reconcile the relay lifecycle from demand on startup: run it if any relay

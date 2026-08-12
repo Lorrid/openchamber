@@ -131,7 +131,7 @@ export function buildSlashCommandDefinitions() {
   ].map((c) => ({ type: 1, ...c }));
 }
 
-export function buildDynamicSlashCommandDefinitions({
+function buildDynamicSlashCommandDefinitions({
   commands = [],
   skills = [],
   existingNames = new Set(),

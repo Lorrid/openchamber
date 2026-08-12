@@ -33,6 +33,56 @@ import {
 import { resolvePrimaryWorktreeRoot } from '../git/service.js';
 
 /**
+ * Build the channel→project resolver the Discord listener uses to route an
+ * inbound message to the right OpenChamber project. Keyed by the persisted
+ * `projectBindings` (channel id → project). Shared by the manual
+ * `/discord/listener/start` path and the boot auto-start so they can never
+ * drift.
+ */
+export function buildDiscordResolveProject(projectBindings) {
+  const bindingMap = new Map(
+    Array.isArray(projectBindings)
+      ? projectBindings
+          .filter((b) => b && b.channelId)
+          .map((b) => [
+            String(b.channelId),
+            { path: b.projectPath ?? null, label: b.projectLabel ?? null },
+          ])
+      : [],
+  );
+  return ({ channelId }) => bindingMap.get(String(channelId)) ?? null;
+}
+
+/** Telegram chat/topic → project resolver (uses chatId + optional messageThreadId). */
+export function buildTelegramResolveProject(projectBindings) {
+  const bindings = Array.isArray(projectBindings) ? projectBindings : [];
+  return ({ chatId, channelId, threadId } = {}) => {
+    const id = String(chatId ?? channelId ?? '');
+    if (!id) return null;
+    const threadKey = threadId != null && String(threadId).length > 0 ? String(threadId) : null;
+    if (threadKey) {
+      const threaded = bindings.find(
+        (b) =>
+          b &&
+          String(b.chatId) === id &&
+          b.messageThreadId != null &&
+          String(b.messageThreadId) === threadKey,
+      );
+      if (threaded?.projectPath) {
+        return { path: threaded.projectPath, label: threaded.projectLabel ?? null };
+      }
+    }
+    const chatLevel = bindings.find(
+      (b) => b && String(b.chatId) === id && (b.messageThreadId == null || b.messageThreadId === ''),
+    );
+    if (chatLevel?.projectPath) {
+      return { path: chatLevel.projectPath, label: chatLevel.projectLabel ?? null };
+    }
+    return null;
+  };
+}
+
+/**
  * Resolve owner user ids for Telegram persistence / listener start.
  * Accepts ownerUserIds and/or legacy defaultUserId; always returns both
  * ownerUserIds and defaultUserId (first owner) for back-compat.
@@ -262,7 +312,7 @@ export function mergeProjectBindings(prev, incoming) {
  * non-forum multi-project rows key by chatId+projectPath so they do not collide.
  * Exported for testing.
  */
-export function mergeTelegramProjectBindings(prev, incoming) {
+function mergeTelegramProjectBindings(prev, incoming) {
   const byKey = new Map();
   const add = (list) => {
     for (const b of Array.isArray(list) ? list : []) {
@@ -434,57 +484,6 @@ export function createMessengerSyncRouter({
       }
     };
   };
-
-  /**
-   * Build the channel→project resolver the Discord listener uses to route an
-   * inbound message to the right OpenChamber project. Keyed by the persisted
-   * `projectBindings` (channel id → project). Shared by the manual
-   * `/discord/listener/start` path and the boot-time `/discord/auto-start`
-   * path so they can never drift — auto-start previously passed NO bindings,
-   * which made every channel fall back to the first project on the server.
-   */
-  function buildResolveProject(projectBindings) {
-    const bindingMap = new Map(
-      Array.isArray(projectBindings)
-        ? projectBindings
-            .filter((b) => b && b.channelId)
-            .map((b) => [
-              String(b.channelId),
-              { path: b.projectPath ?? null, label: b.projectLabel ?? null },
-            ])
-        : [],
-    );
-    return ({ channelId }) => bindingMap.get(String(channelId)) ?? null;
-  }
-
-  /** Telegram chat/topic → project resolver (uses chatId + optional messageThreadId). */
-  function buildTelegramResolveProject(projectBindings) {
-    const bindings = Array.isArray(projectBindings) ? projectBindings : [];
-    return ({ chatId, channelId, threadId } = {}) => {
-      const id = String(chatId ?? channelId ?? '');
-      if (!id) return null;
-      const threadKey = threadId != null && String(threadId).length > 0 ? String(threadId) : null;
-      if (threadKey) {
-        const threaded = bindings.find(
-          (b) =>
-            b &&
-            String(b.chatId) === id &&
-            b.messageThreadId != null &&
-            String(b.messageThreadId) === threadKey,
-        );
-        if (threaded?.projectPath) {
-          return { path: threaded.projectPath, label: threaded.projectLabel ?? null };
-        }
-      }
-      const chatLevel = bindings.find(
-        (b) => b && String(b.chatId) === id && (b.messageThreadId == null || b.messageThreadId === ''),
-      );
-      if (chatLevel?.projectPath) {
-        return { path: chatLevel.projectPath, label: chatLevel.projectLabel ?? null };
-      }
-      return null;
-    };
-  }
 
   async function resolveDefaultDiscordTarget({ projectPath } = {}) {
     if (!readSettings) return null;
@@ -2069,7 +2068,7 @@ export function createMessengerSyncRouter({
     // as /listener/stop and /test.
     const token = await resolveDiscordBotToken(req.body?.token);
     if (!token) return res.status(400).json({ error: 'token required' });
-    const resolveProject = buildResolveProject(projectBindings);
+    const resolveProject = buildDiscordResolveProject(projectBindings);
     const result = discordListener.start(token, {
       guildId,
       autoReply: autoReply !== false,

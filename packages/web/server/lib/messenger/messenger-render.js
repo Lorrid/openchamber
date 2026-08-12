@@ -49,7 +49,7 @@ export function escapeMd(s) {
   return String(s ?? '').replace(/[*_]/g, (c) => `\\${c}`);
 }
 
-export function shortFileName(p) {
+function shortFileName(p) {
   if (!p) return '';
   const last = String(p).split(/[\\/]/).pop();
   return last || String(p);
@@ -549,7 +549,7 @@ function renderEditDiff(input, { maxLinesPerSide = 12, lineLimit = 120 } = {}) {
  *   - other tools → pretty-printed input JSON + output preview
  * Errors always close the block with a ⚠ fenced message.
  */
-export function renderToolDetailVerbose(part) {
+function renderToolDetailVerbose(part) {
   const tool = String(part.tool ?? 'tool');
   const state = part.state ?? {};
   const input = state.input ?? {};

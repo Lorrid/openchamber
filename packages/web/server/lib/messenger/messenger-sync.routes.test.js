@@ -249,16 +249,4 @@ describe('messenger /discord/listener sticky stop', () => {
     });
   });
 
-  it('auto-start refuses when listenerEnabled is false', async () => {
-    const readSettings = vi.fn(async () => ({
-      discord: { botToken: SETTINGS_TOKEN, listenerEnabled: false },
-    }));
-
-    const res = await request(createApp({ readSettings }))
-      .post('/api/messenger/discord/auto-start')
-      .send({});
-
-    expect(res.status).toBe(200);
-    expect(res.body).toMatchObject({ ok: false, reason: 'listener-disabled' });
-  });
 });

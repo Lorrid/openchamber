@@ -128,7 +128,7 @@ function mapCapabilityModalities(cap) {
 }
 
 /** Resolved input modality keys for a provider model (ordered, de-duped). */
-export function inputModalityKeys(model) {
+function inputModalityKeys(model) {
   if (!model || typeof model !== 'object') return [];
   let keys = normalizeModalityList(model?.modalities?.input);
   if (keys.length === 0) {

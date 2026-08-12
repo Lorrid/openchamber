@@ -20,6 +20,9 @@ import { buildTelegramInlineKeyboard } from './telegram-api.js';
 /** Comfortable page size for Telegram button lists (mobile). */
 export const TELEGRAM_PAGE_SIZE = 8;
 
+// Re-exported so Telegram wizards have a single import surface for the
+// shared wizard primitives (same role discord-wizard-shared.js plays for
+// Discord wizards).
 export {
   PREV_VALUE,
   NEXT_VALUE,
@@ -28,6 +31,7 @@ export {
   createWizardStore,
   botHashFor,
 };
+
 
 /**
  * Build one-column inline keyboard rows for the current page of options.

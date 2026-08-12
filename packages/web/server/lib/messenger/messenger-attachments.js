@@ -34,9 +34,9 @@ const TEXT_EXTENSIONS = new Set([
 const IMAGE_MIME = new Set(['image/png', 'image/jpeg', 'image/gif', 'image/webp']);
 const PDF_MIME = 'application/pdf';
 
-export const MAX_TEXT_ATTACHMENT_BYTES = 2 * 1024 * 1024; // 2 MB
-export const MAX_BINARY_ATTACHMENT_BYTES = 8 * 1024 * 1024; // 8 MB
-export const MAX_AUDIO_ATTACHMENT_BYTES = 20 * 1024 * 1024; // matches /api/stt limit
+const MAX_TEXT_ATTACHMENT_BYTES = 2 * 1024 * 1024; // 2 MB
+const MAX_BINARY_ATTACHMENT_BYTES = 8 * 1024 * 1024; // 8 MB
+const MAX_AUDIO_ATTACHMENT_BYTES = 20 * 1024 * 1024; // matches /api/stt limit
 const MAX_INLINE_TEXT_CHARS = 60_000;
 
 function extOf(filename) {
