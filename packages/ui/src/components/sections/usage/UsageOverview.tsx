@@ -24,6 +24,8 @@ import {
 } from '@/lib/quota';
 import { getAllSyncSessions } from '@/sync/sync-refs';
 import { useQuotaAutoRefresh, useQuotaStore } from '@/stores/useQuotaStore';
+import { useUIStore } from '@/stores/useUIStore';
+import { useConfigStore } from '@/stores/useConfigStore';
 import { cn } from '@/lib/utils';
 import type { QuotaProviderId } from '@/types';
 import { UsageAreaChart } from './UsageAreaChart';
@@ -32,12 +34,13 @@ import { UsageProgressBar } from './UsageProgressBar';
 import {
   getProviderRemainingPercent,
   getProviderUsedPercent,
-  isActiveProviderResult,
+  isVisibleUsageProvider,
   listProviderWindows,
 } from './usageProviderHelpers';
 import { formatWindowLabel } from '@/lib/quota';
 
 const PERIOD_OPTIONS: UsagePeriodDays[] = [7, 30];
+const CREDENTIAL_PROVIDERS = new Set<QuotaProviderId>(['ollama-cloud', 'cursor']);
 
 const DeltaBadge: React.FC<{
   delta: number | null;
@@ -59,10 +62,15 @@ const DeltaBadge: React.FC<{
 export const UsageOverview: React.FC = () => {
   const { t } = useI18n();
   const results = useQuotaStore((state) => state.results);
+  const hiddenProviderIds = useQuotaStore((state) => state.hiddenProviderIds);
   const setSelectedProvider = useQuotaStore((state) => state.setSelectedProvider);
+  const hideUsageProvider = useQuotaStore((state) => state.hideUsageProvider);
+  const showUsageProvider = useQuotaStore((state) => state.showUsageProvider);
   const fetchAllQuotas = useQuotaStore((state) => state.fetchAllQuotas);
   const isLoading = useQuotaStore((state) => state.isLoading);
   const loadSettings = useQuotaStore((state) => state.loadSettings);
+  const setSettingsPage = useUIStore((state) => state.setSettingsPage);
+  const setConfigSelectedProvider = useConfigStore((state) => state.setSelectedProvider);
 
   const [periodDays, setPeriodDays] = React.useState<UsagePeriodDays>(7);
   const [metric, setMetric] = React.useState<UsageMetricMode>('cost');
@@ -80,10 +88,20 @@ export const UsageOverview: React.FC = () => {
     return () => window.clearInterval(timer);
   }, []);
 
+  const hiddenSet = React.useMemo(() => new Set(hiddenProviderIds), [hiddenProviderIds]);
+
   const activeResults = React.useMemo(
-    () => results.filter((result) => isActiveProviderResult(result)),
-    [results],
+    () => results.filter((result) => isVisibleUsageProvider(result, hiddenSet)),
+    [hiddenSet, results],
   );
+
+  const availableProviders = React.useMemo(() => {
+    return QUOTA_PROVIDERS.filter((provider) => {
+      const result = results.find((entry) => entry.providerId === provider.id);
+      if (!result?.configured) return true;
+      return hiddenSet.has(provider.id);
+    });
+  }, [hiddenSet, results]);
 
   const periodSummary = React.useMemo(() => {
     void sessionTick;
@@ -407,17 +425,31 @@ export const UsageOverview: React.FC = () => {
                         <span className="sr-only">{tone}</span>
                       </td>
                       <td className="px-3 py-3 text-right">
-                        <Button
-                          size="sm"
-                          variant="ghost"
-                          className="h-7 w-7 px-0"
-                          aria-label={t('settings.usage.overview.providers.openDetailAria', {
-                            provider: meta?.name ?? result.providerName,
-                          })}
-                          onClick={() => setSelectedProvider(result.providerId)}
-                        >
-                          <Icon name="arrow-right-s" className="h-4 w-4" />
-                        </Button>
+                        <div className="flex items-center justify-end gap-1">
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            className="h-7 w-7 px-0"
+                            aria-label={t('settings.usage.overview.providers.removeAria', {
+                              provider: meta?.name ?? result.providerName,
+                            })}
+                            title={t('settings.usage.sidebar.removeProviderTitle')}
+                            onClick={() => hideUsageProvider(result.providerId)}
+                          >
+                            <Icon name="close" className="h-3.5 w-3.5" />
+                          </Button>
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            className="h-7 w-7 px-0"
+                            aria-label={t('settings.usage.overview.providers.openDetailAria', {
+                              provider: meta?.name ?? result.providerName,
+                            })}
+                            onClick={() => setSelectedProvider(result.providerId)}
+                          >
+                            <Icon name="arrow-right-s" className="h-4 w-4" />
+                          </Button>
+                        </div>
                       </td>
                     </tr>
                   );
@@ -428,42 +460,59 @@ export const UsageOverview: React.FC = () => {
         )}
       </SettingsSection>
 
-      <SettingsSection title={t('settings.usage.overview.actions.title')}>
-        <div className="grid gap-3 @xl:grid-cols-2">
-          <button
-            type="button"
-            onClick={() => setSelectedProvider(USAGE_ADD_PROVIDER_ID)}
-            className="flex items-start gap-3 rounded-xl border border-[var(--interactive-border)] bg-[var(--surface-elevated)] p-4 text-left transition-colors hover:bg-interactive-hover"
-            data-settings-item="usage.add-provider"
-          >
-            <span className="flex h-9 w-9 items-center justify-center rounded-lg bg-[var(--surface-muted)]">
-              <Icon name="add" className="h-4 w-4" />
-            </span>
-            <span>
-              <span className="block typography-ui-label text-foreground">{t('settings.usage.overview.actions.addProvider')}</span>
-              <span className="mt-0.5 block typography-meta text-muted-foreground">{t('settings.usage.overview.actions.addProviderDescription')}</span>
-            </span>
-          </button>
-          <button
-            type="button"
-            onClick={() => {
-              const first = activeResults[0];
-              if (first) setSelectedProvider(first.providerId);
-              else setSelectedProvider(USAGE_ADD_PROVIDER_ID);
-            }}
-            className="flex items-start gap-3 rounded-xl border border-[var(--interactive-border)] bg-[var(--surface-elevated)] p-4 text-left transition-colors hover:bg-interactive-hover"
-            data-settings-item="usage.manage-limits"
-          >
-            <span className="flex h-9 w-9 items-center justify-center rounded-lg bg-[var(--surface-muted)]">
-              <Icon name="git-branch" className="h-4 w-4" />
-            </span>
-            <span>
-              <span className="block typography-ui-label text-foreground">{t('settings.usage.overview.actions.manageLimits')}</span>
-              <span className="mt-0.5 block typography-meta text-muted-foreground">{t('settings.usage.overview.actions.manageLimitsDescription')}</span>
-            </span>
-          </button>
-        </div>
-      </SettingsSection>
+      {availableProviders.length > 0 && (
+        <SettingsSection
+          title={t('settings.usage.overview.available.title')}
+          settingsItem="usage.available-providers"
+        >
+          <p className="mb-3 typography-meta text-muted-foreground">
+            {t('settings.usage.overview.available.description')}
+          </p>
+          <div className="space-y-1">
+            {availableProviders.map((provider) => {
+              const result = results.find((entry) => entry.providerId === provider.id);
+              const isHiddenConfigured = Boolean(result?.configured) && hiddenSet.has(provider.id);
+              return (
+                <div
+                  key={provider.id}
+                  className="flex items-center gap-3 rounded-lg px-2 py-2 hover:bg-interactive-hover"
+                >
+                  <ProviderLogo providerId={provider.id} className="h-5 w-5 shrink-0" />
+                  <span className="min-w-0 flex-1">
+                    <span className="block typography-ui-label text-foreground">{provider.name}</span>
+                    <span className="block typography-micro text-muted-foreground">
+                      {isHiddenConfigured
+                        ? t('settings.usage.overview.available.hiddenConfigured')
+                        : t('settings.usage.overview.available.notConfigured')}
+                    </span>
+                  </span>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={() => {
+                      if (isHiddenConfigured) {
+                        showUsageProvider(provider.id);
+                        setSelectedProvider(provider.id);
+                        return;
+                      }
+                      if (CREDENTIAL_PROVIDERS.has(provider.id)) {
+                        setSelectedProvider(USAGE_ADD_PROVIDER_ID);
+                        return;
+                      }
+                      setConfigSelectedProvider(provider.id);
+                      setSettingsPage('providers');
+                    }}
+                  >
+                    {isHiddenConfigured
+                      ? t('settings.usage.overview.available.restore')
+                      : t('settings.usage.overview.available.connect')}
+                  </Button>
+                </div>
+              );
+            })}
+          </div>
+        </SettingsSection>
+      )}
     </SettingsPageLayout>
   );
 };

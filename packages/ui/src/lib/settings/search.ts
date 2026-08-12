@@ -533,11 +533,11 @@ const SETTINGS_SEARCH_ITEMS: readonly SettingsSearchItem[] = [
     keywords: ['providers', 'table', 'remaining', 'limits'],
   },
   {
-    id: 'usage.manage-limits',
+    id: 'usage.available-providers',
     page: 'usage',
-    titleKey: 'settings.usage.overview.actions.manageLimits',
-    descriptionKey: 'settings.usage.overview.actions.manageLimitsDescription',
-    keywords: ['limits', 'quota', 'remaining'],
+    titleKey: 'settings.usage.overview.available.title',
+    descriptionKey: 'settings.usage.overview.available.description',
+    keywords: ['available', 'add', 'restore', 'hidden', 'providers'],
   },
   {
     id: 'usage.work-status-panel',

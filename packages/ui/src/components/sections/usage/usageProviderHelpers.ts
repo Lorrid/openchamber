@@ -30,3 +30,15 @@ export const listProviderWindows = (
 
 export const isActiveProviderResult = (result: ProviderResult | undefined): boolean =>
   Boolean(result?.configured);
+
+/** Configured providers appear in Usage unless the user explicitly removed them. */
+export const isVisibleUsageProvider = (
+  result: ProviderResult | undefined,
+  hiddenProviderIds: ReadonlySet<string> | readonly string[],
+): boolean => {
+  if (!result?.configured) return false;
+  if ('has' in hiddenProviderIds) {
+    return !hiddenProviderIds.has(result.providerId);
+  }
+  return !hiddenProviderIds.includes(result.providerId);
+};

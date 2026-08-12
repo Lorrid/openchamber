@@ -445,13 +445,14 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ onClose, forceMobile
       useQuotaStore.getState().setSelectedProvider(USAGE_ADD_PROVIDER_ID);
     }
 
-    if (result.id === 'usage.overview' || result.id === 'usage.providers-table' || result.id === 'usage.manage-limits') {
+    if (result.id === 'usage.overview' || result.id === 'usage.providers-table' || result.id === 'usage.available-providers') {
       useQuotaStore.getState().setSelectedProvider(null);
     }
 
     if (result.id === 'usage.work-status-panel' || result.id === 'usage.model-quotas' || result.id === 'usage.period-stats') {
       const quota = useQuotaStore.getState();
-      const active = quota.results.find((entry) => entry.configured);
+      const hidden = new Set(quota.hiddenProviderIds);
+      const active = quota.results.find((entry) => entry.configured && !hidden.has(entry.providerId));
       if (active) {
         quota.setSelectedProvider(active.providerId);
       } else {

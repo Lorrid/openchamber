@@ -65,6 +65,7 @@ export const UsageProviderDetail: React.FC<UsageProviderDetailProps> = ({ provid
   const error = useQuotaStore((state) => state.error);
   const dropdownProviderIds = useQuotaStore((state) => state.dropdownProviderIds);
   const setDropdownProviderIds = useQuotaStore((state) => state.setDropdownProviderIds);
+  const hideUsageProvider = useQuotaStore((state) => state.hideUsageProvider);
   const selectedModels = useQuotaStore((state) => state.selectedModels);
   const toggleModelSelected = useQuotaStore((state) => state.toggleModelSelected);
   const applyDefaultSelections = useQuotaStore((state) => state.applyDefaultSelections);
@@ -204,6 +205,15 @@ export const UsageProviderDetail: React.FC<UsageProviderDetailProps> = ({ provid
           ariaLabel={t('settings.usage.page.options.showInWorkStatusAria')}
           info={t('settings.usage.page.options.showInWorkStatusTooltip')}
         />
+        <div className="mt-3">
+          <Button
+            size="sm"
+            variant="outline"
+            onClick={() => hideUsageProvider(providerId)}
+          >
+            {t('settings.usage.page.actions.removeFromUsage')}
+          </Button>
+        </div>
       </SettingsSection>
 
       <SettingsSection title={t('settings.usage.page.section.periodUsage')} settingsItem="usage.period-stats">

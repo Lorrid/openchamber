@@ -16,6 +16,8 @@ let quotaAutoRefreshInterval: number | null = null;
 interface QuotaSettingsState {
   displayMode: 'usage' | 'remaining';
   dropdownProviderIds: QuotaProviderId[];
+  /** Configured providers the user removed from the Usage block (still configured elsewhere). */
+  hiddenProviderIds: QuotaProviderId[];
   selectedModels: Record<string, string[]>;  // Map of providerId -> selected model names
   expandedFamilies: Record<string, string[]>;  // Map of providerId -> EXPANDED family IDs (header dropdown - inverted)
 }
@@ -36,6 +38,9 @@ interface QuotaStore extends QuotaSettingsState {
   setSelectedProvider: (providerId: UsageSelectionId | null) => void;
   setDisplayMode: (mode: 'usage' | 'remaining') => void;
   setDropdownProviderIds: (providerIds: QuotaProviderId[]) => void;
+  setHiddenProviderIds: (providerIds: QuotaProviderId[]) => void;
+  hideUsageProvider: (providerId: QuotaProviderId) => void;
+  showUsageProvider: (providerId: QuotaProviderId) => void;
   setSelectedModels: (providerId: string, modelNames: string[]) => void;
   toggleModelSelected: (providerId: string, modelName: string) => void;
   setExpandedFamilies: (providerId: string, familyIds: string[]) => void;
@@ -54,6 +59,15 @@ const parseSettings = (data: Record<string, unknown> | null): QuotaSettingsState
         typeof entry === 'string' && allProviderIds.includes(entry as QuotaProviderId)
       )
     : allProviderIds;
+
+  const rawHiddenProviders = Array.isArray(data?.usageHiddenProviders)
+    ? data?.usageHiddenProviders
+    : null;
+  const hiddenProviderIds = rawHiddenProviders
+    ? rawHiddenProviders.filter((entry): entry is QuotaProviderId =>
+        typeof entry === 'string' && allProviderIds.includes(entry as QuotaProviderId)
+      )
+    : [];
 
   // Parse selected models (providerId -> array of model names)
   const selectedModels: Record<string, string[]> = {};
@@ -80,6 +94,7 @@ const parseSettings = (data: Record<string, unknown> | null): QuotaSettingsState
   return {
     displayMode,
     dropdownProviderIds,
+    hiddenProviderIds,
     selectedModels,
     expandedFamilies,
   };
@@ -111,6 +126,7 @@ const loadSettingsFromRuntime = async (): Promise<QuotaSettingsState> => {
   return {
     displayMode: 'usage',
     dropdownProviderIds: QUOTA_PROVIDERS.map((provider) => provider.id),
+    hiddenProviderIds: [],
     selectedModels: {},
     expandedFamilies: {},
   };
@@ -127,6 +143,7 @@ export const useQuotaStore = create<QuotaStore>()(
       error: null,
       displayMode: 'usage',
       dropdownProviderIds: QUOTA_PROVIDERS.map((provider) => provider.id),
+      hiddenProviderIds: [],
       selectedModels: {},
       expandedFamilies: {},
 
@@ -202,6 +219,20 @@ export const useQuotaStore = create<QuotaStore>()(
       setSelectedProvider: (providerId) => set({ selectedProviderId: providerId }),
       setDisplayMode: (mode) => set({ displayMode: mode }),
       setDropdownProviderIds: (providerIds) => set({ dropdownProviderIds: providerIds }),
+      setHiddenProviderIds: (providerIds) => set({ hiddenProviderIds: providerIds }),
+      hideUsageProvider: (providerId) => {
+        const next = Array.from(new Set([...get().hiddenProviderIds, providerId]));
+        set({
+          hiddenProviderIds: next,
+          selectedProviderId: get().selectedProviderId === providerId ? null : get().selectedProviderId,
+        });
+        void updateDesktopSettings({ usageHiddenProviders: next });
+      },
+      showUsageProvider: (providerId) => {
+        const next = get().hiddenProviderIds.filter((id) => id !== providerId);
+        set({ hiddenProviderIds: next });
+        void updateDesktopSettings({ usageHiddenProviders: next });
+      },
 
       setSelectedModels: (providerId, modelNames) => {
         set((state) => ({

@@ -2,7 +2,6 @@ import React from 'react';
 import { ScrollableOverlay } from '@/components/ui/ScrollableOverlay';
 import { ProviderLogo } from '@/components/ui/ProviderLogo';
 import { Button } from '@/components/ui/button';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Icon } from '@/components/icon/Icon';
 import { cn } from '@/lib/utils';
 import {
@@ -11,13 +10,12 @@ import {
   resolveUsageTone,
 } from '@/lib/quota';
 import { useQuotaStore } from '@/stores/useQuotaStore';
-import { updateDesktopSettings } from '@/lib/persistence';
 import { useI18n } from '@/lib/i18n';
 import { SETTINGS_PANEL_TITLE_CLASS } from '@/components/sections/shared/SettingsSection';
 import {
   getProviderRemainingPercent,
   getProviderUsedPercent,
-  isActiveProviderResult,
+  isVisibleUsageProvider,
 } from './usageProviderHelpers';
 
 interface UsageSidebarProps {
@@ -27,40 +25,34 @@ interface UsageSidebarProps {
 export const UsageSidebar: React.FC<UsageSidebarProps> = ({ onItemSelect }) => {
   const { t } = useI18n();
   const results = useQuotaStore((state) => state.results);
+  const hiddenProviderIds = useQuotaStore((state) => state.hiddenProviderIds);
   const selectedProviderId = useQuotaStore((state) => state.selectedProviderId);
   const setSelectedProvider = useQuotaStore((state) => state.setSelectedProvider);
+  const hideUsageProvider = useQuotaStore((state) => state.hideUsageProvider);
   const fetchAllQuotas = useQuotaStore((state) => state.fetchAllQuotas);
   const isLoading = useQuotaStore((state) => state.isLoading);
-  const usageDisplayMode = useQuotaStore((state) => state.displayMode);
-  const setUsageDisplayMode = useQuotaStore((state) => state.setDisplayMode);
   const loadUsageSettings = useQuotaStore((state) => state.loadSettings);
 
   React.useEffect(() => {
     void loadUsageSettings();
   }, [loadUsageSettings]);
 
-  const persistUsageSettings = React.useCallback(async (changes: { usageDisplayMode?: 'usage' | 'remaining'; usageDropdownProviders?: string[] }) => {
-    try {
-      await updateDesktopSettings(changes);
-    } catch (error) {
-      console.warn('Failed to save usage settings:', error);
-    }
-  }, []);
+  const hiddenSet = React.useMemo(() => new Set(hiddenProviderIds), [hiddenProviderIds]);
 
-  const handleUsageDisplayModeChange = React.useCallback((value: string) => {
-    if (value !== 'usage' && value !== 'remaining') {
-      return;
-    }
-    setUsageDisplayMode(value);
-    void persistUsageSettings({ usageDisplayMode: value });
-  }, [persistUsageSettings, setUsageDisplayMode]);
-
-  const activeProviders = React.useMemo(() => {
+  const visibleProviders = React.useMemo(() => {
     return QUOTA_PROVIDERS.filter((provider) => {
       const result = results.find((entry) => entry.providerId === provider.id);
-      return isActiveProviderResult(result);
+      return isVisibleUsageProvider(result, hiddenSet);
     });
-  }, [results]);
+  }, [hiddenSet, results]);
+
+  const availableCount = React.useMemo(() => {
+    return QUOTA_PROVIDERS.filter((provider) => {
+      const result = results.find((entry) => entry.providerId === provider.id);
+      if (!result?.configured) return true;
+      return hiddenSet.has(provider.id);
+    }).length;
+  }, [hiddenSet, results]);
 
   const isOverviewSelected = selectedProviderId === null;
   const isAddSelected = selectedProviderId === USAGE_ADD_PROVIDER_ID;
@@ -71,7 +63,7 @@ export const UsageSidebar: React.FC<UsageSidebarProps> = ({ onItemSelect }) => {
         <h2 className={`${SETTINGS_PANEL_TITLE_CLASS} mb-3`}>{t('settings.usage.sidebar.title')}</h2>
         <div className="flex items-center justify-between gap-2">
           <span className="typography-meta text-muted-foreground">
-            {t('settings.usage.sidebar.activeTotal', { count: activeProviders.length })}
+            {t('settings.usage.sidebar.activeTotal', { count: visibleProviders.length })}
           </span>
           <Button
             size="sm"
@@ -84,18 +76,6 @@ export const UsageSidebar: React.FC<UsageSidebarProps> = ({ onItemSelect }) => {
           >
             <Icon name="refresh" className={cn('h-3.5 w-3.5', isLoading && 'animate-spin')} />
           </Button>
-        </div>
-        <div className="mt-2 flex items-center justify-between gap-2">
-          <span className="typography-micro text-muted-foreground">{t('settings.usage.sidebar.field.display')}</span>
-          <Select value={usageDisplayMode} onValueChange={handleUsageDisplayModeChange}>
-            <SelectTrigger className="w-fit">
-              <SelectValue placeholder={t('settings.usage.sidebar.field.displayModePlaceholder')} />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="usage">{t('settings.usage.sidebar.field.displayModeUsage')}</SelectItem>
-              <SelectItem value="remaining">{t('settings.usage.sidebar.field.displayModeRemaining')}</SelectItem>
-            </SelectContent>
-          </Select>
         </div>
       </div>
 
@@ -117,17 +97,16 @@ export const UsageSidebar: React.FC<UsageSidebarProps> = ({ onItemSelect }) => {
           </span>
         </button>
 
-        {activeProviders.length > 0 && (
+        {visibleProviders.length > 0 && (
           <div className="px-1.5 pt-3 pb-1 typography-micro text-muted-foreground">
             {t('settings.usage.sidebar.activeProviders')}
           </div>
         )}
 
-        {activeProviders.map((provider) => {
+        {visibleProviders.map((provider) => {
           const result = results.find((entry) => entry.providerId === provider.id);
           const usedPercent = getProviderUsedPercent(result?.usage);
           const remainingPercent = getProviderRemainingPercent(result?.usage);
-          const displayPercent = usageDisplayMode === 'remaining' ? remainingPercent : usedPercent;
           const tone = resolveUsageTone(usedPercent);
           const isSelected = provider.id === selectedProviderId;
 
@@ -158,14 +137,22 @@ export const UsageSidebar: React.FC<UsageSidebarProps> = ({ onItemSelect }) => {
                 <span className="typography-ui-label font-normal truncate flex-1 min-w-0 text-foreground">
                   {provider.name}
                 </span>
-                {displayPercent !== null && (
-                  <span className="typography-micro text-muted-foreground flex-shrink-0 tabular-nums">
-                    {usageDisplayMode === 'remaining'
-                      ? t('settings.usage.sidebar.remainingPct', { percent: displayPercent })
-                      : t('settings.usage.sidebar.usedPct', { percent: displayPercent })}
+                {remainingPercent !== null && (
+                  <span className="typography-micro text-muted-foreground flex-shrink-0 tabular-nums group-hover:hidden">
+                    {t('settings.usage.sidebar.remainingPct', { percent: remainingPercent })}
                   </span>
                 )}
               </button>
+              <Button
+                size="sm"
+                variant="ghost"
+                className="h-7 w-7 px-0 opacity-0 group-hover:opacity-100 focus-visible:opacity-100"
+                aria-label={t('settings.usage.sidebar.removeProviderAria', { provider: provider.name })}
+                title={t('settings.usage.sidebar.removeProviderTitle')}
+                onClick={() => hideUsageProvider(provider.id)}
+              >
+                <Icon name="close" className="h-3.5 w-3.5" />
+              </Button>
             </div>
           );
         })}
@@ -185,8 +172,15 @@ export const UsageSidebar: React.FC<UsageSidebarProps> = ({ onItemSelect }) => {
           <span className="flex h-5 w-5 items-center justify-center rounded-md bg-[var(--surface-muted)]">
             <Icon name="add" className="h-3.5 w-3.5" />
           </span>
-          <span className="typography-ui-label font-normal text-foreground">
-            {t('settings.usage.sidebar.addProvider')}
+          <span className="min-w-0 flex-1">
+            <span className="block typography-ui-label font-normal text-foreground">
+              {t('settings.usage.sidebar.addProvider')}
+            </span>
+            {availableCount > 0 && (
+              <span className="block typography-micro text-muted-foreground">
+                {t('settings.usage.sidebar.availableCount', { count: availableCount })}
+              </span>
+            )}
           </span>
         </button>
       </ScrollableOverlay>

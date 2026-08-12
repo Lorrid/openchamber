@@ -10,7 +10,6 @@ import { useQuotaStore } from '@/stores/useQuotaStore';
 import { useUIStore } from '@/stores/useUIStore';
 import { useConfigStore } from '@/stores/useConfigStore';
 import { QuotaCredentials } from './QuotaCredentials';
-import { isActiveProviderResult } from './usageProviderHelpers';
 import type { QuotaProviderId } from '@/types';
 
 const CREDENTIAL_PROVIDERS = new Set<QuotaProviderId>(['ollama-cloud', 'cursor']);
@@ -18,17 +17,22 @@ const CREDENTIAL_PROVIDERS = new Set<QuotaProviderId>(['ollama-cloud', 'cursor']
 export const UsageAddProvider: React.FC = () => {
   const { t } = useI18n();
   const results = useQuotaStore((state) => state.results);
+  const hiddenProviderIds = useQuotaStore((state) => state.hiddenProviderIds);
   const setSelectedProvider = useQuotaStore((state) => state.setSelectedProvider);
+  const showUsageProvider = useQuotaStore((state) => state.showUsageProvider);
   const setSettingsPage = useUIStore((state) => state.setSettingsPage);
   const setConfigSelectedProvider = useConfigStore((state) => state.setSelectedProvider);
   const [credentialProviderId, setCredentialProviderId] = React.useState<QuotaProviderId | null>(null);
 
-  const inactiveProviders = React.useMemo(() => {
-    const activeIds = new Set(
-      results.filter((result) => isActiveProviderResult(result)).map((result) => result.providerId),
-    );
-    return QUOTA_PROVIDERS.filter((provider) => !activeIds.has(provider.id));
-  }, [results]);
+  const hiddenSet = React.useMemo(() => new Set(hiddenProviderIds), [hiddenProviderIds]);
+
+  const availableProviders = React.useMemo(() => {
+    return QUOTA_PROVIDERS.filter((provider) => {
+      const result = results.find((entry) => entry.providerId === provider.id);
+      if (!result?.configured) return true;
+      return hiddenSet.has(provider.id);
+    });
+  }, [hiddenSet, results]);
 
   const openProvidersSettings = React.useCallback((providerId?: string) => {
     if (providerId) {
@@ -40,12 +44,18 @@ export const UsageAddProvider: React.FC = () => {
   }, [setConfigSelectedProvider, setSettingsPage]);
 
   const handleSelect = React.useCallback((providerId: QuotaProviderId) => {
+    const result = results.find((entry) => entry.providerId === providerId);
+    if (result?.configured && hiddenSet.has(providerId)) {
+      showUsageProvider(providerId);
+      setSelectedProvider(providerId);
+      return;
+    }
     if (CREDENTIAL_PROVIDERS.has(providerId)) {
       setCredentialProviderId(providerId);
       return;
     }
     openProvidersSettings(providerId);
-  }, [openProvidersSettings]);
+  }, [hiddenSet, openProvidersSettings, results, setSelectedProvider, showUsageProvider]);
 
   const credentialMeta = credentialProviderId
     ? QUOTA_PROVIDERS.find((provider) => provider.id === credentialProviderId)
@@ -69,29 +79,35 @@ export const UsageAddProvider: React.FC = () => {
       showSaveStatus
     >
       <SettingsSection divider={false} settingsItem="usage.add-provider">
-        {inactiveProviders.length === 0 ? (
+        {availableProviders.length === 0 ? (
           <p className="typography-meta text-muted-foreground">{t('settings.usage.add.empty')}</p>
         ) : (
           <div className="space-y-1">
-            {inactiveProviders.map((provider) => (
-              <button
-                key={provider.id}
-                type="button"
-                onClick={() => handleSelect(provider.id)}
-                className="flex w-full items-center gap-3 rounded-lg px-2 py-2 text-left transition-colors hover:bg-interactive-hover"
-              >
-                <ProviderLogo providerId={provider.id} className="h-5 w-5 shrink-0" />
-                <span className="min-w-0 flex-1">
-                  <span className="block typography-ui-label text-foreground">{provider.name}</span>
-                  <span className="block typography-micro text-muted-foreground">
-                    {CREDENTIAL_PROVIDERS.has(provider.id)
-                      ? t('settings.usage.add.viaCredentials')
-                      : t('settings.usage.add.viaProviders')}
+            {availableProviders.map((provider) => {
+              const result = results.find((entry) => entry.providerId === provider.id);
+              const isHiddenConfigured = Boolean(result?.configured) && hiddenSet.has(provider.id);
+              return (
+                <button
+                  key={provider.id}
+                  type="button"
+                  onClick={() => handleSelect(provider.id)}
+                  className="flex w-full items-center gap-3 rounded-lg px-2 py-2 text-left transition-colors hover:bg-interactive-hover"
+                >
+                  <ProviderLogo providerId={provider.id} className="h-5 w-5 shrink-0" />
+                  <span className="min-w-0 flex-1">
+                    <span className="block typography-ui-label text-foreground">{provider.name}</span>
+                    <span className="block typography-micro text-muted-foreground">
+                      {isHiddenConfigured
+                        ? t('settings.usage.add.restoreHint')
+                        : CREDENTIAL_PROVIDERS.has(provider.id)
+                          ? t('settings.usage.add.viaCredentials')
+                          : t('settings.usage.add.viaProviders')}
+                    </span>
                   </span>
-                </span>
-                <Icon name="arrow-right-s" className="h-4 w-4 text-muted-foreground" />
-              </button>
-            ))}
+                  <Icon name="arrow-right-s" className="h-4 w-4 text-muted-foreground" />
+                </button>
+              );
+            })}
           </div>
         )}
 
@@ -109,6 +125,7 @@ export const UsageAddProvider: React.FC = () => {
             className="mt-2"
             size="sm"
             onClick={() => {
+              showUsageProvider(credentialProviderId);
               setSelectedProvider(credentialProviderId);
             }}
           >
