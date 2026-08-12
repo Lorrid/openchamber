@@ -329,7 +329,22 @@ export const createOpenChamberControlService = (dependencies) => {
   const browserAction = (action, input, signal) => {
     const parameters = {};
 
+    const readViewport = (required) => {
+      const viewport = asNonEmptyString(input.viewport);
+      if (!viewport) {
+        if (required) throw new OpenChamberControlError('viewport is required for browser.resize', 400);
+        return;
+      }
+      if (!['mobile', 'tablet', 'desktop', 'fill'].includes(viewport)) {
+        throw new OpenChamberControlError('viewport must be mobile, tablet, desktop, or fill', 400);
+      }
+      parameters.viewport = viewport;
+    };
+
+    if (action === 'browser.resize') readViewport(true);
+
     if (action === 'browser.open') {
+      readViewport(false);
       const url = asNonEmptyString(input.url);
       if (!url) throw new OpenChamberControlError('url is required for browser.open', 400);
       let parsed;
@@ -343,6 +358,7 @@ export const createOpenChamberControlService = (dependencies) => {
       }
       parameters.url = parsed.toString();
     }
+
 
     if (action === 'browser.click') {
       const selector = asNonEmptyString(input.selector);

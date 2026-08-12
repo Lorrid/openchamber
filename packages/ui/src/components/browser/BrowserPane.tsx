@@ -26,7 +26,14 @@ import {
 } from '@/lib/browser/pageActions';
 import { BrowserToolbar } from './BrowserToolbar';
 import { BrowserDeviceBar, type BrowserColorScheme } from './BrowserDeviceBar';
-import { FILL_VIEWPORT, fitViewport, type BrowserViewport } from '@/lib/browser/viewport';
+import {
+  FILL_VIEWPORT,
+  fitViewport,
+  isViewportMode,
+  viewportForMode,
+  viewportSummary,
+  type BrowserViewport,
+} from '@/lib/browser/viewport';
 import { BrowserEmptyState } from './BrowserEmptyState';
 import { useAnnotationAttach, useAnnotationOverlayLabels } from './useAnnotationAttach';
 import { useWebviewNavigation } from './useWebviewNavigation';
@@ -95,6 +102,10 @@ const WebviewBrowser: React.FC<BrowserPaneProps> = ({ initialUrl, directory, tab
   const [zoomLevel, setZoomLevel] = React.useState(0);
   const [showDeviceBar, setShowDeviceBar] = React.useState(false);
   const [viewport, setViewport] = React.useState<BrowserViewport>(FILL_VIEWPORT);
+  // Read inside agent actions, which are not re-created when the viewport
+  // changes and would otherwise report whatever it was when they were built.
+  const viewportRef = React.useRef(viewport);
+  viewportRef.current = viewport;
   const [colorScheme, setColorScheme] = React.useState<BrowserColorScheme>('system');
   const [stageSize, setStageSize] = React.useState({ width: 0, height: 0 });
   const stageRef = React.useRef<HTMLDivElement | null>(null);
@@ -252,9 +263,29 @@ const WebviewBrowser: React.FC<BrowserPaneProps> = ({ initialUrl, directory, tab
     const webview = webviewRef.current;
     if (!webview) throw new Error('The browser panel is not ready');
 
+    // Showing the bar when the agent sizes the page keeps the change visible:
+    // the user should see which layout is being looked at, not just that it
+    // suddenly narrowed.
+    const applyViewportParameter = (): void => {
+      if (!isViewportMode(parameters.viewport)) return;
+      setViewport(viewportForMode(parameters.viewport));
+      setShowDeviceBar(true);
+    };
+
+    if (action === 'browser.resize') {
+      if (!isViewportMode(parameters.viewport)) throw new Error('viewport is required');
+      applyViewportParameter();
+      // Let the resize land before reporting it, so a snapshot that follows
+      // describes the new layout rather than the old one.
+      await new Promise((resolve) => setTimeout(resolve, 200));
+      await waitForIdle();
+      return { viewport: viewportSummary(viewportForMode(parameters.viewport)) };
+    }
+
     if (action === 'browser.open') {
       const url = typeof parameters.url === 'string' ? parameters.url : '';
       if (!url) throw new Error('url is required');
+      applyViewportParameter();
       loadUrl(url);
       await new Promise((resolve) => setTimeout(resolve, 150));
       const settled = await waitForIdle(25_000);
@@ -266,7 +297,13 @@ const WebviewBrowser: React.FC<BrowserPaneProps> = ({ initialUrl, directory, tab
       }
       // `settled: false` means the page is still fetching, not that opening
       // failed — the agent can snapshot it and decide for itself.
-      return { url: normalizeBrowserUrl(url), title, opened: true, settled };
+      return {
+        url: normalizeBrowserUrl(url),
+        title,
+        opened: true,
+        settled,
+        viewport: viewportSummary(viewportRef.current),
+      };
     }
 
     await waitForIdle();
@@ -300,6 +337,11 @@ const WebviewBrowser: React.FC<BrowserPaneProps> = ({ initialUrl, directory, tab
     const record = result as Record<string, unknown>;
     if (record.ok !== true) {
       throw new Error(typeof record.error === 'string' && record.error ? record.error : 'Browser action failed');
+    }
+    // A snapshot has to say which layout it describes, or the agent cannot tell
+    // a mobile rendering from a desktop one.
+    if (action === 'browser.snapshot') {
+      return { ...record, viewport: viewportSummary(viewportRef.current) };
     }
     // A click or a submit commonly starts a navigation; let it land so the
     // agent's next snapshot sees the page the action produced.

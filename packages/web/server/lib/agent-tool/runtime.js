@@ -50,6 +50,7 @@ const PLUGIN_PARAMETER_PROPERTIES = {
   value: { type: 'string', description: 'Text to type for browser.type' },
   submit: { type: 'boolean', description: 'Press Enter after typing' },
   direction: { type: 'string', enum: ['up', 'down', 'top', 'bottom'], description: 'Scroll direction for browser.scroll' },
+  viewport: { type: 'string', enum: ['mobile', 'tablet', 'desktop', 'fill'], description: 'Page layout size; snapshots report which one is in effect' },
 };
 
 const asNonEmptyString = (value) => {

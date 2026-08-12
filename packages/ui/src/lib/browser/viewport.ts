@@ -99,3 +99,49 @@ export const describeViewport = (viewport: BrowserViewport): string => {
   }
   return '';
 };
+
+/**
+ * The vocabulary the agent gets.
+ *
+ * Named sizes rather than pixel dimensions: an agent asked to "check the mobile
+ * layout" should not have to invent a width, and a number it invented tells the
+ * user nothing about what was actually checked.
+ */
+export const VIEWPORT_MODES = ['mobile', 'tablet', 'desktop', 'fill'] as const;
+export type BrowserViewportMode = (typeof VIEWPORT_MODES)[number];
+
+const MODE_PRESETS: Record<Exclude<BrowserViewportMode, 'fill'>, string> = {
+  mobile: 'iphone-14',
+  tablet: 'ipad-mini',
+  desktop: 'desktop',
+};
+
+export const isViewportMode = (value: unknown): value is BrowserViewportMode => (
+  typeof value === 'string' && (VIEWPORT_MODES as readonly string[]).includes(value)
+);
+
+export const viewportForMode = (mode: BrowserViewportMode): BrowserViewport => (
+  mode === 'fill' ? FILL_VIEWPORT : presetViewport(MODE_PRESETS[mode]) ?? FILL_VIEWPORT
+);
+
+/**
+ * Reports the current viewport in the agent's own vocabulary, so a snapshot
+ * states which layout it describes.
+ */
+export const viewportSummary = (viewport: BrowserViewport): {
+  mode: BrowserViewportMode | 'custom';
+  width: number | null;
+  height: number | null;
+} => {
+  const size = viewportSize(viewport);
+  if (!size) return { mode: 'fill', width: null, height: null };
+
+  for (const mode of ['mobile', 'tablet', 'desktop'] as const) {
+    const preset = viewportForMode(mode);
+    const presetSize = viewportSize(preset);
+    if (presetSize && presetSize.width === size.width && presetSize.height === size.height) {
+      return { mode, width: size.width, height: size.height };
+    }
+  }
+  return { mode: 'custom', width: size.width, height: size.height };
+};

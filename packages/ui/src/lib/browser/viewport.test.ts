@@ -9,8 +9,11 @@ import {
   describeViewport,
   fitViewport,
   presetViewport,
+  isViewportMode,
   rotateViewport,
+  viewportForMode,
   viewportSize,
+  viewportSummary,
 } from './viewport';
 
 describe('viewport size', () => {
@@ -87,5 +90,35 @@ describe('fitting', () => {
     const layout = fitViewport(viewport, { width: 0, height: 0 });
     expect(layout?.width).toBe(400);
     expect(layout && layout.scale > 0).toBe(true);
+  });
+});
+
+describe('agent viewport vocabulary', () => {
+  test('each named mode resolves to a real size', () => {
+    for (const mode of ['mobile', 'tablet', 'desktop'] as const) {
+      const size = viewportSize(viewportForMode(mode));
+      expect(size !== null).toBe(true);
+    }
+  });
+
+  test('fill has no size, as the agent should expect', () => {
+    expect(viewportSize(viewportForMode('fill'))).toBeNull();
+  });
+
+  test('accepts only the vocabulary it published', () => {
+    expect(isViewportMode('mobile')).toBe(true);
+    expect(isViewportMode('phone')).toBe(false);
+    expect(isViewportMode(390)).toBe(false);
+  });
+
+  test('reports back in the same words it accepts', () => {
+    expect(viewportSummary(viewportForMode('mobile')).mode).toBe('mobile');
+    expect(viewportSummary(FILL_VIEWPORT).mode).toBe('fill');
+  });
+
+  test('calls a hand-typed size custom rather than the nearest name', () => {
+    const summary = viewportSummary({ kind: 'custom', width: 500, height: 900 });
+    expect(summary.mode).toBe('custom');
+    expect(summary.width).toBe(500);
   });
 });

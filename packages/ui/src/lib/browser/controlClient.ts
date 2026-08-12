@@ -72,7 +72,23 @@ const handleRequest = async (request: BrowserControlRequest): Promise<void> => {
         return;
       }
       opener?.(url);
-      await postResult(request.requestId, { ok: true, data: { url, opened: true } });
+      // The view is only created by this call, so anything that configures one
+      // cannot be honoured yet. Saying so beats reporting a plain success and
+      // leaving the agent to believe a size it asked for was applied.
+      const requestedViewport = typeof request.parameters.viewport === 'string'
+        ? request.parameters.viewport
+        : '';
+      await postResult(request.requestId, {
+        ok: true,
+        data: requestedViewport && requestedViewport !== 'fill'
+          ? {
+            url,
+            opened: true,
+            viewportApplied: false,
+            note: 'The panel had no browser view yet, so the viewport was not applied. Call browser.resize now that one exists.',
+          }
+          : { url, opened: true },
+      });
       return;
     }
 
