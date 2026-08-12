@@ -2,7 +2,7 @@ import React from 'react';
 import { create } from 'zustand';
 import { devtools } from 'zustand/middleware';
 import type { ProviderResult, QuotaProviderId } from '@/types';
-import { QUOTA_PROVIDERS } from '@/lib/quota';
+import { QUOTA_PROVIDERS, type UsageSelectionId } from '@/lib/quota';
 import { isVSCodeRuntime } from '@/lib/desktop';
 import { getRegisteredRuntimeAPIs } from '@/contexts/runtimeAPIRegistry';
 import { getDefaultModels } from '@/lib/quota/model-families';
@@ -22,7 +22,8 @@ interface QuotaSettingsState {
 
 interface QuotaStore extends QuotaSettingsState {
   results: ProviderResult[];
-  selectedProviderId: QuotaProviderId | null;
+  /** null = Usage Overview; `__add_provider__` = add flow; otherwise a quota provider detail. */
+  selectedProviderId: UsageSelectionId | null;
   isLoading: boolean;
   isFetchingProvider: Record<string, boolean>;
   lastUpdated: number | null;
@@ -32,7 +33,7 @@ interface QuotaStore extends QuotaSettingsState {
   fetchAllQuotas: () => Promise<void>;
   fetchQuotas: (providerIds: QuotaProviderId[]) => Promise<void>;
   fetchProviderQuota: (providerId: QuotaProviderId) => Promise<void>;
-  setSelectedProvider: (providerId: QuotaProviderId | null) => void;
+  setSelectedProvider: (providerId: UsageSelectionId | null) => void;
   setDisplayMode: (mode: 'usage' | 'remaining') => void;
   setDropdownProviderIds: (providerIds: QuotaProviderId[]) => void;
   setSelectedModels: (providerId: string, modelNames: string[]) => void;
