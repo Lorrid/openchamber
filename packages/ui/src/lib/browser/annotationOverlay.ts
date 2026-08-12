@@ -483,6 +483,21 @@ export const buildAnnotationOverlayScript = (
     comment.focus({ preventScroll: true });
   };
 
+  /**
+   * Swallows the page's own mouse handling while annotating.
+   *
+   * Blocking pointerdown is not enough: a click still follows it, so marking a
+   * button pressed that button and marking a link navigated away from the page
+   * being annotated. These are the events that reach page code, so these are
+   * the ones that have to stop.
+   */
+  var blockPageInteraction = function (event) {
+    if (isOverlayNode(event.target)) return;
+    event.preventDefault();
+    event.stopPropagation();
+  };
+  var BLOCKED_EVENTS = ['click', 'auxclick', 'dblclick', 'mousedown', 'mouseup', 'contextmenu'];
+
   var onScrollOrResize = function () {
     syncSelectionVisuals();
     positionEditor();
@@ -504,6 +519,9 @@ export const buildAnnotationOverlayScript = (
   document.addEventListener('pointermove', onPointerMove, true);
   document.addEventListener('pointerdown', onPointerDown, true);
   document.addEventListener('pointerup', onPointerUp, true);
+  BLOCKED_EVENTS.forEach(function (name) {
+    window.addEventListener(name, blockPageInteraction, { capture: true, passive: false });
+  });
   window.addEventListener('scroll', onScrollOrResize, true);
   window.addEventListener('resize', onScrollOrResize, true);
   window.addEventListener('keydown', onKeyDown, true);
@@ -514,6 +532,9 @@ export const buildAnnotationOverlayScript = (
     document.removeEventListener('pointermove', onPointerMove, true);
     document.removeEventListener('pointerdown', onPointerDown, true);
     document.removeEventListener('pointerup', onPointerUp, true);
+    BLOCKED_EVENTS.forEach(function (name) {
+      window.removeEventListener(name, blockPageInteraction, true);
+    });
     window.removeEventListener('scroll', onScrollOrResize, true);
     window.removeEventListener('resize', onScrollOrResize, true);
     window.removeEventListener('keydown', onKeyDown, true);
