@@ -43,6 +43,8 @@ type UrlWatchEntry = {
   openInPreview: boolean;
   /** Addresses announced so far by an auto-discovery run, in announcement order. */
   announced: string[];
+  /** Set once the panel is showing these candidates and wants later ones too. */
+  offering: boolean;
 };
 
 interface ProjectActionsButtonProps {
@@ -290,9 +292,10 @@ export const ProjectActionsButton = ({
         return;
       }
 
+      watch.offering = true;
       setAnnouncedDevServers(run.directory, candidates);
       useUIStore.getState().openContextSurface(run.directory, 'browser');
-      toast.info(t('projectActions.toast.multipleServers', { count: candidates.length }));
+      toast.info(t('projectActions.toast.multipleServers'));
     };
 
     const monitorRuns = () => {
@@ -307,7 +310,7 @@ export const ProjectActionsButton = ({
           continue;
         }
 
-        const watch = urlWatchByRunKeyRef.current[runKey] ?? { lastSeenChunkId: null, openedUrl: false, tail: '', openInPreview: false, announced: [] };
+        const watch = urlWatchByRunKeyRef.current[runKey] ?? { lastSeenChunkId: null, openedUrl: false, tail: '', openInPreview: false, announced: [], offering: false };
         urlWatchByRunKeyRef.current[runKey] = watch;
         const action = displayActions.find((item) => item.id === entry.actionId);
         const bufferChunks = terminalStore.getBuffer(entry.directory, entry.tabId).chunks;
@@ -321,13 +324,20 @@ export const ProjectActionsButton = ({
         // Auto-discovery inferred the command; it must not also infer the
         // address. It collects what the servers announce and decides once they
         // have had a moment to all speak up.
-        if (!watch.openedUrl && watch.openInPreview) {
+        // Keep listening after the panel starts offering candidates: servers in
+        // one project can be seconds apart, and a list that froze at whoever was
+        // ready first would quietly omit the rest.
+        if (watch.openInPreview && (!watch.openedUrl || watch.offering)) {
           const announced = extractAnnouncedUrls(textForScan);
-          const isFirst = watch.announced.length === 0;
+          const before = watch.announced.length;
           for (const url of announced) {
             if (!watch.announced.includes(url)) watch.announced.push(url);
           }
-          if (isFirst && watch.announced.length > 0) {
+          const added = watch.announced.length - before;
+
+          if (watch.offering && added > 0) {
+            setAnnouncedDevServers(entry.directory, watch.announced);
+          } else if (!watch.openedUrl && before === 0 && watch.announced.length > 0) {
             window.clearTimeout(previewWaitTimeoutByRunKeyRef.current[runKey]);
             previewWaitTimeoutByRunKeyRef.current[runKey] = window.setTimeout(
               () => settleAutoDiscovery(runKey),
@@ -560,6 +570,7 @@ export const ProjectActionsButton = ({
         tail: '',
         openInPreview: discovered.id === AUTO_DISCOVER_ACTION_ID,
         announced: [],
+        offering: false,
       };
 
       const normalizedCommand = stripControlChars(discovered.command.trim().replace(/\r\n|\r/g, '\n'));

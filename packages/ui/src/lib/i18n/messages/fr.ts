@@ -2875,7 +2875,7 @@ export const dict = {
   'contextPanel.browser.waitingForServerHint': 'Il n’accepte pas encore de connexions. La page se chargera dès que ce sera le cas.',
   'contextPanel.browser.loadFailedUnknown': 'La page n’a pas pu être atteinte.',
   'contextPanel.browser.devServers.title': 'Serveurs de développement actifs',
-  'projectActions.toast.multipleServers': '{count} serveurs trouvés — choisissez-en un dans le panneau navigateur',
+  'projectActions.toast.multipleServers': 'Plusieurs serveurs ont démarré — choisissez-en un dans le panneau navigateur',
   'contextPanel.browser.devServers.justStarted': 'Démarrés à l’instant',
   'contextPanel.browser.devServers.unavailable': 'Impossible de vérifier les serveurs de développement actifs.',
   'contextPanel.browser.annotate.toggle': 'Annoter la page',

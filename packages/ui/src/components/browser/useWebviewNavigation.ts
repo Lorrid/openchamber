@@ -27,6 +27,17 @@ import { IDLE_NAV_STATUS, type BrowserNavStatus } from '@/lib/browser/contract';
 /** Chromium's code for "this navigation was replaced by another one". */
 const ERR_ABORTED = -3;
 
+/**
+ * `about:blank` is the view's resting state, not somewhere the user went. It
+ * arrives through `did-navigate` like any other address, and taking it at face
+ * value puts it in the address bar and makes the panel look like it is showing
+ * a page — which hides the empty state that would otherwise offer somewhere to
+ * go.
+ */
+const isRealPageUrl = (url: unknown): url is string => (
+  typeof url === 'string' && url.length > 0 && url !== 'about:blank'
+);
+
 type FailLoadDetail = {
   errorCode?: number;
   errorDescription?: string;
@@ -70,7 +81,7 @@ export const useWebviewNavigation = (
     const readCurrentUrl = (): string => {
       try {
         const value = webview.getURL();
-        return value && value !== 'about:blank' ? value : '';
+        return isRealPageUrl(value) ? value : '';
       } catch {
         return '';
       }
@@ -86,7 +97,7 @@ export const useWebviewNavigation = (
     };
 
     const commitUrl = (next: string) => {
-      if (!next) return;
+      if (!isRealPageUrl(next)) return;
       setUrl(next);
       urlChangeRef.current(next);
     };
@@ -118,7 +129,7 @@ export const useWebviewNavigation = (
 
     const onNavigate = (event: Event) => {
       const detail = readEventPayload<{ url?: string }>(event);
-      if (typeof detail.url === 'string' && detail.url) {
+      if (isRealPageUrl(detail.url)) {
         commitUrl(detail.url);
         syncHistory();
       }
@@ -136,7 +147,7 @@ export const useWebviewNavigation = (
       if (code === ERR_ABORTED) return;
       setStatus({
         kind: 'failed',
-        url: typeof detail.validatedURL === 'string' && detail.validatedURL ? detail.validatedURL : readCurrentUrl(),
+        url: isRealPageUrl(detail.validatedURL) ? detail.validatedURL : readCurrentUrl(),
         code,
         description: typeof detail.errorDescription === 'string' ? detail.errorDescription : '',
       });

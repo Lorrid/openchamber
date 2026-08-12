@@ -1205,7 +1205,7 @@ export const dict: Record<I18nKey, string> = {
   'contextPanel.browser.waitingForServerHint': '它还没有开始接受连接。一旦可用，本页就会加载。',
   'contextPanel.browser.loadFailedUnknown': '无法访问该页面。',
   'contextPanel.browser.devServers.title': '正在运行的开发服务器',
-  'projectActions.toast.multipleServers': '找到 {count} 个服务器 — 请在浏览器面板中选择',
+  'projectActions.toast.multipleServers': '启动了多个服务器 — 请在浏览器面板中选择',
   'contextPanel.browser.devServers.justStarted': '刚刚启动',
   'contextPanel.browser.devServers.unavailable': '无法检查正在运行的开发服务器。',
   'contextPanel.browser.annotate.toggle': '标注页面',

@@ -1205,7 +1205,7 @@ export const dict: Record<I18nKey, string> = {
   'contextPanel.browser.waitingForServerHint': '아직 연결을 받지 않습니다. 준비되는 대로 이 페이지를 불러옵니다.',
   'contextPanel.browser.loadFailedUnknown': '페이지에 접근할 수 없습니다.',
   'contextPanel.browser.devServers.title': '실행 중인 개발 서버',
-  'projectActions.toast.multipleServers': '서버 {count}개를 찾았습니다. 브라우저 패널에서 선택하세요',
+  'projectActions.toast.multipleServers': '여러 서버가 시작되었습니다. 브라우저 패널에서 선택하세요',
   'contextPanel.browser.devServers.justStarted': '방금 시작됨',
   'contextPanel.browser.devServers.unavailable': '실행 중인 개발 서버를 확인하지 못했습니다.',
   'contextPanel.browser.annotate.toggle': '페이지에 주석 달기',

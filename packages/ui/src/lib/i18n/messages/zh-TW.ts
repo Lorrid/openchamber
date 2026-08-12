@@ -1217,7 +1217,7 @@ export const dict: Record<I18nKey, string> = {
   'contextPanel.browser.waitingForServerHint': '它尚未開始接受連線。一旦可用，本頁就會載入。',
   'contextPanel.browser.loadFailedUnknown': '無法連線到該頁面。',
   'contextPanel.browser.devServers.title': '執行中的開發伺服器',
-  'projectActions.toast.multipleServers': '找到 {count} 個伺服器 — 請在瀏覽器面板中選擇',
+  'projectActions.toast.multipleServers': '啟動了多個伺服器 — 請在瀏覽器面板中選擇',
   'contextPanel.browser.devServers.justStarted': '剛剛啟動',
   'contextPanel.browser.devServers.unavailable': '無法檢查執行中的開發伺服器。',
   'contextPanel.browser.annotate.toggle': '標註頁面',

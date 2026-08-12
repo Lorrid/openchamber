@@ -1519,7 +1519,7 @@ export const dict: Record<I18nKey, string> = {
   'contextPanel.browser.waitingForServerHint': 'Jeszcze nie przyjmuje połączeń. Strona wczyta się, gdy tylko zacznie.',
   'contextPanel.browser.loadFailedUnknown': 'Nie udało się połączyć ze stroną.',
   'contextPanel.browser.devServers.title': 'Działające serwery deweloperskie',
-  'projectActions.toast.multipleServers': 'Znaleziono serwery: {count} — wybierz jeden w panelu przeglądarki',
+  'projectActions.toast.multipleServers': 'Uruchomiło się kilka serwerów — wybierz jeden w panelu przeglądarki',
   'contextPanel.browser.devServers.justStarted': 'Właśnie uruchomione',
   'contextPanel.browser.devServers.unavailable': 'Nie udało się sprawdzić działających serwerów deweloperskich.',
   'contextPanel.browser.annotate.toggle': 'Dodaj adnotację do strony',

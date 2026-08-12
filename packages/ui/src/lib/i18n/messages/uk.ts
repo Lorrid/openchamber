@@ -1205,7 +1205,7 @@ export const dict: Record<I18nKey, string> = {
   "contextPanel.browser.waitingForServerHint": "Він ще не приймає зʼєднання. Сторінка завантажиться, щойно почне.",
   "contextPanel.browser.loadFailedUnknown": "Не вдалося звернутися до сторінки.",
   "contextPanel.browser.devServers.title": "Запущені dev-сервери",
-  "projectActions.toast.multipleServers": "Знайдено серверів: {count} — оберіть у панелі браузера",
+  "projectActions.toast.multipleServers": "Запустилося кілька серверів — оберіть у панелі браузера",
   "contextPanel.browser.devServers.justStarted": "Щойно запущені",
   "contextPanel.browser.devServers.unavailable": "Не вдалося перевірити запущені dev-сервери.",
   "contextPanel.browser.annotate.toggle": "Анотувати сторінку",
