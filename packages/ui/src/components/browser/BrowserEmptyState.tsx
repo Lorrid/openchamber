@@ -4,19 +4,19 @@ import { Button } from '@/components/ui/button';
 import { Icon } from '@/components/icon/Icon';
 import { OpenChamberLogo } from '@/components/ui/OpenChamberLogo';
 import { useI18n } from '@/lib/i18n';
-import { fetchDevServers, type DevServerDiscovery } from '@/lib/browser/devServers';
+import { fetchDevServers, mergeDevServerCandidates, type DevServerDiscovery } from '@/lib/browser/devServers';
 import { clearAnnouncedDevServers, useAnnouncedDevServers } from '@/lib/browser/announcedServers';
 import { browserUrlLabel } from '@/lib/browser/url';
 
 /**
  * What the panel shows before anything is loaded.
  *
- * Rather than an inert placeholder, this lists the servers actually listening
- * on the machine, which is almost always what the user came here to open.
- * Discovery failure is stated plainly instead of being rendered as "nothing is
- * running" — the two mean very different things to someone whose dev server is
- * definitely up.
+ * Rather than an inert placeholder, this lists the servers actually running,
+ * which is almost always what the user came here to open. Discovery failure is
+ * stated plainly instead of being rendered as "nothing is running" — the two
+ * mean very different things to someone whose dev server is definitely up.
  */
+
 /** The base path a server is served under, or '' when it sits at the root. */
 const pathLabel = (url: string): string => {
   try {
@@ -27,28 +27,43 @@ const pathLabel = (url: string): string => {
   }
 };
 
+/** Re-checked while the panel is open: a project's servers appear seconds apart. */
+const REFRESH_INTERVAL_MS = 2_000;
+
 export const BrowserEmptyState: React.FC<{
   onOpen: (url: string) => void;
   directory?: string;
 }> = ({ onOpen, directory = '' }) => {
   const { t } = useI18n();
   const [discovery, setDiscovery] = React.useState<DevServerDiscovery>({ kind: 'loading' });
-  // Announced addresses win over discovered ports: a server that prints its own
-  // address includes the base path it is served under, which a listening socket
-  // cannot reveal.
   const announced = useAnnouncedDevServers(directory);
 
   React.useEffect(() => {
-    const controller = new AbortController();
     let active = true;
-    void fetchDevServers(controller.signal).then((result) => {
-      if (active) setDiscovery(result);
-    });
+    let timer: ReturnType<typeof setTimeout> | null = null;
+    const controller = new AbortController();
+
+    const poll = () => {
+      void fetchDevServers(controller.signal).then((result) => {
+        if (!active) return;
+        setDiscovery(result);
+        // One look is a snapshot of whichever servers happened to be up first.
+        timer = setTimeout(poll, REFRESH_INTERVAL_MS);
+      });
+    };
+    poll();
+
     return () => {
       active = false;
+      if (timer) clearTimeout(timer);
       controller.abort();
     };
   }, []);
+
+  const candidates = React.useMemo(() => mergeDevServerCandidates({
+    announced,
+    discovered: discovery.kind === 'ready' ? discovery.servers : null,
+  }), [announced, discovery]);
 
   return (
     <div className="absolute inset-0 flex flex-col items-center justify-center gap-5 overflow-y-auto bg-background p-6 text-center">
@@ -58,14 +73,16 @@ export const BrowserEmptyState: React.FC<{
         <span className="typography-micro text-muted-foreground">{t('contextPanel.browser.emptyHint')}</span>
       </div>
 
-      {announced.length > 0 ? (
+      {candidates.length > 0 ? (
         <div className="flex w-full max-w-sm flex-col gap-1">
           <span className="typography-micro text-left text-muted-foreground">
-            {t('contextPanel.browser.devServers.justStarted')}
+            {announced.length > 0
+              ? t('contextPanel.browser.devServers.justStarted')
+              : t('contextPanel.browser.devServers.title')}
           </span>
-          {announced.map((url) => (
+          {candidates.map((candidate) => (
             <Button
-              key={url}
+              key={candidate.port}
               type="button"
               variant="outline"
               size="sm"
@@ -74,42 +91,20 @@ export const BrowserEmptyState: React.FC<{
                 // The offer is answered; leaving it up would keep suggesting
                 // servers behind a page the user is already looking at.
                 clearAnnouncedDevServers(directory);
-                onOpen(url);
+                onOpen(candidate.url);
               }}
             >
               <Icon name="global" className="size-3.5 shrink-0" aria-hidden="true" />
-              <span className="truncate">{browserUrlLabel(url) || url}</span>
-              <span className="ml-auto truncate typography-micro text-muted-foreground">{pathLabel(url)}</span>
+              <span className="truncate">{browserUrlLabel(candidate.url) || candidate.url}</span>
+              <span className="ml-auto truncate typography-micro text-muted-foreground">
+                {pathLabel(candidate.url)}
+              </span>
             </Button>
           ))}
         </div>
       ) : null}
 
-      {announced.length === 0 && discovery.kind === 'ready' && discovery.servers.length > 0 ? (
-        <div className="flex w-full max-w-sm flex-col gap-1">
-          <span className="typography-micro text-left text-muted-foreground">
-            {t('contextPanel.browser.devServers.title')}
-          </span>
-          {discovery.servers.map((server) => (
-            <Button
-              key={server.port}
-              type="button"
-              variant="outline"
-              size="sm"
-              className="w-full justify-start gap-2"
-              onClick={() => onOpen(server.url)}
-            >
-              <Icon name="global" className="size-3.5 shrink-0" aria-hidden="true" />
-              <span className="truncate">{server.url}</span>
-              {server.command ? (
-                <span className="ml-auto truncate typography-micro text-muted-foreground">{server.command}</span>
-              ) : null}
-            </Button>
-          ))}
-        </div>
-      ) : null}
-
-      {discovery.kind === 'unavailable' ? (
+      {candidates.length === 0 && discovery.kind === 'unavailable' ? (
         <span className="typography-micro text-muted-foreground">
           {t('contextPanel.browser.devServers.unavailable')}
         </span>

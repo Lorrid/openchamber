@@ -71,3 +71,68 @@ export const probeLoopbackStatus = async (url: string): Promise<number | null> =
     return null;
   }
 };
+
+export type DevServerCandidate = {
+  readonly url: string;
+  readonly port: number;
+  /** Present when a server announced this address itself. */
+  readonly announced: boolean;
+};
+
+const portOf = (url: string): number | null => {
+  try {
+    const parsed = new URL(url);
+    const port = Number.parseInt(parsed.port || (parsed.protocol === 'https:' ? '443' : '80'), 10);
+    return Number.isInteger(port) && port > 0 ? port : null;
+  } catch {
+    return null;
+  }
+};
+
+/**
+ * Combines what servers said with what is actually listening.
+ *
+ * Each source knows something the other cannot. An announcement carries the base
+ * path an app is served under, which a socket cannot reveal. A listening port is
+ * ground truth, which an announcement is not: terminals wrap long lines, and a
+ * URL split mid-port reads as a perfectly plausible address on a port where
+ * nothing is running.
+ *
+ * So discovery decides which servers exist and announcements supply their paths.
+ * When discovery is unavailable the announcements stand on their own — offering
+ * something unverified beats offering nothing.
+ */
+export const mergeDevServerCandidates = ({
+  announced,
+  discovered,
+}: {
+  announced: ReadonlyArray<string>;
+  discovered: ReadonlyArray<DiscoveredDevServer> | null;
+}): DevServerCandidate[] => {
+  const announcedByPort = new Map<number, string>();
+  for (const url of announced) {
+    const port = portOf(url);
+    if (port !== null && !announcedByPort.has(port)) announcedByPort.set(port, url);
+  }
+
+  if (!discovered) {
+    return [...announcedByPort.entries()]
+      .map(([port, url]) => ({ url, port, announced: true }))
+      .sort((left, right) => left.port - right.port);
+  }
+
+  return discovered
+    .map((server) => {
+      const announcedUrl = announcedByPort.get(server.port);
+      return {
+        url: announcedUrl ?? server.url,
+        port: server.port,
+        announced: announcedUrl !== undefined,
+      };
+    })
+    .sort((left, right) => {
+      // Servers this run announced come first: they are the ones just started.
+      if (left.announced !== right.announced) return left.announced ? -1 : 1;
+      return left.port - right.port;
+    });
+};
