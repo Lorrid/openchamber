@@ -24,6 +24,9 @@ and what made it fragile per framework.
 - Port discovery is not owned here. `runtime.js` is given the reachable set by
   the same dev-server discovery the user's own list is built from.
 - The browser panel decides when to tunnel; this module never chooses a target.
+  `packages/ui/src/lib/browser/devTunnel.ts` owns that decision, including for
+  navigations the page starts itself: a tunnelled page that sends the view to
+  another loopback port means a port on the host, not on the user's machine.
 
 ## Invariants
 

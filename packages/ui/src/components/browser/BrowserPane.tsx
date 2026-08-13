@@ -19,7 +19,7 @@ import { resolveAnnotationOverlayTheme } from '@/lib/browser/overlayTheme';
 import { registerBrowserController } from '@/lib/browser/controlClient';
 import { suggestFromHistory } from '@/lib/browser/history';
 import { selectBrowserHistory, useBrowserHistoryStore } from '@/stores/useBrowserHistoryStore';
-import { resolveBrowsableUrl, toDisplayUrl } from '@/lib/browser/devTunnel';
+import { resolveBrowsableUrl, shouldTunnelLoopbackUrl, toDisplayUrl } from '@/lib/browser/devTunnel';
 import {
   buildClickScript,
   buildInspectScript,
@@ -39,7 +39,7 @@ import {
 } from '@/lib/browser/viewport';
 import { BrowserEmptyState } from './BrowserEmptyState';
 import { useAnnotationAttach, useAnnotationOverlayLabels } from './useAnnotationAttach';
-import { useWebviewNavigation } from './useWebviewNavigation';
+import { readEventPayload, useWebviewNavigation } from './useWebviewNavigation';
 
 export type BrowserPaneProps = {
   initialUrl: string;
@@ -471,6 +471,61 @@ const WebviewBrowser: React.FC<BrowserPaneProps> = ({ initialUrl, directory, tab
     };
   }, [webviewElement]);
 
+  /**
+   * Keeps loopback navigations on the machine the page came from.
+   *
+   * A tunnelled page can send the view to another local port — a docs server
+   * behind a dev gateway, an API on its own port. That navigation happens
+   * inside the view, so nothing resolved it, and it would be looked for on this
+   * machine instead of the host.
+   *
+   * A link or a script navigation is caught before it happens. A server
+   * redirect cannot be: by the time the view reports it, it is already loading.
+   * That one is recovered from its failure instead, once per address, so a port
+   * that genuinely is not there still fails honestly.
+   */
+  const retunneledUrlsRef = React.useRef(new Set<string>());
+  // Asking for an address again is a fresh request, so the recovery budget
+  // comes back with it. The automatic retry deliberately does not reset it.
+  const loadUrlFromUser = React.useCallback((value: string) => {
+    retunneledUrlsRef.current.clear();
+    loadUrl(value);
+  }, [loadUrl]);
+  React.useEffect(() => {
+    if (!webviewElement) return;
+
+    const onWillNavigate = (event: Event) => {
+      const detail = readEventPayload<{ url?: string }>(event);
+      const target = typeof detail.url === 'string' ? detail.url : '';
+      if (!target || !shouldTunnelLoopbackUrl(target)) return;
+      event.preventDefault();
+      loadUrl(target);
+    };
+
+    const onFailLoad = (event: Event) => {
+      const detail = readEventPayload<{
+        errorCode?: number;
+        validatedURL?: string;
+        isMainFrame?: boolean;
+      }>(event);
+      if (detail.isMainFrame === false) return;
+      // Superseded navigations are not failures.
+      if (detail.errorCode === -3) return;
+      const target = typeof detail.validatedURL === 'string' ? detail.validatedURL : '';
+      if (!target || !shouldTunnelLoopbackUrl(target)) return;
+      if (retunneledUrlsRef.current.has(target)) return;
+      retunneledUrlsRef.current.add(target);
+      loadUrl(target);
+    };
+
+    webviewElement.addEventListener('will-navigate', onWillNavigate);
+    webviewElement.addEventListener('did-fail-load', onFailLoad);
+    return () => {
+      webviewElement.removeEventListener('will-navigate', onWillNavigate);
+      webviewElement.removeEventListener('did-fail-load', onFailLoad);
+    };
+  }, [loadUrl, webviewElement]);
+
   // Popups open in place; a detached window would escape the panel entirely.
   React.useEffect(() => {
     if (!webviewElement) return;
@@ -634,7 +689,7 @@ const WebviewBrowser: React.FC<BrowserPaneProps> = ({ initialUrl, directory, tab
       <BrowserToolbar
         address={address}
         onAddressChange={setAddress}
-        onSubmit={loadUrl}
+        onSubmit={loadUrlFromUser}
         suggestions={suggestions}
         onForgetSuggestion={(url) => forgetHistoryVisit(directory, url)}
         onBack={() => { try { webviewRef.current?.goBack(); } catch { /* not attached */ } }}
@@ -696,7 +751,7 @@ const WebviewBrowser: React.FC<BrowserPaneProps> = ({ initialUrl, directory, tab
           />
         ) : null}
         {initialSrc !== null && !startUrl && !navigation.url && !isLoading ? (
-          <BrowserEmptyState onOpen={loadUrl} directory={directory} />
+          <BrowserEmptyState onOpen={loadUrlFromUser} directory={directory} />
         ) : null}
         {isWaitingForServer ? (
           <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 bg-background p-6 text-center">

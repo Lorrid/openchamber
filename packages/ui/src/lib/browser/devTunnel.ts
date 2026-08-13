@@ -110,6 +110,31 @@ export const resolveBrowsableUrl = async (url: string): Promise<string> => {
 };
 
 /**
+ * True when a loopback URL belongs to the machine OpenChamber runs on rather
+ * than to this one.
+ *
+ * A page served through a tunnel can send the browser to another local port —
+ * a docs server behind a dev gateway, an API on its own port — and that
+ * navigation happens inside the view, where nothing resolved it. Without this
+ * the address would be looked for on the user's own machine, where it is either
+ * nothing at all or, worse, a different application.
+ *
+ * A URL already pointing at a tunnel's local port is not retargeted; that one
+ * is this machine, deliberately.
+ */
+export const shouldTunnelLoopbackUrl = (url: string): boolean => {
+  if (!url || !isDesktopRuntime() || !isLoopbackUrl(url)) return false;
+  if (!isRemoteRuntime(getRuntimeApiBaseUrl())) return false;
+  try {
+    const parsed = new URL(url);
+    const port = Number.parseInt(parsed.port || '0', 10);
+    return !originByLocalPort.has(port);
+  } catch {
+    return false;
+  }
+};
+
+/**
  * Maps a URL the view actually loaded back to the address the user asked for.
  *
  * Without this the tunnel's random local port would show up in the address bar
