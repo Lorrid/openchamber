@@ -4,6 +4,7 @@ import { collectConnectedQuotaProviderIds, resolveQuotaProviderId } from './prov
 describe('resolveQuotaProviderId', () => {
   test('maps OpenCode provider aliases onto quota IDs', () => {
     expect(resolveQuotaProviderId('google')).toBe('google');
+    expect(resolveQuotaProviderId('gemini')).toBe('google');
     expect(resolveQuotaProviderId('github-copilot')).toBe('github-copilot');
     expect(resolveQuotaProviderId('anthropic')).toBe('claude');
   });
@@ -16,6 +17,11 @@ describe('resolveQuotaProviderId', () => {
 describe('collectConnectedQuotaProviderIds', () => {
   test('collects unique mapped quota IDs from OpenCode provider list', () => {
     expect(collectConnectedQuotaProviderIds(['google', 'github-copilot', 'opencode', 'google']))
-      .toEqual(new Set(['google', 'github-copilot']));
+      .toEqual(new Set(['google', 'github-copilot', 'github-copilot-addon']));
+  });
+
+  test('maps gemini plugin id onto google quota provider', () => {
+    expect(collectConnectedQuotaProviderIds(['gemini']))
+      .toEqual(new Set(['google']));
   });
 });

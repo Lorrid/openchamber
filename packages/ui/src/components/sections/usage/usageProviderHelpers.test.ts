@@ -11,6 +11,13 @@ describe('isIncludedUsageProvider', () => {
     expect(isIncludedUsageProvider('claude', { configured: true })).toBe(true);
   });
 
+  test('includes auth-configured providers from /api/quota/providers', () => {
+    expect(isIncludedUsageProvider('kimi-for-coding', {
+      configured: false,
+      authConfiguredQuotaProviderIds: new Set(['kimi-for-coding', 'zai-coding-plan']),
+    })).toBe(true);
+  });
+
   test('includes OpenCode-connected providers mapped to quota IDs', () => {
     expect(isIncludedUsageProvider('google', {
       configured: false,
@@ -21,6 +28,7 @@ describe('isIncludedUsageProvider', () => {
   test('excludes providers that are neither configured nor connected', () => {
     expect(isIncludedUsageProvider('claude', {
       configured: false,
+      authConfiguredQuotaProviderIds: new Set(['google']),
       connectedQuotaProviderIds: new Set(['google']),
     })).toBe(false);
   });
@@ -30,6 +38,14 @@ describe('isVisibleUsageProvider', () => {
   test('shows configured providers by default', () => {
     expect(isVisibleUsageProvider('claude', {
       configured: true,
+      hiddenProviderIds: [],
+    })).toBe(true);
+  });
+
+  test('shows auth-configured plugin providers even when fetch is not configured', () => {
+    expect(isVisibleUsageProvider('zai-coding-plan', {
+      configured: false,
+      authConfiguredQuotaProviderIds: ['zai-coding-plan'],
       hiddenProviderIds: [],
     })).toBe(true);
   });
@@ -57,6 +73,7 @@ describe('isVisibleUsageProvider', () => {
   test('never shows providers that are neither configured nor connected', () => {
     expect(isVisibleUsageProvider('claude', {
       configured: false,
+      authConfiguredQuotaProviderIds: [],
       connectedQuotaProviderIds: [],
       hiddenProviderIds: [],
     })).toBe(false);

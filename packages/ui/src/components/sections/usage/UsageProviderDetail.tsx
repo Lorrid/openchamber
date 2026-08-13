@@ -59,6 +59,7 @@ export const UsageProviderDetail: React.FC<UsageProviderDetailProps> = ({ provid
   const { t } = useI18n();
   const timeFormatPreference = useUIStore((state) => state.timeFormatPreference);
   const results = useQuotaStore((state) => state.results);
+  const authConfiguredProviderIds = useQuotaStore((state) => state.authConfiguredProviderIds);
   const setSelectedProvider = useQuotaStore((state) => state.setSelectedProvider);
   const loadSettings = useQuotaStore((state) => state.loadSettings);
   const fetchAllQuotas = useQuotaStore((state) => state.fetchAllQuotas);
@@ -72,6 +73,7 @@ export const UsageProviderDetail: React.FC<UsageProviderDetailProps> = ({ provid
   const toggleModelSelected = useQuotaStore((state) => state.toggleModelSelected);
   const applyDefaultSelections = useQuotaStore((state) => state.applyDefaultSelections);
   const configProviders = useConfigStore((state) => state.providers);
+  const loadProviders = useConfigStore((state) => state.loadProviders);
 
   const [periodDays, setPeriodDays] = React.useState<UsagePeriodDays>(7);
   const [metric, setMetric] = React.useState<UsageMetricMode>('tokens');
@@ -81,8 +83,9 @@ export const UsageProviderDetail: React.FC<UsageProviderDetailProps> = ({ provid
 
   React.useEffect(() => {
     void loadSettings();
+    void loadProviders({ source: 'usageProviderDetail' });
     void fetchAllQuotas();
-  }, [loadSettings, fetchAllQuotas]);
+  }, [loadSettings, loadProviders, fetchAllQuotas]);
 
   const connectedQuotaIds = React.useMemo(
     () => collectConnectedQuotaProviderIds(configProviders.map((provider) => provider.id)),
@@ -98,7 +101,8 @@ export const UsageProviderDetail: React.FC<UsageProviderDetailProps> = ({ provid
     : null;
   const showInDropdown = dropdownProviderIds.includes(providerId);
   const hasCredentialsForm = providerId === 'ollama-cloud' || providerId === 'cursor';
-  const isOpenCodeConnected = connectedQuotaIds.has(providerId);
+  const isOpenCodeConnected = connectedQuotaIds.has(providerId)
+    || authConfiguredProviderIds.includes(providerId);
 
   const handleDropdownToggle = React.useCallback((enabled: boolean) => {
     const next = enabled

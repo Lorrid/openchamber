@@ -18,6 +18,7 @@ const CREDENTIAL_PROVIDERS = new Set<QuotaProviderId>(['ollama-cloud', 'cursor']
 export const UsageAddProvider: React.FC = () => {
   const { t } = useI18n();
   const results = useQuotaStore((state) => state.results);
+  const authConfiguredProviderIds = useQuotaStore((state) => state.authConfiguredProviderIds);
   const hiddenProviderIds = useQuotaStore((state) => state.hiddenProviderIds);
   const setSelectedProvider = useQuotaStore((state) => state.setSelectedProvider);
   const showUsageProvider = useQuotaStore((state) => state.showUsageProvider);
@@ -27,6 +28,10 @@ export const UsageAddProvider: React.FC = () => {
   const [credentialProviderId, setCredentialProviderId] = React.useState<QuotaProviderId | null>(null);
 
   const hiddenSet = React.useMemo(() => new Set(hiddenProviderIds), [hiddenProviderIds]);
+  const authConfiguredSet = React.useMemo(
+    () => new Set(authConfiguredProviderIds),
+    [authConfiguredProviderIds],
+  );
   const connectedQuotaIds = React.useMemo(
     () => collectConnectedQuotaProviderIds(configProviders.map((provider) => provider.id)),
     [configProviders],
@@ -37,12 +42,13 @@ export const UsageAddProvider: React.FC = () => {
       const result = results.find((entry) => entry.providerId === provider.id);
       const included = isIncludedUsageProvider(provider.id, {
         configured: result?.configured,
+        authConfiguredQuotaProviderIds: authConfiguredSet,
         connectedQuotaProviderIds: connectedQuotaIds,
       });
       if (!included) return true;
       return hiddenSet.has(provider.id);
     });
-  }, [connectedQuotaIds, hiddenSet, results]);
+  }, [authConfiguredSet, connectedQuotaIds, hiddenSet, results]);
 
   const openProvidersSettings = React.useCallback((providerId?: string) => {
     if (providerId) {
@@ -57,6 +63,7 @@ export const UsageAddProvider: React.FC = () => {
     const result = results.find((entry) => entry.providerId === providerId);
     const isHiddenIncluded = isIncludedUsageProvider(providerId, {
       configured: result?.configured,
+      authConfiguredQuotaProviderIds: authConfiguredSet,
       connectedQuotaProviderIds: connectedQuotaIds,
     }) && hiddenSet.has(providerId);
     if (isHiddenIncluded) {
@@ -69,7 +76,7 @@ export const UsageAddProvider: React.FC = () => {
       return;
     }
     openProvidersSettings(providerId);
-  }, [connectedQuotaIds, hiddenSet, openProvidersSettings, results, setSelectedProvider, showUsageProvider]);
+  }, [authConfiguredSet, connectedQuotaIds, hiddenSet, openProvidersSettings, results, setSelectedProvider, showUsageProvider]);
 
   const credentialMeta = credentialProviderId
     ? QUOTA_PROVIDERS.find((provider) => provider.id === credentialProviderId)
@@ -101,6 +108,7 @@ export const UsageAddProvider: React.FC = () => {
               const result = results.find((entry) => entry.providerId === provider.id);
               const isHiddenIncluded = isIncludedUsageProvider(provider.id, {
                 configured: result?.configured,
+                authConfiguredQuotaProviderIds: authConfiguredSet,
                 connectedQuotaProviderIds: connectedQuotaIds,
               }) && hiddenSet.has(provider.id);
               return (

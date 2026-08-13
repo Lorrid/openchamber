@@ -24,6 +24,8 @@ interface QuotaSettingsState {
 
 interface QuotaStore extends QuotaSettingsState {
   results: ProviderResult[];
+  /** Quota IDs from GET /api/quota/providers (auth/credential configured). */
+  authConfiguredProviderIds: QuotaProviderId[];
   /** null = Usage Overview; `__add_provider__` = add flow; otherwise a quota provider detail. */
   selectedProviderId: UsageSelectionId | null;
   isLoading: boolean;
@@ -32,6 +34,7 @@ interface QuotaStore extends QuotaSettingsState {
   error: string | null;
 
   loadSettings: () => Promise<void>;
+  fetchAuthConfiguredProviders: () => Promise<void>;
   fetchAllQuotas: () => Promise<void>;
   fetchQuotas: (providerIds: QuotaProviderId[]) => Promise<void>;
   fetchProviderQuota: (providerId: QuotaProviderId) => Promise<void>;
@@ -132,10 +135,20 @@ const loadSettingsFromRuntime = async (): Promise<QuotaSettingsState> => {
   };
 };
 
+const parseAuthConfiguredProviderIds = (payload: unknown): QuotaProviderId[] => {
+  const allProviderIds = new Set(QUOTA_PROVIDERS.map((provider) => provider.id));
+  const providers = (payload as { providers?: unknown } | null)?.providers;
+  if (!Array.isArray(providers)) return [];
+  return providers.filter((entry): entry is QuotaProviderId =>
+    typeof entry === 'string' && allProviderIds.has(entry as QuotaProviderId)
+  );
+};
+
 export const useQuotaStore = create<QuotaStore>()(
   devtools(
     (set, get) => ({
       results: [],
+      authConfiguredProviderIds: [],
       selectedProviderId: null,
       isLoading: false,
       isFetchingProvider: {},
@@ -156,6 +169,23 @@ export const useQuotaStore = create<QuotaStore>()(
         }
       },
 
+      fetchAuthConfiguredProviders: async () => {
+        try {
+          const response = await runtimeFetch('/api/quota/providers', {
+            method: 'GET',
+            headers: { Accept: 'application/json' },
+          });
+          if (!response.ok) {
+            // Keep last-known auth list; do not treat failure as "none configured".
+            return;
+          }
+          const payload = await response.json().catch(() => null);
+          set({ authConfiguredProviderIds: parseAuthConfiguredProviderIds(payload) });
+        } catch (error) {
+          console.warn('Failed to list configured quota providers:', error);
+        }
+      },
+
       fetchQuotas: async (providerIds) => {
         set({ isLoading: true, error: null });
         try {
@@ -173,6 +203,7 @@ export const useQuotaStore = create<QuotaStore>()(
       },
 
       fetchAllQuotas: async () => {
+        await get().fetchAuthConfiguredProviders();
         await get().fetchQuotas(QUOTA_PROVIDERS.map((provider) => provider.id));
       },
 
@@ -195,13 +226,17 @@ export const useQuotaStore = create<QuotaStore>()(
           });
         } catch (error) {
           const message = error instanceof Error ? error.message : 'Failed to fetch quota';
+          const previous = get().results.find((entry) => entry.providerId === providerId);
+          const authConfigured = get().authConfiguredProviderIds.includes(providerId);
+          // Fetch failure must not erase an authoritative "configured" signal from
+          // auth.json / managed credentials or a prior successful fetch.
           const fallback: ProviderResult = {
             providerId,
-            providerName: providerId,
+            providerName: previous?.providerName ?? providerId,
             ok: false,
-            configured: false,
+            configured: Boolean(previous?.configured || authConfigured),
             error: message,
-            usage: null,
+            usage: previous?.usage ?? null,
             fetchedAt: Date.now()
           };
           set((state) => {

@@ -28,6 +28,7 @@ interface UsageSidebarProps {
 export const UsageSidebar: React.FC<UsageSidebarProps> = ({ onItemSelect }) => {
   const { t } = useI18n();
   const results = useQuotaStore((state) => state.results);
+  const authConfiguredProviderIds = useQuotaStore((state) => state.authConfiguredProviderIds);
   const hiddenProviderIds = useQuotaStore((state) => state.hiddenProviderIds);
   const selectedProviderId = useQuotaStore((state) => state.selectedProviderId);
   const setSelectedProvider = useQuotaStore((state) => state.setSelectedProvider);
@@ -36,12 +37,18 @@ export const UsageSidebar: React.FC<UsageSidebarProps> = ({ onItemSelect }) => {
   const isLoading = useQuotaStore((state) => state.isLoading);
   const loadUsageSettings = useQuotaStore((state) => state.loadSettings);
   const configProviders = useConfigStore((state) => state.providers);
+  const loadProviders = useConfigStore((state) => state.loadProviders);
 
   React.useEffect(() => {
     void loadUsageSettings();
-  }, [loadUsageSettings]);
+    void loadProviders({ source: 'usageSidebar' });
+  }, [loadProviders, loadUsageSettings]);
 
   const hiddenSet = React.useMemo(() => new Set(hiddenProviderIds), [hiddenProviderIds]);
+  const authConfiguredSet = React.useMemo(
+    () => new Set(authConfiguredProviderIds),
+    [authConfiguredProviderIds],
+  );
   const connectedQuotaIds = React.useMemo(
     () => collectConnectedQuotaProviderIds(configProviders.map((provider) => provider.id)),
     [configProviders],
@@ -52,23 +59,25 @@ export const UsageSidebar: React.FC<UsageSidebarProps> = ({ onItemSelect }) => {
       const result = results.find((entry) => entry.providerId === provider.id);
       return isVisibleUsageProvider(provider.id, {
         configured: result?.configured,
+        authConfiguredQuotaProviderIds: authConfiguredSet,
         connectedQuotaProviderIds: connectedQuotaIds,
         hiddenProviderIds: hiddenSet,
       });
     });
-  }, [connectedQuotaIds, hiddenSet, results]);
+  }, [authConfiguredSet, connectedQuotaIds, hiddenSet, results]);
 
   const availableCount = React.useMemo(() => {
     return QUOTA_PROVIDERS.filter((provider) => {
       const result = results.find((entry) => entry.providerId === provider.id);
       const included = isIncludedUsageProvider(provider.id, {
         configured: result?.configured,
+        authConfiguredQuotaProviderIds: authConfiguredSet,
         connectedQuotaProviderIds: connectedQuotaIds,
       });
       if (!included) return true;
       return hiddenSet.has(provider.id);
     }).length;
-  }, [connectedQuotaIds, hiddenSet, results]);
+  }, [authConfiguredSet, connectedQuotaIds, hiddenSet, results]);
 
   const isOverviewSelected = selectedProviderId === null;
   const isAddSelected = selectedProviderId === USAGE_ADD_PROVIDER_ID;
@@ -154,13 +163,13 @@ export const UsageSidebar: React.FC<UsageSidebarProps> = ({ onItemSelect }) => {
                   {provider.name}
                 </span>
                 {remainingDisplay?.kind === 'percent' && (
-                  <span className="typography-micro text-muted-foreground flex-shrink-0 tabular-nums group-hover:hidden">
+                  <span className="shrink-0 max-w-[4.75rem] truncate text-[0.625rem] leading-none tabular-nums text-muted-foreground group-hover:hidden">
                     {t('settings.usage.sidebar.remainingPct', { percent: remainingDisplay.percent })}
                   </span>
                 )}
                 {remainingDisplay?.kind === 'amount' && (
                   <span
-                    className="typography-micro text-muted-foreground flex-shrink-0 tabular-nums truncate max-w-[7.5rem] group-hover:hidden"
+                    className="shrink-0 max-w-[4.75rem] truncate text-[0.625rem] leading-none tabular-nums text-muted-foreground group-hover:hidden"
                     title={remainingDisplay.label}
                   >
                     {remainingDisplay.label}

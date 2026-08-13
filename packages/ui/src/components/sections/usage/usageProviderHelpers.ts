@@ -71,6 +71,12 @@ const hasProviderId = (
 
 export type UsageProviderInclusionOptions = {
   configured?: boolean;
+  /**
+   * Quota IDs reported by GET /api/quota/providers (auth.json / managed
+   * credentials). Authoritative for plugin OAuth and credential-backed quotas
+   * even when a per-provider fetch fails or returns configured:false.
+   */
+  authConfiguredQuotaProviderIds?: ReadonlySet<string> | readonly string[];
   /** Quota IDs mapped from OpenCode-connected providers (Settings → Providers). */
   connectedQuotaProviderIds?: ReadonlySet<string> | readonly string[];
 };
@@ -81,6 +87,7 @@ export const isIncludedUsageProvider = (
   options: UsageProviderInclusionOptions,
 ): boolean => {
   if (options.configured) return true;
+  if (hasProviderId(options.authConfiguredQuotaProviderIds, providerId)) return true;
   return hasProviderId(options.connectedQuotaProviderIds, providerId);
 };
 
@@ -89,7 +96,8 @@ export const isActiveProviderResult = (result: ProviderResult | undefined): bool
 
 /**
  * Included providers appear in Usage unless the user explicitly removed them.
- * OpenCode-connected providers count even when the quota API reports not configured.
+ * Auth-configured (plugin OAuth / auth.json) and OpenCode-connected providers
+ * count even when a per-provider quota fetch reports not configured.
  */
 export const isVisibleUsageProvider = (
   providerId: QuotaProviderId,

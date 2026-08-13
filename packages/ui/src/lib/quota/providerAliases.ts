@@ -13,9 +13,11 @@ const OPENCODE_PROVIDER_ALIASES: Record<string, QuotaProviderId> = {
   chatgpt: 'codex',
   cursor: 'cursor',
   'github-copilot': 'github-copilot',
+  'github-copilot-addon': 'github-copilot-addon',
   copilot: 'github-copilot',
   google: 'google',
   'google.oauth': 'google',
+  gemini: 'google',
   'kimi-for-coding': 'kimi-for-coding',
   kimi: 'kimi-for-coding',
   'nano-gpt': 'nano-gpt',
@@ -58,7 +60,11 @@ export const resolveQuotaProviderId = (openCodeProviderId: string | null | undef
 /**
  * Map OpenCode-connected provider IDs onto Usage/quota provider IDs.
  * Used so Providers → connected accounts auto-appear in Usage even when
- * the quota API has not marked them `configured` yet (e.g. missing auth.json).
+ * the quota API has not marked them `configured` yet (e.g. missing auth.json,
+ * env-only keys, or auth-plugin OAuth that OpenCode lists as connected).
+ *
+ * GitHub Copilot Add-on shares auth with base Copilot, so a connected
+ * `github-copilot` also unlocks the add-on quota surface.
  */
 export const collectConnectedQuotaProviderIds = (
   openCodeProviderIds: Iterable<string>,
@@ -66,7 +72,11 @@ export const collectConnectedQuotaProviderIds = (
   const ids = new Set<QuotaProviderId>();
   for (const openCodeProviderId of openCodeProviderIds) {
     const resolved = resolveQuotaProviderId(openCodeProviderId);
-    if (resolved) ids.add(resolved);
+    if (!resolved) continue;
+    ids.add(resolved);
+    if (resolved === 'github-copilot') {
+      ids.add('github-copilot-addon');
+    }
   }
   return ids;
 };

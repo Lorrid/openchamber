@@ -51,11 +51,13 @@ const DeltaBadge: React.FC<{
 export const UsageOverview: React.FC = () => {
   const { t } = useI18n();
   const results = useQuotaStore((state) => state.results);
+  const authConfiguredProviderIds = useQuotaStore((state) => state.authConfiguredProviderIds);
   const hiddenProviderIds = useQuotaStore((state) => state.hiddenProviderIds);
   const fetchAllQuotas = useQuotaStore((state) => state.fetchAllQuotas);
   const isLoading = useQuotaStore((state) => state.isLoading);
   const loadSettings = useQuotaStore((state) => state.loadSettings);
   const configProviders = useConfigStore((state) => state.providers);
+  const loadProviders = useConfigStore((state) => state.loadProviders);
 
   const [periodDays, setPeriodDays] = React.useState<UsagePeriodDays>(7);
   const [metric, setMetric] = React.useState<UsageMetricMode>('cost');
@@ -65,8 +67,9 @@ export const UsageOverview: React.FC = () => {
 
   React.useEffect(() => {
     void loadSettings();
+    void loadProviders({ source: 'usageOverview' });
     void fetchAllQuotas();
-  }, [loadSettings, fetchAllQuotas]);
+  }, [loadSettings, loadProviders, fetchAllQuotas]);
 
   React.useEffect(() => {
     const timer = window.setInterval(() => setSessionTick((value) => value + 1), 30_000);
@@ -74,6 +77,10 @@ export const UsageOverview: React.FC = () => {
   }, []);
 
   const hiddenSet = React.useMemo(() => new Set(hiddenProviderIds), [hiddenProviderIds]);
+  const authConfiguredSet = React.useMemo(
+    () => new Set(authConfiguredProviderIds),
+    [authConfiguredProviderIds],
+  );
   const connectedQuotaIds = React.useMemo(
     () => collectConnectedQuotaProviderIds(configProviders.map((provider) => provider.id)),
     [configProviders],
@@ -84,6 +91,7 @@ export const UsageOverview: React.FC = () => {
       const result = results.find((entry) => entry.providerId === meta.id);
       if (!isVisibleUsageProvider(meta.id, {
         configured: result?.configured,
+        authConfiguredQuotaProviderIds: authConfiguredSet,
         connectedQuotaProviderIds: connectedQuotaIds,
         hiddenProviderIds: hiddenSet,
       })) {
@@ -98,7 +106,7 @@ export const UsageOverview: React.FC = () => {
         fetchedAt: 0,
       }];
     });
-  }, [connectedQuotaIds, hiddenSet, results]);
+  }, [authConfiguredSet, connectedQuotaIds, hiddenSet, results]);
 
   const periodSummary = React.useMemo(() => {
     void sessionTick;
