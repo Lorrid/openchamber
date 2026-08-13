@@ -1195,6 +1195,8 @@ export const dict: Record<I18nKey, string> = {
   'contextRail.editorTree.toggle': '파일 트리 표시 전환',
   'contextPanel.browser.open': '브라우저 패널 열기',
   'contextPanel.browser.addressAria': '브라우저 주소',
+  'contextPanel.browser.history.label': '최근 주소',
+  'contextPanel.browser.history.forget': '기록에서 제거',
   'contextPanel.browser.empty': '웹 브라우저',
   'contextPanel.browser.emptyHint': '위에 주소를 입력하여 탐색을 시작하세요',
   'contextPanel.browser.inspectUnavailable': '브라우저 패널에서 이 페이지를 검사할 수 없습니다.',

@@ -1195,6 +1195,8 @@ export const dict: Record<I18nKey, string> = {
   "contextRail.editorTree.toggle": "Alternar árbol de archivos",
   "contextPanel.browser.open": "Abrir panel del navegador",
   "contextPanel.browser.addressAria": "Dirección del navegador",
+  "contextPanel.browser.history.label": "Direcciones recientes",
+  "contextPanel.browser.history.forget": "Quitar del historial",
   "contextPanel.browser.empty": "Navegador web",
   "contextPanel.browser.emptyHint": "Ingrese una dirección arriba para comenzar a navegar",
   "contextPanel.browser.inspectUnavailable": "Esta página no se puede inspeccionar desde el panel del navegador.",

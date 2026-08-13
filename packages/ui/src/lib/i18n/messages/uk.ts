@@ -1195,6 +1195,8 @@ export const dict: Record<I18nKey, string> = {
   "contextRail.editorTree.toggle": "Перемкнути дерево файлів",
   "contextPanel.browser.open": "Відкрити панель браузера",
   "contextPanel.browser.addressAria": "Адреса браузера",
+  "contextPanel.browser.history.label": "Нещодавні адреси",
+  "contextPanel.browser.history.forget": "Прибрати з історії",
   "contextPanel.browser.empty": "Веб-браузер",
   "contextPanel.browser.emptyHint": "Введіть адресу вище, щоб почати перегляд",
   "contextPanel.browser.inspectUnavailable": "Цю сторінку неможливо інспектувати з панелі браузера.",

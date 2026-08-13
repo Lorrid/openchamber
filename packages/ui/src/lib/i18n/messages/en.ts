@@ -1194,6 +1194,8 @@ export const dict = {
   'contextRail.editorTree.toggle': 'Toggle file tree',
   'contextPanel.browser.open': 'Open browser panel',
   'contextPanel.browser.addressAria': 'Browser address',
+  'contextPanel.browser.history.label': 'Recent addresses',
+  'contextPanel.browser.history.forget': 'Remove from history',
   'contextPanel.browser.empty': 'Web browser',
   'contextPanel.browser.emptyHint': 'Enter an address above to start browsing the web',
   'contextPanel.browser.inspectUnavailable': 'This page cannot be inspected from the browser panel.',

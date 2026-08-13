@@ -1045,6 +1045,8 @@ export const dict = {
   'contextPanel.mode.browser': 'Browser',
   'contextPanel.browser.open': 'Browser-Panel öffnen',
   'contextPanel.browser.addressAria': 'Browser-Adresse',
+  'contextPanel.browser.history.label': 'Zuletzt besuchte Adressen',
+  'contextPanel.browser.history.forget': 'Aus dem Verlauf entfernen',
   'contextPanel.browser.empty': 'Webbrowser',
   'contextPanel.browser.emptyHint': 'Geben Sie oben eine Adresse ein, um mit dem Surfen im Web zu beginnen',
   'contextPanel.browser.inspectUnavailable': 'Diese Seite kann nicht aus dem Browser-Panel inspectiert werden.',

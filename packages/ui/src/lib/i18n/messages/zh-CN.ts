@@ -1195,6 +1195,8 @@ export const dict: Record<I18nKey, string> = {
   'contextRail.editorTree.toggle': '切换文件树',
   'contextPanel.browser.open': '打开浏览器面板',
   'contextPanel.browser.addressAria': '浏览器地址',
+  'contextPanel.browser.history.label': '最近访问的地址',
+  'contextPanel.browser.history.forget': '从历史记录中移除',
   'contextPanel.browser.empty': '网页浏览器',
   'contextPanel.browser.emptyHint': '在上方输入网址开始浏览',
   'contextPanel.browser.inspectUnavailable': '无法从浏览器面板检查此页面。',

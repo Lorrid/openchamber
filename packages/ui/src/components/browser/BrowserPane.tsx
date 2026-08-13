@@ -17,6 +17,8 @@ import {
 } from '@/lib/browser/annotationSession';
 import { resolveAnnotationOverlayTheme } from '@/lib/browser/overlayTheme';
 import { registerBrowserController } from '@/lib/browser/controlClient';
+import { suggestFromHistory } from '@/lib/browser/history';
+import { selectBrowserHistory, useBrowserHistoryStore } from '@/stores/useBrowserHistoryStore';
 import { resolveBrowsableUrl, toDisplayUrl } from '@/lib/browser/devTunnel';
 import {
   buildClickScript,
@@ -142,6 +144,23 @@ const WebviewBrowser: React.FC<BrowserPaneProps> = ({ initialUrl, directory, tab
   const attachAnnotation = useAnnotationAttach(directory);
   const overlayLabels = useAnnotationOverlayLabels();
   const isLoading = navigation.status.kind === 'loading';
+
+  const history = useBrowserHistoryStore(selectBrowserHistory(directory));
+  const recordHistoryVisit = useBrowserHistoryStore((state) => state.recordVisit);
+  const forgetHistoryVisit = useBrowserHistoryStore((state) => state.forget);
+  // Recorded once a page has actually loaded, and with the title it reported:
+  // an address that failed to open is not somewhere to offer going back to.
+  React.useEffect(() => {
+    if (navigation.status.kind !== 'ready') return;
+    recordHistoryVisit(directory, {
+      url: toDisplayUrl(navigation.status.url),
+      title: navigation.status.title,
+    });
+  }, [directory, navigation.status, recordHistoryVisit]);
+  const suggestions = React.useMemo(
+    () => suggestFromHistory(history, address),
+    [history, address],
+  );
 
   const loadUrl = React.useCallback((value: string) => {
     const next = normalizeBrowserUrl(value);
@@ -616,6 +635,8 @@ const WebviewBrowser: React.FC<BrowserPaneProps> = ({ initialUrl, directory, tab
         address={address}
         onAddressChange={setAddress}
         onSubmit={loadUrl}
+        suggestions={suggestions}
+        onForgetSuggestion={(url) => forgetHistoryVisit(directory, url)}
         onBack={() => { try { webviewRef.current?.goBack(); } catch { /* not attached */ } }}
         onForward={() => { try { webviewRef.current?.goForward(); } catch { /* not attached */ } }}
         onReload={handleReload}
@@ -727,12 +748,23 @@ const IframeBrowser: React.FC<BrowserPaneProps> = ({ initialUrl, directory, tabI
     setContextPanelTabTargetPath(directory, tabID, url);
   }, [directory, tabID, setContextPanelTabTargetPath]);
 
+  const visitedAddresses = useBrowserHistoryStore(selectBrowserHistory(directory));
+  const recordHistoryVisit = useBrowserHistoryStore((state) => state.recordVisit);
+  const forgetHistoryVisit = useBrowserHistoryStore((state) => state.forget);
+  const suggestions = React.useMemo(
+    () => suggestFromHistory(visitedAddresses, address),
+    [visitedAddresses, address],
+  );
+
   const navigate = React.useCallback((value: string) => {
     const next = normalizeBrowserUrl(value);
     if (next === BLANK_URL) return;
     setAddress(next);
     setLoadedUrl(next);
     persistUrl(next);
+    // The page is opaque here, so there is no load event and no title to wait
+    // for; what was asked for is the only thing this runtime can record.
+    recordHistoryVisit(directory, { url: next });
     setHistory((current) => {
       const kept = historyIndex >= 0 ? current.slice(0, historyIndex + 1) : [];
       if (kept[kept.length - 1] === next) {
@@ -742,7 +774,7 @@ const IframeBrowser: React.FC<BrowserPaneProps> = ({ initialUrl, directory, tabI
       setHistoryIndex(kept.length);
       return [...kept, next];
     });
-  }, [historyIndex, persistUrl]);
+  }, [directory, historyIndex, persistUrl, recordHistoryVisit]);
 
   const goTo = React.useCallback((index: number) => {
     const next = history[index];
@@ -759,6 +791,8 @@ const IframeBrowser: React.FC<BrowserPaneProps> = ({ initialUrl, directory, tabI
         address={address}
         onAddressChange={setAddress}
         onSubmit={navigate}
+        suggestions={suggestions}
+        onForgetSuggestion={(url) => forgetHistoryVisit(directory, url)}
         onBack={() => goTo(historyIndex - 1)}
         onForward={() => goTo(historyIndex + 1)}
         onReload={bumpReload}

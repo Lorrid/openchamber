@@ -1509,6 +1509,8 @@ export const dict: Record<I18nKey, string> = {
   'contextRail.editorTree.toggle': 'Przełącz drzewo plików',
   'contextPanel.browser.open': 'Otwórz panel przeglądarki',
   'contextPanel.browser.addressAria': 'Adres przeglądarki',
+  'contextPanel.browser.history.label': 'Ostatnie adresy',
+  'contextPanel.browser.history.forget': 'Usuń z historii',
   'contextPanel.browser.empty': 'Przeglądarka internetowa',
   'contextPanel.browser.emptyHint': 'Wprowadź adres powyżej, aby rozpocząć przeglądanie',
   'contextPanel.browser.inspectUnavailable': 'Nie można sprawdzić tej strony z panelu przeglądarki.',

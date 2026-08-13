@@ -1014,6 +1014,8 @@ export const dict = {
   'contextRail.editorTree.toggle': 'Afficher/masquer l’arborescence de fichiers',
   'contextPanel.browser.open': 'Ouvrir le panneau du navigateur',
   'contextPanel.browser.addressAria': 'Adresse du navigateur',
+  'contextPanel.browser.history.label': 'Adresses récentes',
+  'contextPanel.browser.history.forget': 'Retirer de l’historique',
   'contextPanel.browser.empty': 'Navigateur Internet',
   'contextPanel.browser.emptyHint': 'Entrez une adresse ci-dessus pour commencer à naviguer sur le Web',
   'contextPanel.tab.closeTabAria': 'Fermer l\'onglet {label}',

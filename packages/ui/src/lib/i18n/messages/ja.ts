@@ -1191,6 +1191,8 @@ export const dict: Record<I18nKey, string> = {
   'contextRail.editorTree.toggle': 'ファイルツリーの表示切替',
   'contextPanel.browser.open': 'ブラウザパネルを開く',
   'contextPanel.browser.addressAria': 'ブラウザアドレス',
+  'contextPanel.browser.history.label': '最近のアドレス',
+  'contextPanel.browser.history.forget': '履歴から削除',
   'contextPanel.browser.empty': 'ウェブブラウザ',
   'contextPanel.browser.emptyHint': '上のアドレスバーにURLを入力してウェブを閲覧',
   'contextPanel.browser.inspectUnavailable': 'このページはブラウザパネルから検査できません。',
