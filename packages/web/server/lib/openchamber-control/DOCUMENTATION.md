@@ -53,3 +53,10 @@ other.
   directory and does not erase other session results.
 - Destructive session/worktree deletion and project-path registration are not
   part of the action contract.
+- `browser.capture` writes its image on the server, into
+  `.openchamber/screenshots/` under the scoped project directory, and returns
+  the project-relative path rather than the image bytes. The client that took
+  the picture may be on a different machine than the repository, and a path is
+  what an answer, a commit, or a review can use; base64 in a tool result cannot
+  be any of those. The agent's label is reduced to a filename fragment, never
+  used as a path.

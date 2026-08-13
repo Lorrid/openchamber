@@ -299,6 +299,22 @@ const WebviewBrowser: React.FC<BrowserPaneProps> = ({ initialUrl, directory, tab
       return { url: toDisplayUrl(webview.getURL()), title };
     }
 
+    if (action === 'browser.capture') {
+      // Wait for a settled page first: a screenshot of a half-painted layout is
+      // worse than none, because it looks like a finished one.
+      await waitForIdle();
+      const capture = await annotationHost.capturePage();
+      if (!capture) throw new Error('The page could not be captured');
+      let title = '';
+      try { title = webview.getTitle() || ''; } catch { title = ''; }
+      return {
+        ...capture,
+        url: toDisplayUrl(webview.getURL()),
+        title,
+        viewport: viewportSummary(viewportRef.current),
+      };
+    }
+
     if (action === 'browser.resize') {
       if (!isViewportMode(parameters.viewport)) throw new Error('viewport is required');
       applyViewportParameter();
@@ -395,7 +411,7 @@ const WebviewBrowser: React.FC<BrowserPaneProps> = ({ initialUrl, directory, tab
       await waitForIdle();
     }
     return result;
-  }, [loadUrl, waitForIdle]);
+  }, [annotationHost, loadUrl, waitForIdle]);
 
   React.useEffect(
     () => registerBrowserController({ run: runControlAction }),

@@ -2,6 +2,7 @@ import path from 'node:path';
 import { createOpencodeClient } from '@opencode-ai/sdk/v2';
 import { OpenChamberControlError, asControlError } from './error.js';
 import { OPENCHAMBER_ALL_ACTIONS } from './actions.js';
+import { writeScreenshot } from './screenshots.js';
 
 const DEFAULT_WAIT_TIMEOUT_SECONDS = 600;
 const MAX_WAIT_TIMEOUT_SECONDS = 86_400;
@@ -327,7 +328,7 @@ export const createOpenChamberControlService = (dependencies) => {
    * should come back as a usage error the agent can correct, without waking a
    * client or waiting for a round trip.
    */
-  const browserAction = (action, input, signal) => {
+  const browserAction = async (action, input, signal, contextDirectory) => {
     const parameters = {};
 
     const readViewport = (required) => {
@@ -343,6 +344,11 @@ export const createOpenChamberControlService = (dependencies) => {
     };
 
     if (action === 'browser.resize') readViewport(true);
+
+    if (action === 'browser.capture') {
+      const label = asNonEmptyString(input.label);
+      if (label) parameters.label = label;
+    }
 
     if (action === 'browser.open') {
       readViewport(false);
@@ -410,7 +416,36 @@ export const createOpenChamberControlService = (dependencies) => {
     // exceed the client's own wait; sharing one timeout with the quick actions
     // made a slow page indistinguishable from an unreachable browser.
     const timeoutMs = action === 'browser.open' ? 45_000 : 20_000;
-    return browserControl.request(action, parameters, { signal, timeoutMs });
+    const result = await browserControl.request(action, parameters, { signal, timeoutMs });
+
+    // The image is written here rather than in the renderer: the file belongs
+    // beside the code it documents, and the client that took it may be on a
+    // different machine than the repository.
+    if (action === 'browser.capture') {
+      const directory = asNonEmptyString(input.directory) || asNonEmptyString(contextDirectory);
+      if (!directory) {
+        throw new OpenChamberControlError('directory is required to save a screenshot', 400);
+      }
+      const capture = result && typeof result === 'object' ? result : {};
+      const saved = await writeScreenshot({
+        directory,
+        base64: capture.base64,
+        mime: capture.mime,
+        label: input.label,
+      });
+      // The base64 never goes back to the caller: it is large, and the path is
+      // what an answer, a commit, or a review can actually use.
+      return {
+        path: saved.path,
+        url: capture.url ?? null,
+        title: capture.title ?? null,
+        viewport: capture.viewport ?? null,
+        width: capture.width ?? null,
+        height: capture.height ?? null,
+      };
+    }
+
+    return result;
   };
 
   const execute = async (action, input = {}, contextDirectory, options = {}) => {
@@ -422,7 +457,7 @@ export const createOpenChamberControlService = (dependencies) => {
         if (!browserControl) {
           throw new OpenChamberControlError('The in-app browser is not available on this server', 503);
         }
-        return browserAction(action, input, options.signal);
+        return browserAction(action, input, options.signal, contextDirectory);
       }
       if (action === 'projects.list') return { projects: await projects() };
       if (action === 'models.list') return models();
