@@ -437,6 +437,11 @@ export const createOpenChamberControlService = (dependencies) => {
       // what an answer, a commit, or a review can actually use.
       return {
         path: saved.path,
+        // Saving the file is only half of showing it. Chat collects the image
+        // paths written in a finished answer and renders them below it, so the
+        // agent is told the one thing it cannot infer: that writing the path is
+        // what puts the picture in front of the user.
+        hint: `Write ![](${saved.path}) in your reply to show this image to the user; it is rendered under your message.`,
         url: capture.url ?? null,
         title: capture.title ?? null,
         viewport: capture.viewport ?? null,
