@@ -85,46 +85,51 @@ export const BrowserEmptyState: React.FC<{
   }), [announced, discovery]);
 
   return (
-    <div className="absolute inset-0 flex flex-col items-center justify-center gap-5 overflow-y-auto bg-background p-6 text-center">
-      <OpenChamberLogo width={110} height={110} className="opacity-20" />
-      <div className="flex flex-col gap-1">
+    // The whole panel must not scroll: a centred column that overflows clips its
+    // own top, and no amount of scrolling reaches it. Only the list of servers
+    // scrolls, and it shrinks to whatever room is left before it does.
+    <div className="absolute inset-0 flex flex-col items-center justify-center gap-5 overflow-hidden bg-background p-6 text-center">
+      <OpenChamberLogo width={110} height={110} className="shrink-0 opacity-20" />
+      <div className="flex shrink-0 flex-col gap-1">
         <span className="typography-ui-header text-foreground">{t('contextPanel.browser.empty')}</span>
         <span className="typography-micro text-muted-foreground">{t('contextPanel.browser.emptyHint')}</span>
       </div>
 
       {candidates.length > 0 ? (
-        <div className="flex w-full max-w-sm flex-col gap-1">
-          <span className="typography-micro text-left text-muted-foreground">
+        <div className="flex min-h-0 w-full max-w-sm flex-col gap-1">
+          <span className="shrink-0 typography-micro text-left text-muted-foreground">
             {announced.length > 0
               ? t('contextPanel.browser.devServers.justStarted')
               : t('contextPanel.browser.devServers.title')}
           </span>
           {remoteOnly ? (
-            <span className="pb-1 text-left typography-micro text-muted-foreground">
+            <span className="shrink-0 pb-1 text-left typography-micro text-muted-foreground">
               {t('contextPanel.browser.devServers.remoteOnly')}
             </span>
           ) : null}
-          {candidates.map((candidate) => (
-            <Button
-              key={candidate.port}
-              type="button"
-              variant="outline"
-              size="sm"
-              className="w-full justify-start gap-2"
-              onClick={() => {
-                // The offer is answered; leaving it up would keep suggesting
-                // servers behind a page the user is already looking at.
-                clearAnnouncedDevServers(directory);
-                onOpen(candidate.url);
-              }}
-            >
-              <Icon name="global" className="size-3.5 shrink-0" aria-hidden="true" />
-              <span className="truncate">{browserUrlLabel(candidate.url) || candidate.url}</span>
-              <span className="ml-auto truncate typography-micro text-muted-foreground">
-                {pathLabel(candidate.url)}
-              </span>
-            </Button>
-          ))}
+          <div className="flex min-h-0 flex-col gap-1 overflow-y-auto pr-0.5">
+            {candidates.map((candidate) => (
+              <Button
+                key={candidate.port}
+                type="button"
+                variant="outline"
+                size="sm"
+                className="w-full shrink-0 justify-start gap-2"
+                onClick={() => {
+                  // The offer is answered; leaving it up would keep suggesting
+                  // servers behind a page the user is already looking at.
+                  clearAnnouncedDevServers(directory);
+                  onOpen(candidate.url);
+                }}
+              >
+                <Icon name="global" className="size-3.5 shrink-0" aria-hidden="true" />
+                <span className="truncate">{browserUrlLabel(candidate.url) || candidate.url}</span>
+                <span className="ml-auto truncate typography-micro text-muted-foreground">
+                  {pathLabel(candidate.url)}
+                </span>
+              </Button>
+            ))}
+          </div>
         </div>
       ) : null}
 
