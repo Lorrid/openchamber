@@ -57,7 +57,7 @@ export const getToolIcon = (toolName: string) => {
         return <Icon name="openchamber" className={iconClass} />;
     }
     if (tool === 'openchamber_web') {
-        return <Icon name="chrome" className={iconClass} />;
+        return <Icon name="global" className={iconClass} />;
     }
     if (tool === 'question') {
         return <Icon name="survey" className={iconClass} />;
