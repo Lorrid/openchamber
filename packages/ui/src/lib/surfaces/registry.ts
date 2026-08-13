@@ -208,6 +208,14 @@ export const getVisibleContextRailSurfaces = (options: VisibleRailSurfacesOption
     if (surface.id === 'walkthrough' && (options.isVSCode || options.screenWidth < WALKTHROUGH_MIN_WIDTH)) {
       return false;
     }
+    // VS Code already is an editor with a browser next to it. What OpenChamber
+    // could add there is a bare frame: no annotation, no agent control, no
+    // remote dev servers — all of which need a Chromium host the extension does
+    // not have. Offering the surface anyway would promise the panel people see
+    // on the desktop.
+    if (surface.id === 'browser' && options.isVSCode) {
+      return false;
+    }
     if (surface.availability === 'has-content') {
       return options.tabs.some((tab) => tab.mode === surface.mode);
     }

@@ -11,6 +11,7 @@ import { getRuntimeKey } from '@/lib/runtime-switch';
 import type { TerminalShell } from '@/lib/api/types';
 import { useFilesViewTabsStore } from './useFilesViewTabsStore';
 import { isWindowsArm64 } from '@/lib/platform';
+import { isVSCodeRuntime } from '@/lib/desktop';
 
 export type MainTab = 'chat' | 'plan' | 'git' | 'diff' | 'terminal' | 'files' | 'context' | 'diagram';
 export type PendingDiffScope = 'working' | 'staged' | 'turn';
@@ -286,6 +287,7 @@ const sanitizeContextPanelTabs = (tabs: unknown): ContextPanelTab[] => {
   if (!Array.isArray(tabs)) {
     return [];
   }
+  const dropBrowserTabs = isVSCodeRuntime();
 
   const result: ContextPanelTab[] = [];
   const seen = new Set<string>();
@@ -311,6 +313,12 @@ const sanitizeContextPanelTabs = (tabs: unknown): ContextPanelTab[] => {
     // anything still carrying an unknown mode here is discarded rather than
     // resurrected into a tab the panel cannot render.
     if (candidate.mode !== 'diff' && candidate.mode !== 'walkthrough' && candidate.mode !== 'file' && candidate.mode !== 'context' && candidate.mode !== 'plan' && candidate.mode !== 'chat' && candidate.mode !== 'browser' && candidate.mode !== 'git' && candidate.mode !== 'pr' && candidate.mode !== 'notes' && candidate.mode !== 'terminal') {
+      continue;
+    }
+
+    // State is shared with the desktop and web surfaces, which do have a
+    // browser; inside VS Code such a tab would have no surface to belong to.
+    if (dropBrowserTabs && candidate.mode === 'browser') {
       continue;
     }
 
@@ -1288,7 +1296,7 @@ export const useUIStore = create<UIStore>()(
         openContextPreview: (directory, url) => {
           const normalizedDirectory = normalizeDirectoryPath((directory || '').trim());
           const normalizedUrl = (url || '').trim();
-          if (!normalizedDirectory || !normalizedUrl) {
+          if (!normalizedDirectory || !normalizedUrl || isVSCodeRuntime()) {
             return;
           }
 
@@ -1305,7 +1313,7 @@ export const useUIStore = create<UIStore>()(
         // for one is to keep what is already open.
         openNewContextBrowserTab: (directory) => {
           const normalizedDirectory = normalizeDirectoryPath((directory || '').trim());
-          if (!normalizedDirectory) return;
+          if (!normalizedDirectory || isVSCodeRuntime()) return;
           browserTabSequence += 1;
           get().openContextPanelTab(normalizedDirectory, {
             mode: 'browser',
@@ -1316,7 +1324,7 @@ export const useUIStore = create<UIStore>()(
         },
         openContextBrowser: (directory, url = '') => {
           const normalizedDirectory = normalizeDirectoryPath((directory || '').trim());
-          if (!normalizedDirectory) return;
+          if (!normalizedDirectory || isVSCodeRuntime()) return;
           const targetUrl = typeof url === 'string' && url.trim().length > 0 ? url.trim() : '';
           get().openContextPanelTab(normalizedDirectory, {
             mode: 'browser',

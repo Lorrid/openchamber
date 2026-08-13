@@ -3,7 +3,6 @@
 - **Chat images:** completed assistant replies now collect Markdown images into a compact gallery with thumbnails and full-screen previews, including workspace-local images across multi-root workspaces (thanks to @ChangeHow).
 - **Sessions:** switching projects now selects a session owned by the new workspace, and a message already being prepared stays with the session where it was submitted instead of being rerouted by a later project switch (thanks to @makeittech).
 - Usage: quota limits enabled for display now refresh every three minutes, with a manual refresh action available at any time.
-- Browser: the preview and browser panels are now one panel. It embeds the page directly, so a site that refuses to be embedded no longer opens here; annotating a page, letting an agent drive it, and viewing dev servers from a remote OpenChamber need the desktop app.
 - Chat: typing `!` to enter shell mode no longer inserts the trigger into the command or moves the caret to the wrong side of it (thanks to @RyderAsKing).
 - Chat: line numbers with three or more digits no longer wrap in code blocks (thanks to @ChangeHow).
 

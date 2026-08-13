@@ -36,6 +36,13 @@ describe('getVisibleContextRailSurfaces', () => {
     ).toBe(true);
   });
 
+  test('offers no browser surface inside VS Code', () => {
+    expect(getVisibleContextRailSurfaces(baseOptions).some((s) => s.id === 'browser')).toBe(true);
+    // Nothing that makes the panel worth having works there, so offering it
+    // would promise the panel people see on the desktop.
+    expect(getVisibleContextRailSurfaces({ ...baseOptions, isVSCode: true }).some((s) => s.id === 'browser')).toBe(false);
+  });
+
   test('hides content-driven surfaces until a matching tab exists', () => {
     const chat = CONTEXT_SURFACES.find((surface) => surface.id === 'chat');
     if (!chat) {
