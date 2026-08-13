@@ -317,6 +317,26 @@ describe('discord-agent-api — routes', () => {
       `https://discord.com/channels/${GUILD}/${PROJECT_CHANNEL}/777`,
     );
   });
+
+  it('POST /post refuses to send when the bridge reports the server/chat muted', async () => {
+    const isSurfaceEnabled = vi.fn(async () => false);
+    const app = createApp({
+      readSettings: async () => makeSettings(),
+      bridge: { ...makeBridge(), isSurfaceEnabled },
+    });
+
+    const res = await request(app)
+      .post('/api/messenger/agent/post')
+      .send({ project: 'my-app', text: 'Build is green' });
+
+    expect(res.status).toBe(200);
+    expect(res.body.ok).toBe(false);
+    expect(isSurfaceEnabled).toHaveBeenCalledWith(
+      expect.objectContaining({ type: 'discord', channelId: PROJECT_CHANNEL }),
+    );
+    // No message must reach Discord while the surface is muted.
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
 });
 
 describe('discord-agent-api — POST /create-project', () => {

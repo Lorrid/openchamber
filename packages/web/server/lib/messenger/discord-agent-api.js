@@ -569,6 +569,19 @@ export function createDiscordAgentRouter({
     const target = resolveTarget(cfg, { project, session, channel });
     if (target.error) return res.status(400).json({ ok: false, error: target.error });
 
+    // Same sticky-stop contract as every other outbound path: a stopped
+    // integration or a muted server must not receive agent-posted messages.
+    if (
+      bridge?.isSurfaceEnabled &&
+      !(await bridge.isSurfaceEnabled({
+        type: 'discord',
+        token: cfg.token,
+        channelId: target.channelId,
+      }))
+    ) {
+      return res.json({ ok: false, error: 'Discord is turned off for this server/chat.' });
+    }
+
     const result = await postMessage(cfg.token, target.channelId, text, {
       silent: Boolean(silent),
     });

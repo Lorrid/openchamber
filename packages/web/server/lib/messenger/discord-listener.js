@@ -258,6 +258,27 @@ function inboundFromMessage(message) {
   };
 }
 
+/**
+ * Per-server mute. `guildPolicies[guildId].enabled === false` (the Settings
+ * "Enabled" switch) silences the bot in that server for every entry point —
+ * messages, slash commands and component clicks alike.
+ */
+function isGuildMuted(state, guildId) {
+  if (!guildId || !state.guildPolicies) return false;
+  return state.guildPolicies[guildId]?.enabled === false;
+}
+
+/** Ephemeral "this server is muted" reply so the interaction never hangs. */
+async function replyGuildMuted(state, interaction) {
+  await restCall(state.token, 'POST', `/interactions/${interaction.id}/${interaction.token}/callback`, {
+    type: 4,
+    data: {
+      flags: 64,
+      content: 'OpenChamber is turned off for this server. Enable it in Settings → Integrations.',
+    },
+  }).catch(() => {});
+}
+
 function effectiveGuildReplyMode(state, guildId) {
   const policy = guildId && state.guildPolicies ? state.guildPolicies[guildId] : null;
   const mode = policy?.replyMode;
@@ -285,7 +306,7 @@ async function dispatchMessageCreate(state, message, broadcastEvent, bridge) {
   }
 
   const guildId = message.guild_id ?? null;
-  if (guildId && state.guildPolicies && state.guildPolicies[guildId]?.enabled === false) {
+  if (isGuildMuted(state, guildId)) {
     state.filteredOutCount += 1;
     state.lastFilteredGuildId = guildId;
     return;
@@ -355,21 +376,7 @@ async function dispatchMessageCreate(state, message, broadcastEvent, bridge) {
       threadId: null,
     });
     if (!mentionsBot && !hasBinding) {
-      // DEBUG: log raw payload to diagnose mention detection failure
-      console.log('[DISCORD] MENTION DEBUG — message dropped:', {
-        botId: state.botId,
-        botUsername: state.botUsername,
-        contentLen: text.length,
-        content: text.slice(0, 300),
-        mentionsCount: Array.isArray(message.mentions) ? message.mentions.length : 'NOT_AN_ARRAY',
-        mentionsPreview: Array.isArray(message.mentions) ? message.mentions.map((u) => ({ id: u?.id, username: u?.username })).slice(0, 5) : String(message.mentions).slice(0, 200),
-        mentionRoles: mentionRoles.map(String),
-        channelId: message.channel_id,
-        guildId: message.guild_id ?? null,
-        channelMentionMode,
-        guildReplyMode,
-        hasBinding,
-      });
+      state.filteredOutCount += 1;
       return; // ignored by design — user must @mention the bot here
     }
   }
@@ -497,6 +504,7 @@ async function dispatchMessageCreate(state, message, broadcastEvent, bridge) {
         channelId: message.channel_id,
         threadId: null,
         sourceMessageId: message.id,
+        guildId: message.guild_id ?? null,
         text,
         attachments,
         projectPath: project?.path ?? null,
@@ -588,6 +596,12 @@ async function handleApplicationCommand(state, interaction, broadcastEvent, brid
 
   // Only handle commands we know about — pass unknown ones through silently.
   if (!isKnownMessengerCommand(cmdName) && !dynamicCommand) return;
+
+  if (isGuildMuted(state, interaction.guild_id ?? null)) {
+    state.filteredOutCount += 1;
+    await replyGuildMuted(state, interaction);
+    return;
+  }
 
   const user = interaction.member?.user ?? interaction.user ?? {};
   const access = await canProcessDiscordUser(state, {
@@ -785,6 +799,12 @@ async function dispatchInteractionCreate(state, interaction, broadcastEvent, bri
 
   // We only care about MESSAGE_COMPONENT (type 3) interactions.
   if (interaction.type !== 3) return;
+
+  if (isGuildMuted(state, interaction.guild_id ?? null)) {
+    state.filteredOutCount += 1;
+    await replyGuildMuted(state, interaction);
+    return;
+  }
 
   const componentUser = interaction.member?.user ?? interaction.user ?? {};
   const componentAccess = await canProcessDiscordUser(state, {

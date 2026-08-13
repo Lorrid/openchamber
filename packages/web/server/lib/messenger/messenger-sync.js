@@ -9,9 +9,15 @@ import {
   getTelegramChat,
   getTelegramChatMember,
   createTelegramForumTopic,
+  editTelegramForumTopic,
+  deleteTelegramForumTopic,
   telegramMemberCanManageTopics,
 } from './telegram-api.js';
-import { normalizeTelegramChatIds, normalizeTelegramAccessSettings } from './telegram-access.js';
+import {
+  normalizeTelegramChatIds,
+  normalizeTelegramAccessSettings,
+  isTelegramChatDisabled,
+} from './telegram-access.js';
 import { createMessengerOpencodeBridge } from './messenger-opencode-bridge.js';
 import { createDiscordAgentRouter } from './discord-agent-api.js';
 import { parseVerbosityLevel, VERBOSITY_LEVELS } from './messenger-verbosity.js';
@@ -589,17 +595,7 @@ export function createMessengerSyncRouter({
           broadcastEvent,
           listProjects,
           bootstrapProject: projectBootstrap,
-          autoCreateProjectChannel: async (project) => {
-            const { discord } = await loadDiscordSettings();
-            if (!discord?.botToken || !discord?.guildId) return [];
-            return autoCreateMessengerSurfacesForProject(project, {
-              discord: {
-                token: discord.botToken,
-                guildId: discord.guildId,
-                parentCategoryId: discord.parentCategoryId,
-              },
-            });
-          },
+          autoCreateProjectChannel: (project) => autoCreateMessengerSurfacesForProject(project),
           // Worktree sync: resolve the project channel a worktree thread
           // belongs to, and auto-create that channel on demand.
           resolveProjectChannel,
@@ -714,20 +710,10 @@ export function createMessengerSyncRouter({
       projectConfigRuntime,
       scheduledTasksRuntime,
       bootstrapProject: projectBootstrap,
-      // Resolve the bot config server-side and reuse the exact same
-      // find-or-create channel flow the UI's project-add path uses, so an
-      // agent-created project lands in Discord identically to a UI-added one.
-      autoCreateProjectChannel: async (project) => {
-        const { discord } = await loadDiscordSettings();
-        if (!discord?.botToken || !discord?.guildId) return null;
-        return autoCreateMessengerSurfacesForProject(project, {
-          discord: {
-            token: discord.botToken,
-            guildId: discord.guildId,
-            parentCategoryId: discord.parentCategoryId ?? null,
-          },
-        });
-      },
+      // Reuse the exact same find-or-create flow the UI's project-add path
+      // uses, so an agent-created project lands in Discord and Telegram
+      // identically to a UI-added one. Tokens stay server-side.
+      autoCreateProjectChannel: (project) => autoCreateMessengerSurfacesForProject(project),
     }),
   );
 
@@ -1640,139 +1626,315 @@ export function createMessengerSyncRouter({
     }
   }
 
-  /** Upsert a project→channel binding by project path. */
-  function upsertBinding(bindings, { channelId, projectPath, projectLabel }) {
-    const next = bindings.filter(
-      (b) => b && b.projectPath !== projectPath && String(b.channelId) !== String(channelId),
-    );
-    next.push({ channelId: String(channelId), projectPath, projectLabel });
-    return next;
+  /**
+   * Servers that mirror OpenChamber projects as channels: every guild whose
+   * policy opts into project sync and is not muted. An explicit request
+   * override wins outright (worktree sync, onboarding wizard); when no policy
+   * opts in we fall back to the legacy single `discord.guildId` pointer so
+   * older configurations keep auto-creating channels.
+   */
+  function resolveDiscordSyncTargets(discord, override = null) {
+    if (override?.guildId) {
+      return [
+        { guildId: String(override.guildId), parentCategoryId: override.parentCategoryId ?? null },
+      ];
+    }
+    const policies = discord?.guildPolicies;
+    const opted =
+      policies && typeof policies === 'object' && !Array.isArray(policies)
+        ? Object.entries(policies)
+            .filter(([, policy]) => policy?.syncProjects === true && policy?.enabled !== false)
+            .map(([guildId, policy]) => ({
+              guildId: String(guildId),
+              parentCategoryId: policy.parentCategoryId ?? null,
+            }))
+        : [];
+    if (opted.length > 0) return opted;
+    if (!discord?.guildId) return [];
+    return [
+      { guildId: String(discord.guildId), parentCategoryId: discord.parentCategoryId ?? null },
+    ];
+  }
+
+  /** Chats that mirror projects as forum topics (per-chat `syncProjects`). */
+  function resolveTelegramSyncTargets(telegram) {
+    const policies = telegram?.chatPolicies;
+    if (!policies || typeof policies !== 'object' || Array.isArray(policies)) return [];
+    return Object.entries(policies)
+      .filter(([, policy]) => policy?.syncProjects === true && policy?.enabled !== false)
+      .map(([chatId]) => String(chatId));
   }
 
   /**
-   * Find-or-create the Discord text channel that mirrors a project, persist the
-   * project→channel binding, and pre-bind it in the bridge store so the first
-   * web/Discord message lands in the project's own channel instead of #general.
+   * Find-or-create the channel mirroring a project in ONE guild. Reuses a
+   * channel this project is already bound to, then a channel already named
+   * after the project slug, and only creates one when neither exists.
+   */
+  async function ensureDiscordProjectChannel({
+    token,
+    guildId,
+    parentCategoryId,
+    slug,
+    projectLabel,
+    projectBindings,
+  }) {
+    let channels = null;
+    try {
+      const resp = await fetch(
+        `https://discord.com/api/v10/guilds/${encodeURIComponent(guildId)}/channels`,
+        { headers: { Authorization: `Bot ${token}` } },
+      );
+      if (resp.ok) channels = await resp.json();
+    } catch {
+      // best-effort — fall through to create
+    }
+    const list = Array.isArray(channels) ? channels : [];
+    const boundIds = new Set(projectBindings.map((b) => String(b.channelId)));
+    const match =
+      list.find((c) => boundIds.has(String(c.id))) ??
+      list.find((c) => (c.type === 0 || c.type === 5) && String(c.name).toLowerCase() === slug) ??
+      null;
+    if (match) {
+      return {
+        type: 'discord',
+        ok: true,
+        guildId,
+        channelId: String(match.id),
+        channelName: match.name,
+        created: false,
+      };
+    }
+
+    try {
+      const resp = await fetch(
+        `https://discord.com/api/v10/guilds/${encodeURIComponent(guildId)}/channels`,
+        {
+          method: 'POST',
+          headers: { Authorization: `Bot ${token}`, 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            name: slug,
+            type: 0,
+            parent_id: parentCategoryId ?? null,
+            topic: `OpenChamber agent sync channel for ${projectLabel}`.slice(0, 1024),
+          }),
+        },
+      );
+      if (!resp.ok) {
+        return {
+          type: 'discord',
+          ok: false,
+          guildId,
+          error: `Discord: ${resp.status} — ${friendlyDiscordError(resp.status, await resp.text())}`,
+        };
+      }
+      const data = await resp.json();
+      return {
+        type: 'discord',
+        ok: true,
+        guildId,
+        channelId: String(data.id),
+        channelName: data.name,
+        created: true,
+      };
+    } catch (err) {
+      return {
+        type: 'discord',
+        ok: false,
+        guildId,
+        error: err?.message ?? 'create-channel failed',
+      };
+    }
+  }
+
+  /**
+   * Find-or-create the forum topic mirroring a project in ONE Telegram chat.
+   * A non-forum group still binds — at chat level, without a topic — so the
+   * project routes; it just shares the chat with every other conversation.
+   */
+  async function ensureTelegramProjectTopic({ token, chatId, projectPath, projectLabel, projectBindings }) {
+    const existing = projectBindings.find((b) => String(b.chatId) === chatId);
+    if (existing?.messageThreadId != null) {
+      return {
+        type: 'telegram',
+        ok: true,
+        chatId,
+        messageThreadId: String(existing.messageThreadId),
+        created: false,
+      };
+    }
+
+    const chatInfo = await getTelegramChat({ token, chatId });
+    if (!chatInfo.ok) {
+      return { type: 'telegram', ok: false, chatId, error: chatInfo.error ?? 'getChat failed' };
+    }
+    if (chatInfo.chat?.type === 'private') {
+      return {
+        type: 'telegram',
+        ok: false,
+        chatId,
+        error: 'Project sync is only supported for groups and forums, not private chats.',
+      };
+    }
+    if (!chatInfo.chat?.is_forum) {
+      return {
+        type: 'telegram',
+        ok: true,
+        chatId,
+        messageThreadId: null,
+        created: false,
+        note: 'chat is not a forum — bound at chat level',
+      };
+    }
+
+    const me = await telegramApi(token, 'getMe', {});
+    const botUserId = me.ok ? (me.body?.result?.id ?? null) : null;
+    if (botUserId == null) {
+      return { type: 'telegram', ok: false, chatId, error: 'getMe failed' };
+    }
+    const member = await getTelegramChatMember({ token, chatId, userId: botUserId });
+    if (!member.ok) {
+      return { type: 'telegram', ok: false, chatId, error: member.error ?? 'getChatMember failed' };
+    }
+    if (!telegramMemberCanManageTopics(member.member)) {
+      return {
+        type: 'telegram',
+        ok: false,
+        chatId,
+        error:
+          'Bot lacks can_manage_topics — promote it to admin with Manage Topics to create a topic per project.',
+      };
+    }
+
+    const created = await createTelegramForumTopic({ token, chatId, name: projectLabel });
+    if (!created.ok || created.messageThreadId == null) {
+      return {
+        type: 'telegram',
+        ok: false,
+        chatId,
+        error: created.error ?? 'createForumTopic failed',
+      };
+    }
+    return {
+      type: 'telegram',
+      ok: true,
+      chatId,
+      messageThreadId: String(created.messageThreadId),
+      created: true,
+    };
+  }
+
+  /**
+   * Mirror a project into every messenger surface configured to sync projects:
+   * a Discord text channel per opted-in server and a Telegram forum topic per
+   * opted-in chat. Runs on project creation — not only during "Sync now" — so
+   * an enabled sync checkbox keeps both platforms complete automatically.
    *
-   * Idempotent: an existing binding or a channel matching the project slug is
-   * reused rather than duplicated. Best-effort — failures are reported but never
-   * throw, so the UI project-add flow is never blocked.
+   * Idempotent: an existing binding, a channel named after the project slug, or
+   * an existing topic is reused rather than duplicated. Best-effort — one
+   * surface failing never blocks the others or the project-add flow itself.
    */
   async function autoCreateMessengerSurfacesForProject(project, opts = {}) {
     const results = [];
     if (!project || !project.path) return results;
-    const projectLabel = project.label ?? project.path.split('/').pop() ?? project.path;
+    const projectPath = String(project.path);
+    const projectLabel = project.label ?? projectPath.split('/').pop() ?? projectPath;
     const slug = slugifyProjectLabel(projectLabel);
 
-    const discord = opts.discord ?? null;
-    if (discord?.token && discord?.guildId) {
-      const headers = {
-        Authorization: `Bot ${discord.token}`,
-        'Content-Type': 'application/json',
-      };
-      const { discord: discordSettings, bindings } = await loadDiscordSettings();
-      const existingBinding = bindings.find(
-        (b) => b && b.channelId && b.projectPath === project.path,
-      );
-
-      let channelId = null;
-      let channelName = null;
-      let created = false;
-      let error = null;
-
-      // 1) Reuse an existing channel: the persisted binding's channel if it
-      //    still exists, otherwise a text channel whose name matches the slug.
-      try {
-        const listResp = await fetch(
-          `https://discord.com/api/v10/guilds/${encodeURIComponent(discord.guildId)}/channels`,
-          { headers: { Authorization: `Bot ${discord.token}` } },
-        );
-        if (listResp.ok) {
-          const channels = await listResp.json();
-          const list = Array.isArray(channels) ? channels : [];
-          const byId = existingBinding
-            ? list.find((c) => String(c.id) === String(existingBinding.channelId))
-            : null;
-          const byName = list.find(
-            (c) => (c.type === 0 || c.type === 5) && String(c.name).toLowerCase() === slug,
-          );
-          const match = byId ?? byName ?? null;
-          if (match) {
-            channelId = match.id;
-            channelName = match.name;
-          }
-        }
-      } catch {
-        // best-effort — fall through to create
-      }
-
-      // 2) Create the channel when nothing usable exists yet.
-      if (!channelId) {
-        try {
-          const cResp = await fetch(
-            `https://discord.com/api/v10/guilds/${encodeURIComponent(discord.guildId)}/channels`,
-            {
-              method: 'POST',
-              headers,
-              body: JSON.stringify({
-                name: slug,
-                type: 0,
-                parent_id: discord.parentCategoryId ?? null,
-                topic: `OpenChamber agent sync channel for ${projectLabel}`.slice(0, 1024),
-              }),
-            },
-          );
-          if (cResp.ok) {
-            const data = await cResp.json();
-            channelId = data.id;
-            channelName = data.name;
-            created = true;
-          } else {
-            error = `Discord: ${cResp.status} — ${friendlyDiscordError(cResp.status, await cResp.text())}`;
-          }
-        } catch (err) {
-          error = err?.message ?? 'create-channel failed';
-        }
-      }
-
-      if (channelId) {
-        results.push({
-          type: 'discord',
-          ok: true,
-          channelId: String(channelId),
-          channelName: channelName ?? slug,
-          created,
+    const { discord: discordSettings, bindings } = await loadDiscordSettings();
+    const discordToken = opts.discord?.token ?? discordSettings?.botToken ?? null;
+    if (discordToken && discordSettings?.listenerEnabled !== false) {
+      const projectBindings = bindings.filter((b) => b && b.projectPath === projectPath);
+      const newBindings = [];
+      for (const target of resolveDiscordSyncTargets(discordSettings, opts.discord)) {
+        const result = await ensureDiscordProjectChannel({
+          token: discordToken,
+          guildId: target.guildId,
+          parentCategoryId: target.parentCategoryId,
+          slug,
+          projectLabel,
+          projectBindings,
         });
-        // Pre-bind so the bridge skips the "no project" dialogue for first message.
-        if (bridge?.store) {
-          bridge.store.bind({
-            type: 'discord',
-            botTokenHash: discordTokenHash(discord.token),
-            targetKey: String(channelId),
-            sessionId: '', // session is lazily created on first message
-            projectPath: project.path,
-            projectLabel,
-          });
-        }
-        // Persist the project→channel binding so web conversations route into
-        // this channel and the listener routes inbound back to this project —
-        // without needing a manual "Sync now".
-        await saveProjectBindings(
-          upsertBinding(bindings, { channelId, projectPath: project.path, projectLabel }),
-          discordSettings,
-        );
+        results.push(result);
+        if (!result.ok) continue;
+        newBindings.push({ channelId: result.channelId, projectPath, projectLabel });
+        // Pre-bind so the first message skips the "which project?" dialogue.
+        bridge?.store?.bind({
+          type: 'discord',
+          botTokenHash: discordTokenHash(discordToken),
+          targetKey: result.channelId,
+          sessionId: '', // session is lazily created on first message
+          projectPath,
+          projectLabel,
+        });
+      }
+      if (newBindings.length > 0) {
+        const merged = mergeProjectBindings(bindings, newBindings);
+        await saveProjectBindings(merged, discordSettings);
+        discordListener.updateConfig?.(discordToken, {
+          resolveProject: buildDiscordResolveProject(merged),
+        });
         // Keep the pinned worktree index in the project channel up to date.
         if (bridge?.worktreeSync) {
           void bridge.worktreeSync
             .refreshProjectHub({
               config: await bridge.worktreeSync.loadDiscordConfig(),
-              projectRoot: project.path,
+              projectRoot: projectPath,
               projectLabel,
             })
             .catch(() => undefined);
         }
-      } else {
-        results.push({ type: 'discord', ok: false, error: error ?? 'create-channel failed' });
+      }
+    }
+
+    const { telegram: telegramSettings } = await loadTelegramSettings();
+    const telegramToken = telegramSettings?.botToken ?? null;
+    const telegramTargets = telegramToken && telegramSettings.listenerEnabled !== false
+      ? resolveTelegramSyncTargets(telegramSettings)
+      : [];
+    if (telegramTargets.length > 0) {
+      const prevBindings = Array.isArray(telegramSettings.projectBindings)
+        ? telegramSettings.projectBindings
+        : [];
+      const projectBindings = prevBindings.filter((b) => b && String(b.projectPath) === projectPath);
+      const newBindings = [];
+      for (const chatId of telegramTargets) {
+        const result = await ensureTelegramProjectTopic({
+          token: telegramToken,
+          chatId,
+          projectPath,
+          projectLabel,
+          projectBindings,
+        });
+        results.push(result);
+        if (!result.ok) continue;
+        newBindings.push({
+          chatId,
+          projectPath,
+          projectLabel,
+          ...(result.messageThreadId != null ? { messageThreadId: result.messageThreadId } : {}),
+        });
+        bridge?.store?.bind({
+          type: 'telegram',
+          botTokenHash: discordTokenHash(telegramToken),
+          targetKey:
+            result.messageThreadId != null ? `${chatId}:${result.messageThreadId}` : chatId,
+          sessionId: '',
+          projectPath,
+          projectLabel,
+        });
+      }
+      if (newBindings.length > 0 && persistSettings) {
+        const merged = mergeTelegramProjectBindings(prevBindings, newBindings);
+        try {
+          await persistSettings({
+            telegram: { ...telegramSettings, projectBindings: merged },
+          });
+        } catch {
+          // best-effort — the live listener below still routes the new topics
+        }
+        telegramListener.updateConfig?.(telegramToken, {
+          resolveProject: buildTelegramResolveProject(merged),
+        });
       }
     }
 
@@ -1796,13 +1958,40 @@ export function createMessengerSyncRouter({
     };
   };
 
+  /** Fetch a Discord channel's guild_id (used to check per-server mute before a maintenance action). */
+  async function fetchDiscordChannelGuildId(token, channelId) {
+    try {
+      const r = await fetch(`https://discord.com/api/v10/channels/${encodeURIComponent(channelId)}`, {
+        headers: { Authorization: `Bot ${token}` },
+      });
+      if (!r.ok) return { guildId: null, name: null };
+      const data = await r.json();
+      return { guildId: data?.guild_id ? String(data.guild_id) : null, name: data?.name ?? null };
+    } catch {
+      return { guildId: null, name: null };
+    }
+  }
+
+  /** Whether maintenance actions (rename/delete) may run against a bound Discord channel right now. */
+  async function isDiscordChannelActionable(discordSettings, token, channelId) {
+    if (discordSettings?.listenerEnabled === false) return false;
+    const { guildId } = await fetchDiscordChannelGuildId(token, channelId);
+    if (!guildId) return true;
+    return discordSettings?.guildPolicies?.[guildId]?.enabled !== false;
+  }
+
+  /** Whether maintenance actions may run against a bound Telegram chat right now. */
+  function isTelegramChatActionable(telegramSettings, chatId) {
+    if (telegramSettings?.listenerEnabled === false) return false;
+    return !isTelegramChatDisabled(telegramSettings?.chatPolicies, chatId);
+  }
+
   /**
    * Explicit endpoint — the UI calls this right after a project is added so
-   * we don't tightly couple settings-runtime to messenger code.
-   * Body: {
-   *   project: { id, path, label },
-   *   discord?: { token, guildId, parentCategoryId? }
-   * }
+   * we don't tightly couple settings-runtime to messenger code. Mirrors the
+   * project into every Discord server and Telegram chat configured to sync
+   * projects (see `autoCreateMessengerSurfacesForProject`).
+   * Body: { project: { id, path, label }, discord?: { token, guildId, parentCategoryId? } }
    */
   router.post('/bridge/project-added', async (req, res) => {
     const { project, discord } = req.body ?? {};
@@ -1814,148 +2003,225 @@ export function createMessengerSyncRouter({
   });
 
   /**
-   * The UI renamed a project → rename its Discord channel to match and update
-   * the persisted projectLabel on the binding. Creates the channel when the
-   * project has no binding yet (so renaming a project OpenChamber agent never saw still
-   * produces a channel). Best-effort — Discord errors are reported, not thrown.
+   * The UI renamed a project → rename its Discord channel and/or Telegram
+   * forum topic to match, and update the persisted projectLabel on each
+   * binding. Creates the missing surfaces when the project has none yet (so
+   * renaming a project OpenChamber agent never saw still brings it into sync).
+   * A muted integration or server/chat is left untouched — same sticky-stop
+   * contract as message bridging. Best-effort per surface — one platform's
+   * error never blocks the other or the response.
    *
-   * Body: { project: { id?, path, label }, discord: { token, guildId?, parentCategoryId? } }
+   * Body: { project: { id?, path, label }, discord?: { token, guildId?, parentCategoryId? } }
    */
   router.post('/bridge/project-renamed', async (req, res) => {
     const { project, discord } = req.body ?? {};
     if (!project || !project.path) {
       return res.status(400).json({ ok: false, error: 'project { path, label } required' });
     }
-    const token = discord?.token;
-    if (!token) {
-      return res.json({ ok: false, error: 'discord token required' });
-    }
-    const projectLabel = project.label ?? project.path.split('/').pop() ?? project.path;
+    const projectPath = String(project.path);
+    const projectLabel = project.label ?? projectPath.split('/').pop() ?? projectPath;
     const slug = slugifyProjectLabel(projectLabel);
-    const { discord: discordSettings, bindings } = await loadDiscordSettings();
-    const binding = bindings.find((b) => b && b.channelId && b.projectPath === project.path);
 
-    // No channel yet → create one (renaming an unmapped project should still
-    // bring it into the per-project channel model).
-    if (!binding) {
+    const { discord: discordSettings, bindings } = await loadDiscordSettings();
+    const { telegram: telegramSettings } = await loadTelegramSettings();
+    const discordBinding = bindings.find((b) => b && b.channelId && b.projectPath === projectPath);
+    const telegramBindings = Array.isArray(telegramSettings.projectBindings)
+      ? telegramSettings.projectBindings
+      : [];
+    const telegramBinding = telegramBindings.find((b) => b && String(b.projectPath) === projectPath);
+
+    // Neither platform has a surface yet — bring the project into sync instead
+    // of silently doing nothing (mirrors project-added).
+    if (!discordBinding && !telegramBinding) {
       const results = await autoCreateMessengerSurfacesForProject(project, { discord });
-      const ok = results.find((r) => r.ok && r.channelId);
+      const ok = results.find((r) => r.ok && (r.channelId || r.messageThreadId !== undefined));
       return res.json({
-        ok: Boolean(ok),
+        ok: results.length === 0 || results.some((r) => r.ok),
         channelId: ok?.channelId ?? null,
         channelName: ok?.channelName ?? null,
         created: true,
-        error: ok ? null : results.find((r) => r.error)?.error ?? 'create failed',
+        results,
+        error: results.some((r) => r.ok) || results.length === 0 ? null : results[0]?.error,
       });
     }
 
-    const channelId = String(binding.channelId);
-    const headers = { Authorization: `Bot ${token}`, 'Content-Type': 'application/json' };
+    const results = [];
 
-    // Skip the Discord PATCH when the channel name already matches the slug —
-    // this keeps a Discord-originated rename (which set the project label) from
-    // bouncing back as a redundant rename request.
-    let currentName = null;
-    try {
-      const gResp = await fetch(
-        `https://discord.com/api/v10/channels/${encodeURIComponent(channelId)}`,
-        { headers: { Authorization: `Bot ${token}` } },
+    if (discordBinding) {
+      const token = discord?.token ?? discordSettings?.botToken;
+      const channelId = String(discordBinding.channelId);
+      if (!token) {
+        results.push({ type: 'discord', ok: false, channelId, error: 'discord token required' });
+      } else if (!(await isDiscordChannelActionable(discordSettings, token, channelId))) {
+        results.push({ type: 'discord', ok: true, channelId, renamed: false, skipped: 'muted' });
+      } else {
+        const { name: currentName } = await fetchDiscordChannelGuildId(token, channelId);
+        let renamed = false;
+        let error = null;
+        // Skip the PATCH when the channel already matches the slug — keeps a
+        // Discord-originated rename (which set the project label) from
+        // bouncing back as a redundant rename request.
+        if (currentName !== slug) {
+          try {
+            const pResp = await fetch(
+              `https://discord.com/api/v10/channels/${encodeURIComponent(channelId)}`,
+              {
+                method: 'PATCH',
+                headers: { Authorization: `Bot ${token}`, 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                  name: slug,
+                  topic: `OpenChamber agent sync channel for ${projectLabel}`.slice(0, 1024),
+                }),
+              },
+            );
+            if (pResp.ok) {
+              renamed = true;
+            } else {
+              error = `Discord: ${pResp.status} — ${friendlyDiscordError(pResp.status, await pResp.text())}`;
+            }
+          } catch (err) {
+            error = err?.message ?? 'rename failed';
+          }
+        }
+        results.push({ type: 'discord', ok: !error, channelId, channelName: slug, renamed, error });
+      }
+      // Keep the persisted label current regardless of the Discord result —
+      // resolveProjectChannel + the listener read projectLabel from here.
+      await saveProjectBindings(
+        bindings.map((b) => (b && b.projectPath === projectPath ? { ...b, projectLabel } : b)),
+        discordSettings,
       );
-      if (gResp.ok) currentName = (await gResp.json())?.name ?? null;
-    } catch {
-      // best-effort
     }
 
-    let renamed = false;
-    let error = null;
-    if (currentName !== slug) {
+    if (telegramBinding) {
+      const token = telegramSettings?.botToken;
+      const chatId = String(telegramBinding.chatId);
+      if (!token) {
+        results.push({ type: 'telegram', ok: false, chatId, error: 'telegram token required' });
+      } else if (!isTelegramChatActionable(telegramSettings, chatId)) {
+        results.push({ type: 'telegram', ok: true, chatId, renamed: false, skipped: 'muted' });
+      } else if (telegramBinding.messageThreadId == null) {
+        // Chat-level binding (non-forum) — nothing to rename, just relabel.
+        results.push({ type: 'telegram', ok: true, chatId, renamed: false });
+      } else {
+        const renamed = await editTelegramForumTopic({
+          token,
+          chatId,
+          messageThreadId: telegramBinding.messageThreadId,
+          name: projectLabel,
+        });
+        results.push({
+          type: 'telegram',
+          ok: renamed.ok,
+          chatId,
+          messageThreadId: telegramBinding.messageThreadId,
+          renamed: renamed.ok && !renamed.missing,
+          error: renamed.error ?? null,
+        });
+      }
+      const nextTelegramBindings = telegramBindings.map((b) =>
+        b && String(b.projectPath) === projectPath ? { ...b, projectLabel } : b,
+      );
       try {
-        const pResp = await fetch(
-          `https://discord.com/api/v10/channels/${encodeURIComponent(channelId)}`,
-          {
-            method: 'PATCH',
-            headers,
-            body: JSON.stringify({
-              name: slug,
-              topic: `OpenChamber agent sync channel for ${projectLabel}`.slice(0, 1024),
-            }),
-          },
-        );
-        if (pResp.ok) {
-          renamed = true;
-        } else {
-          error = `Discord: ${pResp.status} — ${friendlyDiscordError(pResp.status, await pResp.text())}`;
-        }
-      } catch (err) {
-        error = err?.message ?? 'rename failed';
+        await persistSettings?.({
+          telegram: { ...telegramSettings, projectBindings: nextTelegramBindings },
+        });
+      } catch {
+        // best-effort — rename result already reported
       }
     }
 
-    // Keep the persisted label current regardless of whether the Discord rename
-    // succeeded — resolveProjectChannel + the listener read projectLabel from here.
-    await saveProjectBindings(
-      bindings.map((b) =>
-        b && b.projectPath === project.path ? { ...b, channelId, projectLabel } : b,
-      ),
-      discordSettings,
-    );
-
-    res.json({ ok: !error, channelId, channelName: slug, renamed, error });
+    // Top-level channelId/channelName/renamed/error mirror the Discord result
+    // for callers that only handle a single platform; `results` carries the
+    // full per-platform detail.
+    const discordResult = results.find((r) => r.type === 'discord');
+    res.json({
+      ok: results.every((r) => r.ok),
+      channelId: discordBinding ? String(discordBinding.channelId) : null,
+      channelName: discordBinding ? slug : null,
+      renamed: discordResult?.renamed,
+      results,
+      error: discordResult?.error ?? results.find((r) => !r.ok)?.error ?? null,
+    });
   });
 
   /**
-   * The UI removed a project → delete its Discord channel and drop the binding.
-   * Best-effort — a missing channel (already deleted in Discord) still cleans up
-   * the local binding so state can't drift.
+   * The UI removed a project → delete its Discord channel and/or Telegram
+   * forum topic and drop both bindings. A missing surface (already deleted
+   * upstream) still counts as success so cleanup always completes. A muted
+   * integration/server/chat is left untouched (the binding is still dropped
+   * locally so state can't drift once the surface is re-enabled).
    *
-   * Body: { project: { id?, path, channelId? }, discord: { token } }
+   * Body: { project: { id?, path, channelId? }, discord?: { token, deleteChannel? } }
    */
   router.post('/bridge/project-removed', async (req, res) => {
     const { project, discord } = req.body ?? {};
     if (!project || !project.path) {
       return res.status(400).json({ ok: false, error: 'project { path } required' });
     }
-    const token = discord?.token;
+    const projectPath = String(project.path);
     const { discord: discordSettings, bindings } = await loadDiscordSettings();
-    const binding = bindings.find((b) => b && b.channelId && b.projectPath === project.path);
-    const channelId = binding?.channelId
-      ? String(binding.channelId)
+    const { telegram: telegramSettings } = await loadTelegramSettings();
+    const discordBinding = bindings.find((b) => b && b.channelId && b.projectPath === projectPath);
+    const telegramBindings = Array.isArray(telegramSettings.projectBindings)
+      ? telegramSettings.projectBindings
+      : [];
+    const telegramBinding = telegramBindings.find((b) => b && String(b.projectPath) === projectPath);
+
+    const results = [];
+    const token = discord?.token ?? discordSettings?.botToken;
+    const channelId = discordBinding?.channelId
+      ? String(discordBinding.channelId)
       : project.channelId
         ? String(project.channelId)
         : null;
 
-    let deleted = false;
-    let error = null;
     if (channelId && token && discord?.deleteChannel !== false) {
-      try {
-        const dResp = await fetch(
-          `https://discord.com/api/v10/channels/${encodeURIComponent(channelId)}`,
-          { method: 'DELETE', headers: { Authorization: `Bot ${token}` } },
-        );
-        // 404 = channel already gone; treat as success for cleanup purposes.
-        if (dResp.ok || dResp.status === 404) {
-          deleted = true;
-        } else {
-          error = `Discord: ${dResp.status} — ${friendlyDiscordError(dResp.status, await dResp.text())}`;
+      if (!(await isDiscordChannelActionable(discordSettings, token, channelId))) {
+        results.push({ type: 'discord', ok: true, channelId, deleted: false, skipped: 'muted' });
+      } else {
+        try {
+          const dResp = await fetch(
+            `https://discord.com/api/v10/channels/${encodeURIComponent(channelId)}`,
+            { method: 'DELETE', headers: { Authorization: `Bot ${token}` } },
+          );
+          // 404 = channel already gone; treat as success for cleanup purposes.
+          if (dResp.ok || dResp.status === 404) {
+            results.push({ type: 'discord', ok: true, channelId, deleted: true });
+          } else {
+            results.push({
+              type: 'discord',
+              ok: false,
+              channelId,
+              deleted: false,
+              error: `Discord: ${dResp.status} — ${friendlyDiscordError(dResp.status, await dResp.text())}`,
+            });
+          }
+        } catch (err) {
+          results.push({
+            type: 'discord',
+            ok: false,
+            channelId,
+            deleted: false,
+            error: err?.message ?? 'delete failed',
+          });
         }
-      } catch (err) {
-        error = err?.message ?? 'delete failed';
       }
     }
 
     // Drop the binding from settings and the bridge store regardless of the
     // Discord delete result so the UI project removal is fully mirrored.
-    if (binding) {
+    if (discordBinding) {
       await saveProjectBindings(
-        bindings.filter((b) => !(b && b.projectPath === project.path)),
+        bindings.filter((b) => !(b && b.projectPath === projectPath)),
         discordSettings,
       );
     }
-    if (channelId && token && bridge?.store) {
+    if (channelId && bridge?.store) {
       try {
         bridge.store.unbind({
           type: 'discord',
-          botTokenHash: discordTokenHash(token),
+          botTokenHash: discordTokenHash(token ?? channelId),
           targetKey: channelId,
         });
       } catch {
@@ -1963,15 +2229,71 @@ export function createMessengerSyncRouter({
       }
     }
 
+    if (telegramBinding) {
+      const telegramToken = telegramSettings?.botToken;
+      const chatId = String(telegramBinding.chatId);
+      if (telegramToken && telegramBinding.messageThreadId != null) {
+        if (!isTelegramChatActionable(telegramSettings, chatId)) {
+          results.push({ type: 'telegram', ok: true, chatId, deleted: false, skipped: 'muted' });
+        } else {
+          const deleted = await deleteTelegramForumTopic({
+            token: telegramToken,
+            chatId,
+            messageThreadId: telegramBinding.messageThreadId,
+          });
+          results.push({
+            type: 'telegram',
+            ok: deleted.ok,
+            chatId,
+            deleted: deleted.ok,
+            error: deleted.error ?? null,
+          });
+        }
+      } else {
+        results.push({ type: 'telegram', ok: true, chatId, deleted: false });
+      }
+      const nextTelegramBindings = telegramBindings.filter(
+        (b) => !(b && String(b.projectPath) === projectPath),
+      );
+      try {
+        await persistSettings?.({
+          telegram: { ...telegramSettings, projectBindings: nextTelegramBindings },
+        });
+      } catch {
+        // best-effort — deletion result already reported
+      }
+      if (telegramToken && bridge?.store) {
+        try {
+          bridge.store.unbind({
+            type: 'telegram',
+            botTokenHash: discordTokenHash(telegramToken),
+            targetKey:
+              telegramBinding.messageThreadId != null
+                ? `${chatId}:${telegramBinding.messageThreadId}`
+                : chatId,
+          });
+        } catch {
+          // best-effort
+        }
+      }
+    }
+
     broadcastEvent?.('messenger.bridge.project_channel_removed', {
-      type: 'discord',
       source: 'ui',
-      channelId,
-      projectPath: project.path,
-      projectLabel: binding?.projectLabel ?? null,
+      projectPath,
+      results,
     });
 
-    res.json({ ok: !error, channelId, deleted, error });
+    // Top-level channelId/deleted/error mirror the Discord result for callers
+    // that only handle a single platform; `results` carries the full detail.
+    const discordResult = results.find((r) => r.type === 'discord');
+    res.json({
+      ok: results.every((r) => r.ok),
+      channelId,
+      deleted: discordResult?.deleted,
+      results,
+      error: discordResult?.error ?? results.find((r) => !r.ok)?.error ?? null,
+    });
   });
 
   /**

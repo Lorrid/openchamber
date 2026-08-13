@@ -77,6 +77,9 @@ export function createMessengerAutostart({
       ownerUserIds: access.ownerUserIds.length > 0 ? access.ownerUserIds : undefined,
       allowedChatIds: telegram.allowedChatIds,
       defaultReplyMode: telegram.defaultReplyMode,
+      // Per-chat mute/reply policy — the Telegram counterpart of guildPolicies.
+      // Without this a chat muted in Settings answered again after a restart.
+      chatPolicies: telegram.chatPolicies,
       resolveProject: buildTelegramResolveProject(telegram.projectBindings),
     });
     if (telegram.bridgeEnabled === false && typeof persistSettings === 'function') {

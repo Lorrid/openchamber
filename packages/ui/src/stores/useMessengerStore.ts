@@ -1079,6 +1079,33 @@ function getDiscordSyncGuildIds(
   return conn.discordGuildId ? [conn.discordGuildId] : [];
 }
 
+/** The set of chat ids that should receive per-project forum-topic mirroring. */
+function getTelegramSyncChatIds(
+  conn: Pick<MessengerConnection, 'telegramChatPolicies'>,
+): string[] {
+  const policies = conn.telegramChatPolicies ?? {};
+  return Object.entries(policies)
+    .filter(([, p]) => p?.syncProjects)
+    .map(([chatId]) => chatId);
+}
+
+/** Re-fetch persisted Telegram project bindings after a server-side mirror action. */
+async function refreshTelegramProjectBindings(): Promise<void> {
+  try {
+    const loaded = await getJson<{
+      ok: boolean;
+      config?: { projectBindings?: TelegramProjectBinding[] } | null;
+    }>('/api/messenger/telegram/load-config');
+    if (loaded.ok && Array.isArray(loaded.config?.projectBindings)) {
+      useMessengerStore.getState().updateConnection('telegram', {
+        telegramProjectBindings: loaded.config.projectBindings,
+      });
+    }
+  } catch {
+    // best-effort — the next resync picks up the persisted bindings
+  }
+}
+
 /**
  * Whether the bot should keep a live gateway connection: any joined server is
  * set to respond (absent/true = respond). When membership is not loaded yet we
@@ -2686,29 +2713,30 @@ export const useMessengerStore = create<MessengerState>()(
       },
 
       ensureProjectChannel: async (project) => {
-        const conn = get().connections.find((c) => c.type === 'discord');
-        // Per-project channels require a sync-enabled server. Auto-create targets
-        // the primary sync server; "Sync now" propagates to the rest.
-        const syncGuildId = conn ? getDiscordSyncGuildIds(conn)[0] : undefined;
-        if (!conn?.botToken || !syncGuildId || conn.syncProjects === false) return;
-        const policy = conn.discordGuildPolicies?.[syncGuildId] ?? {};
-        const parentCategoryId =
-          policy.parentCategoryId ??
-          (syncGuildId === conn.discordGuildId ? conn.discordParentCategoryId : undefined);
+        // Mirrors the project into every sync-enabled Discord server AND
+        // Telegram chat — not only the primary Discord server — the server
+        // resolves the full target list from settings when no guildId
+        // override is sent.
+        const discordConn = get().connections.find((c) => c.type === 'discord');
+        const telegramConn = get().connections.find((c) => c.type === 'telegram');
+        const discordEnabled =
+          Boolean(discordConn?.botToken) &&
+          discordConn?.syncProjects !== false &&
+          getDiscordSyncGuildIds(discordConn!).length > 0;
+        const telegramEnabled =
+          Boolean(telegramConn?.botToken) && getTelegramSyncChatIds(telegramConn!).length > 0;
+        if (!discordEnabled && !telegramEnabled) return;
+
         const projectLabel = project.label ?? project.path;
         try {
           const data = await postJson<{
             ok: boolean;
-            results?: { ok: boolean; channelId?: string; channelName?: string }[];
+            results?: { type: 'discord' | 'telegram'; ok: boolean; channelId?: string; channelName?: string }[];
           }>('/api/messenger/bridge/project-added', {
             project: { id: project.id, path: project.path, label: projectLabel },
-            discord: {
-              token: conn.botToken,
-              guildId: syncGuildId,
-              parentCategoryId,
-            },
+            ...(discordEnabled ? { discord: { token: discordConn!.botToken } } : {}),
           });
-          const created = data.results?.find((r) => r.ok && r.channelId);
+          const created = data.results?.find((r) => r.type === 'discord' && r.ok && r.channelId);
           if (created?.channelId) {
             get().setProjectMapping({
               projectId: project.id,
@@ -2717,19 +2745,23 @@ export const useMessengerStore = create<MessengerState>()(
             });
             get().saveDiscordConfig();
           }
+          if (telegramEnabled) void refreshTelegramProjectBindings();
         } catch {
           // best-effort — channel sync must never break project creation
         }
       },
 
       renameProjectChannel: async (project) => {
-        const conn = get().connections.find((c) => c.type === 'discord');
-        const syncGuildId = conn ? getDiscordSyncGuildIds(conn)[0] : undefined;
-        if (!conn?.botToken || !syncGuildId || conn.syncProjects === false) return;
-        const policy = conn.discordGuildPolicies?.[syncGuildId] ?? {};
-        const parentCategoryId =
-          policy.parentCategoryId ??
-          (syncGuildId === conn.discordGuildId ? conn.discordParentCategoryId : undefined);
+        const discordConn = get().connections.find((c) => c.type === 'discord');
+        const telegramConn = get().connections.find((c) => c.type === 'telegram');
+        const discordEnabled =
+          Boolean(discordConn?.botToken) &&
+          discordConn?.syncProjects !== false &&
+          getDiscordSyncGuildIds(discordConn!).length > 0;
+        const telegramEnabled =
+          Boolean(telegramConn?.botToken) && getTelegramSyncChatIds(telegramConn!).length > 0;
+        if (!discordEnabled && !telegramEnabled) return;
+
         const projectLabel = project.label ?? project.path;
         try {
           const data = await postJson<{
@@ -2738,11 +2770,7 @@ export const useMessengerStore = create<MessengerState>()(
             channelName?: string | null;
           }>('/api/messenger/bridge/project-renamed', {
             project: { id: project.id, path: project.path, label: projectLabel },
-            discord: {
-              token: conn.botToken,
-              guildId: syncGuildId,
-              parentCategoryId,
-            },
+            ...(discordEnabled ? { discord: { token: discordConn!.botToken } } : {}),
           });
           if (data.channelId) {
             get().setProjectMapping({
@@ -2752,14 +2780,19 @@ export const useMessengerStore = create<MessengerState>()(
             });
             get().saveDiscordConfig();
           }
+          if (telegramEnabled) void refreshTelegramProjectBindings();
         } catch {
           // best-effort
         }
       },
 
       removeProjectChannel: async (projectId, projectPath) => {
-        const conn = get().connections.find((c) => c.type === 'discord');
-        if (!conn?.botToken) {
+        // Cleanup runs whenever either platform is configured at all — a
+        // channel/topic created while sync was on must still be deleted after
+        // the user turns sync off, so state can't drift.
+        const discordConn = get().connections.find((c) => c.type === 'discord');
+        const telegramConn = get().connections.find((c) => c.type === 'telegram');
+        if (!discordConn?.botToken && !telegramConn?.botToken) {
           get().removeProjectMapping(projectId);
           return;
         }
@@ -2768,13 +2801,14 @@ export const useMessengerStore = create<MessengerState>()(
         try {
           await postJson('/api/messenger/bridge/project-removed', {
             project: { id: projectId, path: projectPath, channelId },
-            discord: { token: conn.botToken },
+            ...(discordConn?.botToken ? { discord: { token: discordConn.botToken } } : {}),
           });
         } catch {
           // best-effort — still drop the local mapping below
         }
         get().removeProjectMapping(projectId);
-        get().saveDiscordConfig();
+        if (discordConn?.botToken) get().saveDiscordConfig();
+        if (telegramConn?.botToken) void refreshTelegramProjectBindings();
       },
 
       notifyWorktreeAdded: async (project, worktree, sessionId = null) => {

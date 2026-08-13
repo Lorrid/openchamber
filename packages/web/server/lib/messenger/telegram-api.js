@@ -285,6 +285,42 @@ export async function createTelegramForumTopic({ token, chatId, name }) {
   return { ok: true, messageThreadId, topic: result };
 }
 
+/** True when a Bot API error means the forum topic no longer exists. */
+function isMissingForumTopic(body) {
+  const description = String(body?.description ?? '').toLowerCase();
+  return description.includes('thread not found') || description.includes('topic_not_found');
+}
+
+/**
+ * Rename a forum topic — the Telegram mirror of renaming a Discord project
+ * channel. A topic that no longer exists resolves as `{ ok: true, missing: true }`
+ * so the caller can drop the stale binding instead of failing the rename.
+ */
+export async function editTelegramForumTopic({ token, chatId, messageThreadId, name }) {
+  const r = await telegramApiWithRetry(token, 'editForumTopic', {
+    chat_id: chatId,
+    message_thread_id: messageThreadId,
+    name: String(name ?? 'project').slice(0, 128) || 'project',
+  });
+  if (r.ok) return { ok: true, missing: false };
+  if (isMissingForumTopic(r.body)) return { ok: true, missing: true };
+  return { ok: false, missing: false, error: friendlyTelegramError(r.status, r.body, r.error) };
+}
+
+/**
+ * Delete a forum topic — the Telegram mirror of deleting a project channel.
+ * An already-deleted topic counts as success so binding cleanup always runs.
+ */
+export async function deleteTelegramForumTopic({ token, chatId, messageThreadId }) {
+  const r = await telegramApiWithRetry(token, 'deleteForumTopic', {
+    chat_id: chatId,
+    message_thread_id: messageThreadId,
+  });
+  if (r.ok) return { ok: true, missing: false };
+  if (isMissingForumTopic(r.body)) return { ok: true, missing: true };
+  return { ok: false, missing: false, error: friendlyTelegramError(r.status, r.body, r.error) };
+}
+
 /**
  * True when the bot member result can create forum topics.
  * Creator always can; administrators need the can_manage_topics privilege.

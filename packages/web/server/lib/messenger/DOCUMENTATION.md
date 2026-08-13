@@ -67,6 +67,24 @@ use to configure everything.
   block unrelated bindings.
 - Bot tokens never appear in route responses (`load-config` reports
   `hasToken` instead).
+- Two independent mute switches, enforced identically on Discord and
+  Telegram, in BOTH directions: the integration toggle
+  (`{discord,telegram}.listenerEnabled: false`) and the per-server/per-chat
+  switch (`discord.guildPolicies[guildId].enabled`,
+  `telegram.chatPolicies[chatId].enabled`). The listeners apply this to
+  inbound messages, slash commands, and component clicks; the bridge's
+  `isSurfaceEnabled` applies it to every outbound path (chat mirroring,
+  approvals, questions, todo updates, and the agent-facing `/post` route).
+  A muted surface exchanges nothing in either direction and re-enabling
+  restores it immediately (no restart required — the health check and
+  `isSurfaceEnabled` both re-read settings live).
+- Project↔messenger surface sync (channel/topic auto-create, rename, delete)
+  runs on project add/rename/remove, not only on manual "Sync now", for
+  every Discord server and Telegram chat whose policy has
+  `syncProjects: true` — see `autoCreateMessengerSurfacesForProject` and the
+  `/bridge/project-added|renamed|removed` routes in `messenger-sync.js`. A
+  muted server/chat is skipped for these maintenance actions the same way it
+  is for messages.
 
 ## Related modules
 

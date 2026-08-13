@@ -56,6 +56,7 @@ import {
   splitForTelegram,
   buildTelegramInlineKeyboard,
 } from './telegram-api.js';
+import { isTelegramChatDisabled } from './telegram-access.js';
 import { resolvePrimaryWorktreeRoot } from '../git/service.js';
 import parser from 'cron-parser';
 
@@ -1855,22 +1856,82 @@ export function createMessengerOpencodeBridge({
     }
   }
 
+  // Discord channels (and threads) never change guild, so the lookup is
+  // cached for the process lifetime. Populated from inbound gateway payloads
+  // and, for web-originated surfaces the listener never saw, by a REST read.
+  const discordChannelGuilds = new Map();
+
+  /** Record the guild a Discord channel/thread belongs to (listener-supplied). */
+  function rememberDiscordChannelGuild(channelId, guildId) {
+    if (!channelId || !guildId) return;
+    discordChannelGuilds.set(String(channelId), String(guildId));
+  }
+
+  async function resolveDiscordGuildId(token, channelId) {
+    const key = String(channelId ?? '');
+    if (!key) return null;
+    const cached = discordChannelGuilds.get(key);
+    if (cached !== undefined) return cached;
+    let guildId = null;
+    try {
+      const r = await fetch(`https://discord.com/api/v10/channels/${encodeURIComponent(key)}`, {
+        headers: { Authorization: `Bot ${token}` },
+      });
+      if (r.ok) {
+        const channel = await r.json();
+        // Threads report their own guild_id; fall back to the parent when a
+        // partial payload omits it.
+        guildId = channel?.guild_id ? String(channel.guild_id) : null;
+        if (!guildId && channel?.parent_id) {
+          guildId = await resolveDiscordGuildId(token, channel.parent_id);
+        }
+      }
+    } catch {
+      // Network failure is not authoritative — do not cache, do not mute.
+      return undefined;
+    }
+    // A DM has no guild; cache `null` so per-guild policy never applies there.
+    discordChannelGuilds.set(key, guildId);
+    return guildId;
+  }
+
   /**
-   * Whether outbound posts to a messenger are allowed. Matches the sticky
-   * stop contract used by boot auto-start / health checks: absent means
-   * enabled; only an explicit `listenerEnabled: false` (Discord/Telegram
-   * integration toggle) mutes the surface.
+   * Whether this concrete surface may exchange messages right now.
+   *
+   * Two independent switches, both fail-open on unknown state so a settings
+   * read error can never silently mute a working bridge:
+   *  - the integration toggle (`listenerEnabled: false`), and
+   *  - the per-server / per-chat mute the Settings UI writes
+   *    (`discord.guildPolicies[guildId].enabled === false`,
+   *     `telegram.chatPolicies[chatId].enabled === false`).
+   *
+   * The listeners apply the same policy to inbound traffic, so gating here
+   * makes a muted server/chat silent in BOTH directions — including mirrored
+   * web activity, approvals, questions and todo updates.
    */
-  async function isMessengerOutboundEnabled(type) {
+  async function isSurfaceEnabled({ type, token, channelId }) {
     if (type !== 'discord' && type !== 'telegram') return true;
     if (typeof readSettings !== 'function') return true;
+    let settings;
     try {
-      const settings = await readSettings();
-      const block = type === 'telegram' ? settings?.telegram : settings?.discord;
-      return block?.listenerEnabled !== false;
+      settings = await readSettings();
     } catch {
       return true;
     }
+    const block = (type === 'telegram' ? settings?.telegram : settings?.discord) ?? {};
+    if (block.listenerEnabled === false) return false;
+    if (!channelId) return true;
+
+    if (type === 'telegram') {
+      return !isTelegramChatDisabled(block.chatPolicies, channelId);
+    }
+
+    const policies = block.guildPolicies;
+    if (!policies || typeof policies !== 'object' || Array.isArray(policies)) return true;
+    const guildId = await resolveDiscordGuildId(token, channelId);
+    // `undefined` = lookup failed; treat as unknown and allow.
+    if (!guildId) return true;
+    return policies[guildId]?.enabled !== false;
   }
 
   // --- Mention-only mode ------------------------------------------------------
@@ -2314,7 +2375,7 @@ export function createMessengerOpencodeBridge({
     const content = renderTodoListForMessenger(todos);
     if (!content || content === entry.lastContent) return;
     if (!ctx.token || (ctx.type !== 'discord' && ctx.type !== 'telegram')) return;
-    if (!(await isMessengerOutboundEnabled(ctx.type))) return;
+    if (!(await isSurfaceEnabled(ctx))) return;
     const ch = ctx.threadId ?? ctx.channelId;
 
     if (ctx.type === 'telegram') {
@@ -2810,8 +2871,8 @@ export function createMessengerOpencodeBridge({
    *  Discord's 2000-char limit (long /help output etc.). */
   async function postMessengerSurface({ type, token, channelId, threadId }, content) {
     if (!content) return { ok: false, error: 'empty content' };
-    if (!(await isMessengerOutboundEnabled(type))) {
-      return { ok: false, error: `${type} integration disabled` };
+    if (!(await isSurfaceEnabled({ type, token, channelId }))) {
+      return { ok: false, error: `${type} surface disabled` };
     }
     if (type === 'discord') {
       const ch = threadId ?? channelId;
@@ -2912,9 +2973,17 @@ export function createMessengerOpencodeBridge({
         return null;
       }
       if (!target?.type || !target?.token || !target?.channelId) return null;
-      // Integration toggle sticky-stop — never spawn a mirror thread while
-      // Discord/Telegram listening is explicitly disabled.
-      if (!(await isMessengerOutboundEnabled(target.type))) return null;
+      // Never spawn a mirror thread while the integration is stopped or the
+      // destination server/chat is muted.
+      if (
+        !(await isSurfaceEnabled({
+          type: target.type,
+          token: target.token,
+          channelId: target.channelId,
+        }))
+      ) {
+        return null;
+      }
 
       const type = target.type;
       const token = target.token;
@@ -3527,6 +3596,9 @@ export function createMessengerOpencodeBridge({
         console.log('[PERMISSION]', `No surface for session=${sessionId} — cannot forward to messenger`);
         return;
       }
+      // A muted integration/server/chat mirrors nothing. The request stays
+      // pending in OpenCode and the web UI, it is neither approved nor denied.
+      if (!(await isSurfaceEnabled(ctx))) return;
 
       // Permission requests are interactive UI — stop typing indicator
       if (stopTypingPulse) stopTypingPulse(ctx);
@@ -3681,6 +3753,9 @@ export function createMessengerOpencodeBridge({
         console.log('[QUESTION]', `No surface for session=${sessionId} — cannot forward to messenger`);
         return;
       }
+      // Same mute contract as permissions — the question stays answerable in
+      // the web UI, it is just not mirrored to a disabled surface.
+      if (!(await isSurfaceEnabled(ctx))) return;
 
       // A question is blocking interactive UI — stop the typing indicator.
       stopTypingPulse(ctx);
@@ -5226,16 +5301,23 @@ export function createMessengerOpencodeBridge({
     projectLabel,
     from,
     attachments = null,
+    // Discord guild the message came from. Seeds the channel→guild cache the
+    // per-server mute uses, so web-mirrored posts resolve it without a REST read.
+    guildId = null,
     // Per-call model/agent pins (scheduled tasks). Highest priority —
     // above surface overrides, project defaults and global defaults.
     modelOverride: pinnedModel = null,
     agentOverride: pinnedAgent = null,
     fromQueue = false,
   }) {
-    // Integration toggle sticky-stop: refuse inbound bridging while the
-    // Discord/Telegram listener is explicitly disabled in settings.
-    if (!(await isMessengerOutboundEnabled(type))) {
-      return { ok: false, error: `${type} integration disabled` };
+    if (type === 'discord' && guildId) {
+      rememberDiscordChannelGuild(channelId, guildId);
+      if (threadId) rememberDiscordChannelGuild(threadId, guildId);
+    }
+    // Sticky stop: refuse inbound bridging while the integration is disabled
+    // or this server/chat is muted in Settings.
+    if (!(await isSurfaceEnabled({ type, token, channelId }))) {
+      return { ok: false, error: `${type} surface disabled` };
     }
 
     // Attachments: text files inline as <attachment> blocks,
@@ -6521,6 +6603,13 @@ export function createMessengerOpencodeBridge({
     getMentionMode,
     /** Whether a surface already has a session binding (mention mode skips bound threads). */
     hasSurfaceBinding,
+    /**
+     * Whether a channel/chat may exchange messages right now (integration
+     * toggle + per-server/chat mute). Exposed so callers that post directly
+     * (e.g. the agent-facing `/post` route) honor the same sticky-stop
+     * contract as the bridge's own outbound paths.
+     */
+    isSurfaceEnabled,
     /** Git worktree ↔ Discord thread sync (UI notify endpoints + hub index). */
     worktreeSync,
     /** Test seam — exposed so tests can drive events without an SSE stream. */
