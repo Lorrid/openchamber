@@ -445,7 +445,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ onClose, forceMobile
       useQuotaStore.getState().setSelectedProvider(USAGE_ADD_PROVIDER_ID);
     }
 
-    if (result.id === 'usage.overview' || result.id === 'usage.providers-table' || result.id === 'usage.available-providers') {
+    if (result.id === 'usage.overview') {
       useQuotaStore.getState().setSelectedProvider(null);
     }
 

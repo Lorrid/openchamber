@@ -15,7 +15,7 @@ import { useConfigStore } from '@/stores/useConfigStore';
 import { useI18n } from '@/lib/i18n';
 import { SETTINGS_PANEL_TITLE_CLASS } from '@/components/sections/shared/SettingsSection';
 import {
-  getProviderRemainingPercent,
+  getProviderRemainingDisplay,
   getProviderUsedPercent,
   isIncludedUsageProvider,
   isVisibleUsageProvider,
@@ -122,7 +122,7 @@ export const UsageSidebar: React.FC<UsageSidebarProps> = ({ onItemSelect }) => {
         {visibleProviders.map((provider) => {
           const result = results.find((entry) => entry.providerId === provider.id);
           const usedPercent = getProviderUsedPercent(result?.usage);
-          const remainingPercent = getProviderRemainingPercent(result?.usage);
+          const remainingDisplay = getProviderRemainingDisplay(result?.usage);
           const tone = resolveUsageTone(usedPercent);
           const isSelected = provider.id === selectedProviderId;
 
@@ -153,9 +153,17 @@ export const UsageSidebar: React.FC<UsageSidebarProps> = ({ onItemSelect }) => {
                 <span className="typography-ui-label font-normal truncate flex-1 min-w-0 text-foreground">
                   {provider.name}
                 </span>
-                {remainingPercent !== null && (
+                {remainingDisplay?.kind === 'percent' && (
                   <span className="typography-micro text-muted-foreground flex-shrink-0 tabular-nums group-hover:hidden">
-                    {t('settings.usage.sidebar.remainingPct', { percent: remainingPercent })}
+                    {t('settings.usage.sidebar.remainingPct', { percent: remainingDisplay.percent })}
+                  </span>
+                )}
+                {remainingDisplay?.kind === 'amount' && (
+                  <span
+                    className="typography-micro text-muted-foreground flex-shrink-0 tabular-nums truncate max-w-[7.5rem] group-hover:hidden"
+                    title={remainingDisplay.label}
+                  >
+                    {remainingDisplay.label}
                   </span>
                 )}
               </button>

@@ -2,12 +2,10 @@ import React from 'react';
 import type { Session } from '@opencode-ai/sdk/v2/client';
 import { Icon } from '@/components/icon/Icon';
 import { Button } from '@/components/ui/button';
-import { ProviderLogo } from '@/components/ui/ProviderLogo';
 import { SettingsPageLayout } from '@/components/sections/shared/SettingsPageLayout';
 import { SettingsChipGroup, SettingsSection } from '@/components/sections/shared/SettingsSection';
 import { useI18n } from '@/lib/i18n';
 import {
-  USAGE_ADD_PROVIDER_ID,
   averageCostPer1kTokens,
   buildPeriodUsageSummary,
   collectConnectedQuotaProviderIds,
@@ -19,30 +17,19 @@ import {
   formatUsd,
   percentChange,
   QUOTA_PROVIDERS,
-  resolveUsageTone,
   type UsageMetricMode,
   type UsagePeriodDays,
 } from '@/lib/quota';
 import { getAllSyncSessions } from '@/sync/sync-refs';
 import { useQuotaAutoRefresh, useQuotaStore } from '@/stores/useQuotaStore';
-import { useUIStore } from '@/stores/useUIStore';
 import { useConfigStore } from '@/stores/useConfigStore';
 import { cn } from '@/lib/utils';
 import type { ProviderResult, QuotaProviderId } from '@/types';
 import { UsageAreaChart } from './UsageAreaChart';
 import { UsageDonutChart } from './UsageDonutChart';
-import { UsageProgressBar } from './UsageProgressBar';
-import {
-  getProviderRemainingPercent,
-  getProviderUsedPercent,
-  isIncludedUsageProvider,
-  isVisibleUsageProvider,
-  listProviderWindows,
-} from './usageProviderHelpers';
-import { formatWindowLabel } from '@/lib/quota';
+import { isVisibleUsageProvider } from './usageProviderHelpers';
 
 const PERIOD_OPTIONS: UsagePeriodDays[] = [7, 30];
-const CREDENTIAL_PROVIDERS = new Set<QuotaProviderId>(['ollama-cloud', 'cursor']);
 
 const DeltaBadge: React.FC<{
   delta: number | null;
@@ -65,14 +52,9 @@ export const UsageOverview: React.FC = () => {
   const { t } = useI18n();
   const results = useQuotaStore((state) => state.results);
   const hiddenProviderIds = useQuotaStore((state) => state.hiddenProviderIds);
-  const setSelectedProvider = useQuotaStore((state) => state.setSelectedProvider);
-  const hideUsageProvider = useQuotaStore((state) => state.hideUsageProvider);
-  const showUsageProvider = useQuotaStore((state) => state.showUsageProvider);
   const fetchAllQuotas = useQuotaStore((state) => state.fetchAllQuotas);
   const isLoading = useQuotaStore((state) => state.isLoading);
   const loadSettings = useQuotaStore((state) => state.loadSettings);
-  const setSettingsPage = useUIStore((state) => state.setSettingsPage);
-  const setConfigSelectedProvider = useConfigStore((state) => state.setSelectedProvider);
   const configProviders = useConfigStore((state) => state.providers);
 
   const [periodDays, setPeriodDays] = React.useState<UsagePeriodDays>(7);
@@ -115,18 +97,6 @@ export const UsageOverview: React.FC = () => {
         usage: null,
         fetchedAt: 0,
       }];
-    });
-  }, [connectedQuotaIds, hiddenSet, results]);
-
-  const availableProviders = React.useMemo(() => {
-    return QUOTA_PROVIDERS.filter((provider) => {
-      const result = results.find((entry) => entry.providerId === provider.id);
-      const included = isIncludedUsageProvider(provider.id, {
-        configured: result?.configured,
-        connectedQuotaProviderIds: connectedQuotaIds,
-      });
-      if (!included) return true;
-      return hiddenSet.has(provider.id);
     });
   }, [connectedQuotaIds, hiddenSet, results]);
 
@@ -254,9 +224,9 @@ export const UsageOverview: React.FC = () => {
             },
             {
               key: 'avg',
-              icon: 'bar-chart-2' as const,
+              icon: 'flashlight' as const,
               label: t('settings.usage.overview.metric.avgCost'),
-              value: avgCost === null ? '—' : formatUsd(avgCost, 4),
+              value: avgCost === null ? '—' : formatUsd(avgCost),
               deltaLabel: avgCostDelta === null
                 ? '—'
                 : `${formatSignedUsd(avgCostDelta)} (${formatPercentDelta(avgCostDeltaPct)})`,
@@ -266,15 +236,13 @@ export const UsageOverview: React.FC = () => {
           ].map((card) => (
             <div
               key={card.key}
-              className="rounded-xl border border-[var(--interactive-border)] bg-[var(--surface-elevated)] p-4"
+              className="rounded-xl border border-[var(--interactive-border)] bg-[var(--surface-elevated)] px-4 py-3"
             >
-              <div className="mb-3 flex items-center justify-between gap-2">
-                <span className="typography-meta text-muted-foreground">{card.label}</span>
-                <span className="flex h-7 w-7 items-center justify-center rounded-md bg-[var(--surface-muted)] text-foreground">
-                  <Icon name={card.icon} className="h-3.5 w-3.5" />
-                </span>
+              <div className="flex items-center gap-2 text-muted-foreground">
+                <Icon name={card.icon} className="h-3.5 w-3.5" />
+                <span className="typography-micro">{card.label}</span>
               </div>
-              <div className="typography-ui-header font-medium tabular-nums text-foreground">{card.value}</div>
+              <div className="mt-2 typography-ui-header tabular-nums text-foreground">{card.value}</div>
               <div className="mt-1">
                 <DeltaBadge delta={card.delta} invert={card.invert} label={card.deltaLabel} />
               </div>
@@ -352,199 +320,6 @@ export const UsageOverview: React.FC = () => {
           </div>
         </div>
       </SettingsSection>
-
-      <SettingsSection title={t('settings.usage.overview.providers.title')} settingsItem="usage.providers-table">
-        {activeResults.length === 0 ? (
-          <div className="rounded-xl border border-dashed border-[var(--interactive-border)] px-4 py-8 text-center">
-            <p className="typography-ui-label text-foreground">{t('settings.usage.overview.empty.title')}</p>
-            <p className="mt-1 typography-meta text-muted-foreground">{t('settings.usage.overview.empty.description')}</p>
-            <Button
-              className="mt-4"
-              size="sm"
-              onClick={() => setSelectedProvider(USAGE_ADD_PROVIDER_ID)}
-            >
-              <Icon name="add" className="mr-1.5 h-3.5 w-3.5" />
-              {t('settings.usage.overview.actions.addProvider')}
-            </Button>
-          </div>
-        ) : (
-          <div className="overflow-x-auto rounded-xl border border-[var(--interactive-border)]">
-            <table className="w-full min-w-[40rem] border-collapse">
-              <thead>
-                <tr className="border-b border-[var(--interactive-border)] bg-[var(--surface-muted)]/40 text-left">
-                  <th className="px-3 py-2 typography-micro font-medium text-muted-foreground">{t('settings.usage.overview.providers.col.provider')}</th>
-                  <th className="px-3 py-2 typography-micro font-medium text-muted-foreground">{t('settings.usage.overview.providers.col.spend')}</th>
-                  <th className="px-3 py-2 typography-micro font-medium text-muted-foreground">{t('settings.usage.overview.providers.col.tokens')}</th>
-                  <th className="px-3 py-2 typography-micro font-medium text-muted-foreground">{t('settings.usage.overview.providers.col.requests')}</th>
-                  <th className="px-3 py-2 typography-micro font-medium text-muted-foreground">{t('settings.usage.overview.providers.col.remaining')}</th>
-                  <th className="px-3 py-2 typography-micro font-medium text-muted-foreground">{t('settings.usage.overview.providers.col.status')}</th>
-                  <th className="px-3 py-2" />
-                </tr>
-              </thead>
-              <tbody>
-                {activeResults.map((result) => {
-                  const meta = QUOTA_PROVIDERS.find((provider) => provider.id === result.providerId);
-                  const period = periodSummary.byProvider.find((entry) => entry.providerId === result.providerId);
-                  const used = getProviderUsedPercent(result.usage);
-                  const remaining = getProviderRemainingPercent(result.usage);
-                  const tone = resolveUsageTone(used);
-                  const windows = listProviderWindows(result.usage).slice(0, 2);
-                  const statusOk = result.ok
-                    || (connectedQuotaIds.has(result.providerId) && !result.configured);
-                  return (
-                    <tr
-                      key={result.providerId}
-                      className="border-b border-[var(--interactive-border)] last:border-b-0 hover:bg-interactive-hover"
-                    >
-                      <td className="px-3 py-3">
-                        <button
-                          type="button"
-                          className="flex min-w-0 items-center gap-2 text-left"
-                          onClick={() => setSelectedProvider(result.providerId)}
-                        >
-                          <ProviderLogo providerId={result.providerId} className="h-4 w-4 shrink-0" />
-                          <span className="typography-ui-label text-foreground truncate">{meta?.name ?? result.providerName}</span>
-                        </button>
-                      </td>
-                      <td className="px-3 py-3 typography-meta tabular-nums text-foreground">
-                        {formatUsd(period?.cost ?? 0)}
-                      </td>
-                      <td className="px-3 py-3 typography-meta tabular-nums text-foreground">
-                        {formatCompactNumber(period?.tokens ?? 0)}
-                      </td>
-                      <td className="px-3 py-3 typography-meta tabular-nums text-foreground">
-                        {formatCompactNumber(period?.requests ?? 0)}
-                      </td>
-                      <td className="px-3 py-3 min-w-[10rem]">
-                        {windows.length === 0 ? (
-                          <span className="typography-meta text-muted-foreground">
-                            {remaining === null ? '—' : t('settings.usage.overview.providers.remainingPct', { percent: remaining })}
-                          </span>
-                        ) : (
-                          <div className="space-y-1.5">
-                            {windows.map(({ label, window }) => (
-                              <div key={label}>
-                                <div className="mb-0.5 flex items-center justify-between gap-2">
-                                  <span className="typography-micro text-muted-foreground">{formatWindowLabel(label)}</span>
-                                  <span className="typography-micro tabular-nums text-muted-foreground">
-                                    {window.remainingPercent === null
-                                      ? '—'
-                                      : t('settings.usage.overview.providers.remainingPct', { percent: Math.round(window.remainingPercent) })}
-                                  </span>
-                                </div>
-                                <UsageProgressBar percent={window.remainingPercent} tonePercent={window.usedPercent} className="h-1" />
-                              </div>
-                            ))}
-                          </div>
-                        )}
-                      </td>
-                      <td className="px-3 py-3">
-                        <span
-                          className={cn(
-                            'inline-flex rounded-md px-1.5 py-0.5 typography-micro',
-                            statusOk
-                              ? 'bg-[var(--status-success-background)] text-[var(--status-success)]'
-                              : 'bg-[var(--status-warning-background)] text-[var(--status-warning)]',
-                          )}
-                        >
-                          {statusOk
-                            ? t('settings.usage.overview.providers.status.active')
-                            : t('settings.usage.overview.providers.status.error')}
-                        </span>
-                        <span className="sr-only">{tone}</span>
-                      </td>
-                      <td className="px-3 py-3 text-right">
-                        <div className="flex items-center justify-end gap-1">
-                          <Button
-                            size="sm"
-                            variant="ghost"
-                            className="h-7 w-7 px-0"
-                            aria-label={t('settings.usage.overview.providers.removeAria', {
-                              provider: meta?.name ?? result.providerName,
-                            })}
-                            title={t('settings.usage.sidebar.removeProviderTitle')}
-                            onClick={() => hideUsageProvider(result.providerId)}
-                          >
-                            <Icon name="close" className="h-3.5 w-3.5" />
-                          </Button>
-                          <Button
-                            size="sm"
-                            variant="ghost"
-                            className="h-7 w-7 px-0"
-                            aria-label={t('settings.usage.overview.providers.openDetailAria', {
-                              provider: meta?.name ?? result.providerName,
-                            })}
-                            onClick={() => setSelectedProvider(result.providerId)}
-                          >
-                            <Icon name="arrow-right-s" className="h-4 w-4" />
-                          </Button>
-                        </div>
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
-        )}
-      </SettingsSection>
-
-      {availableProviders.length > 0 && (
-        <SettingsSection
-          title={t('settings.usage.overview.available.title')}
-          settingsItem="usage.available-providers"
-        >
-          <p className="mb-3 typography-meta text-muted-foreground">
-            {t('settings.usage.overview.available.description')}
-          </p>
-          <div className="space-y-1">
-            {availableProviders.map((provider) => {
-              const result = results.find((entry) => entry.providerId === provider.id);
-              const isHiddenIncluded = isIncludedUsageProvider(provider.id, {
-                configured: result?.configured,
-                connectedQuotaProviderIds: connectedQuotaIds,
-              }) && hiddenSet.has(provider.id);
-              return (
-                <div
-                  key={provider.id}
-                  className="flex items-center gap-3 rounded-lg px-2 py-2 hover:bg-interactive-hover"
-                >
-                  <ProviderLogo providerId={provider.id} className="h-5 w-5 shrink-0" />
-                  <span className="min-w-0 flex-1">
-                    <span className="block typography-ui-label text-foreground">{provider.name}</span>
-                    <span className="block typography-micro text-muted-foreground">
-                      {isHiddenIncluded
-                        ? t('settings.usage.overview.available.hiddenConfigured')
-                        : t('settings.usage.overview.available.notConfigured')}
-                    </span>
-                  </span>
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    onClick={() => {
-                      if (isHiddenIncluded) {
-                        showUsageProvider(provider.id);
-                        setSelectedProvider(provider.id);
-                        return;
-                      }
-                      if (CREDENTIAL_PROVIDERS.has(provider.id)) {
-                        setSelectedProvider(USAGE_ADD_PROVIDER_ID);
-                        return;
-                      }
-                      setConfigSelectedProvider(provider.id);
-                      setSettingsPage('providers');
-                    }}
-                  >
-                    {isHiddenIncluded
-                      ? t('settings.usage.overview.available.restore')
-                      : t('settings.usage.overview.available.connect')}
-                  </Button>
-                </div>
-              );
-            })}
-          </div>
-        </SettingsSection>
-      )}
     </SettingsPageLayout>
   );
 };

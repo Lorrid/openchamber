@@ -21,6 +21,38 @@ export const getProviderRemainingPercent = (
   return clampPercent(remaining);
 };
 
+const COST_REMAINING_WINDOW_KEYS = [
+  'credits',
+  'credits_balance',
+  'plan_limit',
+  'billing_cycle',
+  'on_demand',
+] as const;
+
+/**
+ * Compact remaining readout for provider lists (sidebar): percent when available,
+ * otherwise the cost/credit `valueLabel` from the primary quota window.
+ */
+export const getProviderRemainingDisplay = (
+  usage: ProviderResult['usage'] | null | undefined,
+): { kind: 'percent'; percent: number } | { kind: 'amount'; label: string } | null => {
+  const remainingPercent = getProviderRemainingPercent(usage);
+  if (remainingPercent !== null) {
+    return { kind: 'percent', percent: remainingPercent };
+  }
+
+  const windows = usage?.windows ?? {};
+  for (const key of COST_REMAINING_WINDOW_KEYS) {
+    const label = windows[key]?.valueLabel?.trim();
+    if (label) return { kind: 'amount', label };
+  }
+  for (const window of Object.values(windows)) {
+    const label = window.valueLabel?.trim();
+    if (label) return { kind: 'amount', label };
+  }
+  return null;
+};
+
 export const listProviderWindows = (
   usage: ProviderResult['usage'] | null | undefined,
 ): Array<{ label: string; window: UsageWindow }> => {

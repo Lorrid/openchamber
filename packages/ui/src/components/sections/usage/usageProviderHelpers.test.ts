@@ -1,5 +1,10 @@
 import { describe, expect, test } from 'bun:test';
-import { isIncludedUsageProvider, isVisibleUsageProvider } from './usageProviderHelpers';
+import type { ProviderResult } from '@/types';
+import {
+  getProviderRemainingDisplay,
+  isIncludedUsageProvider,
+  isVisibleUsageProvider,
+} from './usageProviderHelpers';
 
 describe('isIncludedUsageProvider', () => {
   test('includes quota-configured providers', () => {
@@ -55,5 +60,71 @@ describe('isVisibleUsageProvider', () => {
       connectedQuotaProviderIds: [],
       hiddenProviderIds: [],
     })).toBe(false);
+  });
+});
+
+describe('getProviderRemainingDisplay', () => {
+  const usage = (
+    windows: NonNullable<ProviderResult['usage']>['windows'],
+  ): ProviderResult['usage'] => ({ windows });
+
+  test('prefers remaining percent when available', () => {
+    expect(getProviderRemainingDisplay(usage({
+      '5h': {
+        usedPercent: 40,
+        remainingPercent: 60,
+        windowSeconds: null,
+        resetAfterSeconds: null,
+        resetAt: null,
+        resetAtFormatted: null,
+        resetAfterFormatted: null,
+        valueLabel: '$12.00',
+      },
+    }))).toEqual({ kind: 'percent', percent: 60 });
+  });
+
+  test('falls back to cost valueLabel when percent is unavailable', () => {
+    expect(getProviderRemainingDisplay(usage({
+      credits: {
+        usedPercent: null,
+        remainingPercent: null,
+        windowSeconds: null,
+        resetAfterSeconds: null,
+        resetAt: null,
+        resetAtFormatted: null,
+        resetAfterFormatted: null,
+        valueLabel: '$12.35',
+      },
+    }))).toEqual({ kind: 'amount', label: '$12.35' });
+  });
+
+  test('prefers credits_balance window for cost remaining', () => {
+    expect(getProviderRemainingDisplay(usage({
+      other: {
+        usedPercent: null,
+        remainingPercent: null,
+        windowSeconds: null,
+        resetAfterSeconds: null,
+        resetAt: null,
+        resetAtFormatted: null,
+        resetAfterFormatted: null,
+        valueLabel: 'ignore',
+      },
+      credits_balance: {
+        usedPercent: null,
+        remainingPercent: null,
+        windowSeconds: null,
+        resetAfterSeconds: null,
+        resetAt: null,
+        resetAtFormatted: null,
+        resetAfterFormatted: null,
+        valueLabel: '$32.68',
+      },
+    }))).toEqual({ kind: 'amount', label: '$32.68' });
+  });
+
+  test('returns null when neither percent nor valueLabel exists', () => {
+    expect(getProviderRemainingDisplay(usage({}))).toBeNull();
+    expect(getProviderRemainingDisplay(null)).toBeNull();
   });
 });

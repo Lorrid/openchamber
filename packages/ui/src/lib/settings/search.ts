@@ -527,19 +527,6 @@ const SETTINGS_SEARCH_ITEMS: readonly SettingsSearchItem[] = [
     keywords: ['add', 'connect', 'provider', 'credentials'],
   },
   {
-    id: 'usage.providers-table',
-    page: 'usage',
-    titleKey: 'settings.usage.overview.providers.title',
-    keywords: ['providers', 'table', 'remaining', 'limits'],
-  },
-  {
-    id: 'usage.available-providers',
-    page: 'usage',
-    titleKey: 'settings.usage.overview.available.title',
-    descriptionKey: 'settings.usage.overview.available.description',
-    keywords: ['available', 'add', 'restore', 'hidden', 'providers'],
-  },
-  {
     id: 'usage.work-status-panel',
     page: 'usage',
     titleKey: 'settings.usage.page.options.showInWorkStatus',
