@@ -8,7 +8,9 @@
  * decides the outcome.
  *
  * `browser.open` is the exception: it is handled even with no view attached,
- * since opening a tab is precisely what creates one.
+ * since opening a tab is precisely what creates one. The view it creates then
+ * takes over the rest of that same request, so asking for a layout while
+ * opening does not cost the agent a second call.
  */
 import { runtimeFetch } from '@/lib/runtime-fetch';
 import { subscribeOpenchamberEvents } from '@/lib/openchamberEvents';
@@ -27,6 +29,14 @@ export type BrowserController = {
 
 /** Opens a URL when no browser view exists yet. */
 export type BrowserOpener = (url: string) => void;
+
+/**
+ * How long a freshly opened tab is given to mount its view. A pane appears
+ * within a frame or two; this is slack for a busy renderer, not a wait anyone
+ * should ever notice.
+ */
+const VIEW_ATTACH_TIMEOUT_MS = 2_000;
+const VIEW_ATTACH_POLL_MS = 50;
 
 let activeController: BrowserController | null = null;
 let opener: BrowserOpener | null = null;
@@ -58,6 +68,23 @@ const postResult = async (requestId: string, outcome: { ok: boolean; data?: unkn
   }
 };
 
+/**
+ * Waits for a browser view to register itself, or gives up.
+ *
+ * Polls rather than subscribes because registration is a plain assignment made
+ * by whichever pane mounts; a callback would have to be maintained by every
+ * caller of `registerBrowserController` for one waiter.
+ */
+const waitForController = async (
+  timeoutMs = VIEW_ATTACH_TIMEOUT_MS,
+): Promise<BrowserController | null> => {
+  const deadline = Date.now() + timeoutMs;
+  while (!activeController && Date.now() < deadline) {
+    await new Promise((resolve) => setTimeout(resolve, VIEW_ATTACH_POLL_MS));
+  }
+  return activeController;
+};
+
 const handleRequest = async (request: BrowserControlRequest): Promise<void> => {
   const isOpen = request.action === 'browser.open';
   const controller = activeController;
@@ -72,22 +99,41 @@ const handleRequest = async (request: BrowserControlRequest): Promise<void> => {
         return;
       }
       opener?.(url);
-      // The view is only created by this call, so anything that configures one
-      // cannot be honoured yet. Saying so beats reporting a plain success and
-      // leaving the agent to believe a size it asked for was applied.
+
       const requestedViewport = typeof request.parameters.viewport === 'string'
         ? request.parameters.viewport
         : '';
-      await postResult(request.requestId, {
-        ok: true,
-        data: requestedViewport && requestedViewport !== 'fill'
-          ? {
+      if (!requestedViewport || requestedViewport === 'fill') {
+        await postResult(request.requestId, { ok: true, data: { url, opened: true } });
+        return;
+      }
+
+      // The tab was just created, so its view is a few frames away. Waiting for
+      // it lets the layout the agent asked for be applied to the page it is
+      // opening, rather than to the next call it has to make.
+      const attached = await waitForController();
+      if (!attached) {
+        // Still no view. Reporting a plain success here would leave the agent
+        // believing a size it asked for was applied to a page nobody is showing.
+        await postResult(request.requestId, {
+          ok: true,
+          data: {
             url,
             opened: true,
             viewportApplied: false,
             note: 'The panel had no browser view yet, so the viewport was not applied. Call browser.resize now that one exists.',
-          }
-          : { url, opened: true },
+          },
+        });
+        return;
+      }
+
+      const resized = await attached.run('browser.resize', { viewport: requestedViewport });
+      const viewport = resized && typeof resized === 'object'
+        ? (resized as { viewport?: unknown }).viewport ?? null
+        : null;
+      await postResult(request.requestId, {
+        ok: true,
+        data: { url, opened: true, viewportApplied: true, viewport },
       });
       return;
     }
