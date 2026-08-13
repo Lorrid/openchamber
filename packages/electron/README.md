@@ -155,7 +155,9 @@ Use an explicit override when testing a different OpenCode CLI build or when a u
   cleared only through the scoped clear-data command, and camera, microphone,
   location, and device-picker requests from pages shown there are denied. Electron
   grants permission requests by default when no handler is set, and the panel
-  loads whatever address the user types.
+  loads whatever address the user types. Tab favicons are fetched in this
+  session too, so icons behind the page's own login resolve and the app's origin
+  never requests anything from a third-party host.
 
 ## IPC Pattern
 

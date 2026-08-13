@@ -1,6 +1,7 @@
 import React from 'react';
 
 import { IDLE_NAV_STATUS, type BrowserNavStatus } from '@/lib/browser/contract';
+import { useBrowserFaviconStore } from '@/stores/useBrowserFaviconStore';
 import {
   INITIAL_CRASH_RECOVERY_STATE,
   planCrashRecovery,
@@ -148,6 +149,13 @@ export const useWebviewNavigation = (
       }
     };
 
+    const onFaviconUpdated = (event: Event) => {
+      const detail = readEventPayload<{ favicons?: string[] }>(event);
+      const icon = Array.isArray(detail.favicons) ? detail.favicons.find(Boolean) : '';
+      const page = readCurrentUrl();
+      if (icon && page) useBrowserFaviconStore.getState().resolve(page, icon);
+    };
+
     const onTitleUpdated = (event: Event) => {
       const detail = readEventPayload<{ title?: string }>(event);
       if (typeof detail.title === 'string') setTitle(detail.title);
@@ -194,6 +202,7 @@ export const useWebviewNavigation = (
     webview.addEventListener('did-navigate', onNavigate);
     webview.addEventListener('did-navigate-in-page', onNavigate);
     webview.addEventListener('page-title-updated', onTitleUpdated);
+    webview.addEventListener('page-favicon-updated', onFaviconUpdated);
     webview.addEventListener('did-fail-load', onFailLoad);
     // Electron renamed this event; older builds still emit only the old name.
     webview.addEventListener('render-process-gone', onCrashed);
@@ -219,6 +228,7 @@ export const useWebviewNavigation = (
       webview.removeEventListener('did-navigate', onNavigate);
       webview.removeEventListener('did-navigate-in-page', onNavigate);
       webview.removeEventListener('page-title-updated', onTitleUpdated);
+      webview.removeEventListener('page-favicon-updated', onFaviconUpdated);
       webview.removeEventListener('did-fail-load', onFailLoad);
     };
   }, [webview]);

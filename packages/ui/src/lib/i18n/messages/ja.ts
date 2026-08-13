@@ -1193,6 +1193,7 @@ export const dict: Record<I18nKey, string> = {
   'contextPanel.browser.addressAria': 'ブラウザアドレス',
   'contextPanel.browser.history.label': '最近のアドレス',
   'contextPanel.browser.history.forget': '履歴から削除',
+  'contextPanel.browser.newTab': '新しいブラウザタブ',
   'contextPanel.browser.empty': 'ウェブブラウザ',
   'contextPanel.browser.emptyHint': '上のアドレスバーにURLを入力してウェブを閲覧',
   'contextPanel.browser.inspectUnavailable': 'このページはブラウザパネルから検査できません。',

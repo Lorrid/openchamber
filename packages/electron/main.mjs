@@ -1150,6 +1150,17 @@ const BROWSER_PANEL_PARTITION = 'persist:openchamber-browser';
  * silent grant is the one outcome that must not stay. Denials are logged so a
  * page that legitimately needs something is diagnosable rather than mysterious.
  */
+const MAX_FAVICON_BYTES = 512 * 1024;
+const FAVICON_MIME_TYPES = new Set([
+  'image/x-icon',
+  'image/vnd.microsoft.icon',
+  'image/png',
+  'image/jpeg',
+  'image/gif',
+  'image/webp',
+  'image/svg+xml',
+]);
+
 const hardenBrowserPanelSession = () => {
   const panelSession = session.fromPartition(BROWSER_PANEL_PARTITION);
 
@@ -3864,6 +3875,44 @@ const handleInvoke = async (browserWindow, command, args = {}) => {
         try { target.debugger.detach(); } catch { /* already gone */ }
       }
       return { scheme };
+    }
+
+    /**
+     * Fetches a page's favicon for the tab strip.
+     *
+     * Done here, in the panel's own session, rather than by the renderer: the
+     * icon often sits behind the same login as the page, and letting the app's
+     * own origin request it would both fail on those and quietly send traffic
+     * to third-party hosts from OpenChamber itself. The bytes come back as a
+     * data URL so nothing else has to fetch anything.
+     */
+    case 'desktop_browser_fetch_favicon': {
+      const target = typeof args.url === 'string' ? args.url.trim() : '';
+      let parsed;
+      try {
+        parsed = new URL(target);
+      } catch {
+        throw new Error('A favicon URL is required');
+      }
+      if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') {
+        throw new Error('Unsupported favicon URL');
+      }
+
+      const response = await electronNet.fetch(parsed.toString(), {
+        session: session.fromPartition(BROWSER_PANEL_PARTITION),
+      });
+      if (!response.ok) throw new Error(`Favicon request failed (${response.status})`);
+
+      const mime = (response.headers.get('content-type') || '').split(';')[0].trim().toLowerCase();
+      if (!FAVICON_MIME_TYPES.has(mime)) throw new Error('Favicon is not an image');
+
+      const buffer = Buffer.from(await response.arrayBuffer());
+      // A tab icon is a few kilobytes; anything of a different order is not one,
+      // and is not worth holding in memory for every tab.
+      if (buffer.length === 0 || buffer.length > MAX_FAVICON_BYTES) {
+        throw new Error('Favicon is not a usable size');
+      }
+      return { dataUrl: `data:${mime};base64,${buffer.toString('base64')}` };
     }
 
     // Scoped to the browser panel's own partition, so clearing it can never

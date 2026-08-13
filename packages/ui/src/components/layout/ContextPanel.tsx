@@ -22,6 +22,7 @@ import { useThemeSystem } from '@/contexts/useThemeSystem';
 import { useEffectiveDirectory } from '@/hooks/useEffectiveDirectory';
 import { cn } from '@/lib/utils';
 import { useI18n } from '@/lib/i18n';
+import { useBrowserFaviconStore } from '@/stores/useBrowserFaviconStore';
 import { useFilesViewTabsStore } from '@/stores/useFilesViewTabsStore';
 import { useUIStore, type ContextPanelMode, type PendingDiffScope } from '@/stores/useUIStore';
 import { markSessionViewed } from '@/sync/notification-store';
@@ -183,7 +184,10 @@ const getTabLabel = (
   return getModeLabel(tab.mode, t);
 };
 
-const getTabIcon = (tab: { mode: ContextPanelMode; targetPath: string | null }): React.ReactNode | undefined => {
+const getTabIcon = (
+  tab: { mode: ContextPanelMode; targetPath: string | null },
+  faviconByOrigin: Record<string, string> = {},
+): React.ReactNode | undefined => {
   if (tab.mode === 'file') {
     return tab.targetPath
       ? <FileTypeIcon filePath={tab.targetPath} className="h-3.5 w-3.5" />
@@ -227,10 +231,23 @@ const getTabIcon = (tab: { mode: ContextPanelMode; targetPath: string | null }):
   }
 
   if (tab.mode === 'browser') {
-    return <Icon name="global" className="h-3.5 w-3.5" />;
+    const icon = browserFaviconFor(tab.targetPath ?? '', faviconByOrigin);
+    // The page's own icon when it has reported one; the placeholder otherwise,
+    // including in runtimes where a page never can.
+    return icon
+      ? <img src={icon} alt="" aria-hidden="true" className="h-3.5 w-3.5 rounded-[3px] object-contain" />
+      : <Icon name="global" className="h-3.5 w-3.5" />;
   }
 
   return undefined;
+};
+
+const browserFaviconFor = (url: string, faviconByOrigin: Record<string, string>): string => {
+  try {
+    return faviconByOrigin[new URL(url).origin] ?? '';
+  } catch {
+    return '';
+  }
 };
 
 const EDITOR_TREE_MIN_WIDTH = 200;
@@ -442,6 +459,8 @@ export const ContextPanel: React.FC = () => {
   const setSelectedFilePath = useFilesViewTabsStore((state) => state.setSelectedPath);
   const contextEditorTreeVisible = useUIStore((state) => state.contextEditorTreeVisible);
   const toggleContextEditorTree = useUIStore((state) => state.toggleContextEditorTree);
+  const openNewContextBrowserTab = useUIStore((state) => state.openNewContextBrowserTab);
+  const faviconByOrigin = useBrowserFaviconStore((state) => state.byOrigin);
   const allowPromptingSubagentSessions = useUIStore((state) => state.allowPromptingSubagentSessions);
   const { themeMode, setThemeMode, lightThemeId, darkThemeId, currentTheme } = useThemeSystem();
 
@@ -892,11 +911,11 @@ export const ContextPanel: React.FC = () => {
     return {
       id: tab.id,
       label,
-      icon: getTabIcon(tab),
+      icon: getTabIcon(tab, faviconByOrigin),
       title: tabPathLabel ? `${rawLabel}: ${tabPathLabel}` : rawLabel,
       closeLabel: t('contextPanel.tab.closeTabAria', { label }),
     };
-  }), [activeModeTabs, effectiveDirectory, sessionTitleById, t]);
+  }), [activeModeTabs, effectiveDirectory, faviconByOrigin, sessionTitleById, t]);
 
   const activeNonChatContent = activeTab?.mode === 'context'
         ? <ContextPanelContent />
@@ -968,13 +987,29 @@ export const ContextPanel: React.FC = () => {
         />
       ) : (
         <div className="flex min-w-0 flex-1 items-center gap-1.5 px-3">
-          {activeTab ? getTabIcon(activeTab) : null}
+          {activeTab ? getTabIcon(activeTab, faviconByOrigin) : null}
           <span className="truncate typography-ui-label text-foreground">
             {activeTab ? getModeLabel(activeTab.mode, t) : null}
           </span>
         </div>
       )}
       <div className="flex items-center gap-1 px-1.5">
+        {activeTab?.mode === 'browser' ? (
+          <Button
+            type="button"
+            variant="ghost"
+            size="sm"
+            onClick={() => {
+              if (!directoryKey) return;
+              openNewContextBrowserTab(directoryKey);
+            }}
+            className="h-7 w-7 p-0"
+            title={t('contextPanel.browser.newTab')}
+            aria-label={t('contextPanel.browser.newTab')}
+          >
+            <Icon name="add" className="h-3.5 w-3.5" />
+          </Button>
+        ) : null}
         {isFileTabActive ? (
           <Button
             type="button"

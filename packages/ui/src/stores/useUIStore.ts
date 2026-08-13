@@ -119,10 +119,13 @@ const isLegacyDefaultTemplates = (value: unknown): boolean => {
 const CONTEXT_PANEL_DEFAULT_WIDTH = 380;
 const CONTEXT_PANEL_MIN_WIDTH = 380;
 const CONTEXT_PANEL_MAX_WIDTH = 1400;
+/** Per surface, not per panel: see clampContextPanelTabs. */
 const CONTEXT_PANEL_MAX_TABS = 12;
 const CONTEXT_PANEL_MAX_LABEL_LENGTH = 120;
 const LEFT_SIDEBAR_MIN_WIDTH = 280;
 const activeMainTabByRuntime = new Map<string, MainTab>();
+/** Separates browser tabs opened in the same millisecond. */
+let browserTabSequence = 0;
 
 const runtimeMemoryKey = (value?: string | null): string => {
   const key = (value ?? getRuntimeKey()).trim();
@@ -247,20 +250,36 @@ const createContextPanelTab = (descriptor: ContextPanelTabDescriptor): ContextPa
   };
 };
 
-const clampContextPanelTabs = (tabs: ContextPanelTab[], maxTabs: number, activeTabId: string | null): ContextPanelTab[] => {
-  if (tabs.length <= maxTabs) {
-    return tabs;
+/**
+ * Keeps each surface's tab count in hand.
+ *
+ * The limit is per mode because the strip is per mode: a user looking at diffs
+ * only ever sees diff tabs, so evicting one to make room for a browser tab
+ * takes away something they cannot see being taken. Modes compete for screen
+ * space separately, so they get separate budgets.
+ */
+const clampContextPanelTabs = (
+  tabs: ContextPanelTab[],
+  maxTabsPerMode: number,
+  activeTabId: string | null,
+): ContextPanelTab[] => {
+  const counts = new Map<ContextPanelMode, number>();
+  for (const tab of tabs) counts.set(tab.mode, (counts.get(tab.mode) ?? 0) + 1);
+  const over = [...counts.entries()].filter(([, count]) => count > maxTabsPerMode);
+  if (over.length === 0) return tabs;
+
+  const removeSet = new Set<string>();
+  for (const [mode, count] of over) {
+    const modeTabs = tabs.filter((tab) => tab.mode === mode);
+    const removable = [...modeTabs]
+      .sort((a, b) => a.touchedAt - b.touchedAt)
+      .filter((tab) => tab.id !== activeTabId);
+    // Never drop the tab being opened or looked at; if that leaves the mode one
+    // over its budget, one extra tab beats losing the one in use.
+    for (const tab of removable.slice(0, count - maxTabsPerMode)) removeSet.add(tab.id);
   }
 
-  const tabsByTouch = [...tabs].sort((a, b) => a.touchedAt - b.touchedAt);
-  const removable = tabsByTouch.filter((tab) => tab.id !== activeTabId);
-  const removeCount = tabs.length - maxTabs;
-  if (removeCount <= 0 || removable.length === 0) {
-    return tabs.slice(-maxTabs);
-  }
-
-  const removeSet = new Set(removable.slice(0, removeCount).map((tab) => tab.id));
-  return tabs.filter((tab) => !removeSet.has(tab.id));
+  return removeSet.size === 0 ? tabs : tabs.filter((tab) => !removeSet.has(tab.id));
 };
 
 const sanitizeContextPanelTabs = (tabs: unknown): ContextPanelTab[] => {
@@ -762,6 +781,7 @@ interface UIStore {
   openContextPlan: (directory: string) => void;
   openContextPreview: (directory: string, url: string) => void;
   openContextBrowser: (directory: string, url?: string) => void;
+  openNewContextBrowserTab: (directory: string) => void;
   setContextPanelTabTargetPath: (directory: string, tabID: string, targetPath: string) => void;
   setActiveContextPanelTab: (directory: string, tabID: string) => void;
   reorderContextPanelTabs: (directory: string, activeTabID: string, overTabID: string) => void;
@@ -1278,6 +1298,19 @@ export const useUIStore = create<UIStore>()(
             mode: 'browser',
             targetPath: normalizedUrl,
             dedupeKey: normalizedUrl,
+            label: null,
+          });
+        },
+        // Always a new tab, never the existing one: the whole point of asking
+        // for one is to keep what is already open.
+        openNewContextBrowserTab: (directory) => {
+          const normalizedDirectory = normalizeDirectoryPath((directory || '').trim());
+          if (!normalizedDirectory) return;
+          browserTabSequence += 1;
+          get().openContextPanelTab(normalizedDirectory, {
+            mode: 'browser',
+            targetPath: '',
+            dedupeKey: `browser:new:${Date.now()}-${browserTabSequence}`,
             label: null,
           });
         },

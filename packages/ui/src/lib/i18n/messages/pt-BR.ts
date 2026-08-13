@@ -1197,6 +1197,7 @@ export const dict: Record<I18nKey, string> = {
   "contextPanel.browser.addressAria": "Endereço do navegador",
   "contextPanel.browser.history.label": "Endereços recentes",
   "contextPanel.browser.history.forget": "Remover do histórico",
+  "contextPanel.browser.newTab": "Nova aba do navegador",
   "contextPanel.browser.empty": "Navegador web",
   "contextPanel.browser.emptyHint": "Digite um endereço acima para começar a navegar",
   "contextPanel.browser.inspectUnavailable": "Esta página não pode ser inspecionada pelo painel do navegador.",
