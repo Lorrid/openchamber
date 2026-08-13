@@ -133,6 +133,52 @@ describe('managed agent tool runtime', () => {
     expect(Object.keys(tool.openchamber.args.parameters.properties)).toContain('sessionId');
   });
 
+  it('accepts inputs passed beside the action, not only inside parameters', async () => {
+    const { runtime, dataDir } = await createRuntime();
+    const prepared = await runtime.prepareManagedOpenCodeEnv();
+    const pluginPath = path.join(dataDir, 'agent-tool', 'openchamber-plugin.js');
+    const pluginModule = await import(`${pathToFileURL(pluginPath).href}?flat=${Date.now()}`);
+    const { tool } = await pluginModule.OpenChamberPlugin();
+
+    const sent = [];
+    const originalFetch = globalThis.fetch;
+    const originalUrl = process.env.OPENCHAMBER_AGENT_TOOL_URL;
+    const originalToken = process.env.OPENCHAMBER_AGENT_TOOL_TOKEN;
+    process.env.OPENCHAMBER_AGENT_TOOL_URL = prepared.OPENCHAMBER_AGENT_TOOL_URL;
+    process.env.OPENCHAMBER_AGENT_TOOL_TOKEN = prepared.OPENCHAMBER_AGENT_TOOL_TOKEN;
+    globalThis.fetch = async (_endpoint, init) => {
+      sent.push(JSON.parse(init.body));
+      return new Response(JSON.stringify({ schemaVersion: 1, ok: true, action: 'browser.open', data: {} }));
+    };
+    const context = { directory: '/work/project', abort: new AbortController().signal, metadata: () => {} };
+
+    try {
+      // The shape a model actually produced: url and viewport next to action.
+      await tool.openchamber_web.execute(
+        { action: 'browser.open', url: 'https://example.test', viewport: 'mobile' },
+        context,
+      );
+      // The documented shape must keep working, and win when both are present.
+      await tool.openchamber_web.execute(
+        { action: 'browser.open', url: 'https://ignored.test', parameters: { url: 'https://example.test/nested' } },
+        context,
+      );
+      // Both tools come from one template, so session control accepts it too.
+      await tool.openchamber.execute(
+        { action: 'session.messages', sessionId: 'ses_1', limit: 3 },
+        context,
+      );
+    } finally {
+      globalThis.fetch = originalFetch;
+      process.env.OPENCHAMBER_AGENT_TOOL_URL = originalUrl;
+      process.env.OPENCHAMBER_AGENT_TOOL_TOKEN = originalToken;
+    }
+
+    expect(sent[0].input).toEqual({ action: 'browser.open', url: 'https://example.test', viewport: 'mobile' });
+    expect(sent[1].input.url).toBe('https://example.test/nested');
+    expect(sent[2].input).toEqual({ action: 'session.messages', sessionId: 'ses_1', limit: 3 });
+  });
+
   it('omits a tool the user turned off', async () => {
     const { runtime, dataDir } = await createRuntime();
     await runtime.prepareManagedOpenCodeEnv({ includeControl: false, includeWeb: true });

@@ -118,7 +118,12 @@ const createToolEntry = ({ name, description, actions, definitions, parameters }
         parameters: { type: "object", properties: ${JSON.stringify(parameters)}, additionalProperties: false, description: "Inputs for the action; use an empty object when none are needed" },
       },
       async execute(input, context) {
-        const args = { ...(input.parameters ?? {}), action: input.action }
+        // Models routinely put the inputs next to the action instead of inside
+        // the parameters object, and dropping them there produced a
+        // "url is required" error for a call that plainly carried a url. Both
+        // shapes are accepted; an explicit parameters object wins on a conflict.
+        const { action: requestedAction, parameters, ...flattened } = input ?? {}
+        const args = { ...flattened, ...(parameters ?? {}), action: requestedAction }
         const actionTitles = ${JSON.stringify(AGENT_TOOL_ACTION_TITLES)}
         const title = Object.hasOwn(actionTitles, args.action) ? actionTitles[args.action] : args.action
         context.metadata({
