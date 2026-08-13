@@ -1,7 +1,7 @@
 ﻿# Secure Workspaces Production Specification
 
 Status: authoritative implementation and release specification
-Last audited: 2026-07-31
+Last audited: 2026-08-13
 
 ## 1. Purpose
 
@@ -188,7 +188,7 @@ This section records the audited state of the current candidate. Evidence is ide
 - The `v0.1.1` images published on 2026-08-07 are the first carrying OpenCode `1.18.12`, closing the earlier gap where a workspace ran a `1.18.4` CLI against a `1.18.12` host SDK. The version was confirmed by running the published runtime digest rather than trusting the build that produced it.
 - Electron stages and verifies the exact installed plugin payload and bundles an OpenCode CLI matching the OpenChamber SDK version.
 - The runtime and gateway defaults in `packages/web/server/lib/workspaces/policy.js` are the signed `v0.1.1` multi-architecture manifest digests. Startup reconciliation converges an already-written plugin registration to these defaults, so a repin reaches existing installations without a settings re-save.
-- Live Windows Docker and Kubernetes evidence at the current pin was collected on 2026-08-08. Linux evidence remains open. Apple Container is out of the milestone by decision, not by omission (section 3.1).
+- Live Windows Docker and Kubernetes evidence at the current pin was collected on 2026-08-08. Live Linux ARM64 native-AppImage and Docker evidence at the same pin and exact image digests was collected on 2026-08-11, with authoritative cleanup completed on 2026-08-13. The tested AppImage was 216,626,530 bytes with SHA-256 `782420f9a3d4756d6fdd2a3b06ea861359005ff722f88881bc7cb7277cc6932b`; its packaged OpenCode CLI was `1.18.12`, its staged plugin payload contained 33 files, and its Electron executable and native modules passed ARM64 ELF verification. Linux Kubernetes remains open because disposable `kind` could not start on that shared Raspberry Pi host without a cgroup v2 memory controller; boot-parameter changes and reboot were deliberately not performed. Apple Container is out of the milestone by decision, not by omission (section 3.1).
 
 ### 5.2 Implemented Security And Correctness Invariants
 

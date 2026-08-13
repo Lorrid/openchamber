@@ -56,6 +56,36 @@ restart preserving sidebar grouping, full Kubernetes cycle, and four first-try d
 including one workspace whose sync connection was dead. Namespace, containers, workspace
 rows, artifact cache, and apply journals were empty afterwards.
 
+**Linux ARM64, native AppImage and Docker Engine — passed end to end on 2026-08-11.**
+The host was a Raspberry Pi 4 running Debian 12 `aarch64`, kernel
+`6.12.34+rpt-rpi-v8`, and stock Docker `20.10.24`. The native ARM64 AppImage was
+216,626,530 bytes with SHA-256
+`782420f9a3d4756d6fdd2a3b06ea861359005ff722f88881bc7cb7277cc6932b`; its packaged
+OpenCode CLI was `1.18.12`, its staged plugin payload contained 33 files, and final ELF
+verification covered the Electron executable and native modules. Clean Docker creation
+reached `Ready` in about 35 seconds. The runtime and gateway resolved to the exact digests
+in the identity table; the runtime had only its internal network, the access target was
+loopback-only, unauthenticated health returned `401`, authenticated health and SSE returned
+`200`, direct TCP was blocked, an allowed CONNECT returned `200`, and a denied domain
+returned `403`.
+
+Interactive export → review → apply created the selected 49-byte host file with the exact
+reviewed bytes while leaving the immutable baseline unchanged; the artifact was consumed
+and locks/journals were empty. Packaged restart rewrote the stale AppImage plugin path
+before OpenCode launch, recovered `Starting → Ready`, and preserved the routed session.
+Delete succeeded on the first attempt in 5.5 seconds and left no managed container,
+volume, network, or control-plane row. Final cleanup on 2026-08-13 removed only disposable
+validation tooling, profiles, projects, provider data, and configuration; Homebridge
+remained active and enabled.
+
+**Linux Kubernetes — deferred on this host, not failed provider evidence.** Disposable
+`kind` could not start its control plane because the host kernel does not expose the
+cgroup v2 memory controller (`memory.oom.group can't be set: controller "memory" not
+available`). Changing boot parameters and rebooting a shared Homebridge host was outside
+the validation boundary. Kubernetes remains covered by the current Windows live run and
+must be rerun on a Linux host whose kernel exposes the required controller before Linux
+Kubernetes is claimed.
+
 **Automated.** 129 focused workspace server tests; UI tests for session routing, sidebar
 ownership, and locale parity; Electron packaging/architecture/updater tests; the plugin's
 own suite (159 tests, green on Windows). In `packages/web` on Windows, 14 test files fail
@@ -63,7 +93,8 @@ own suite (159 tests, green on Windows). In `packages/web` on Windows, 14 test f
 on `origin/main` pass here. Compare against a baseline worktree before treating any
 failure as this branch's.
 
-**Not proven yet:** Linux, physical iOS/Android, and exact image-digest recertification.
+**Not proven yet:** Linux Kubernetes and physical iOS/Android. Linux Docker is proven at
+the current plugin pin, exact image digests, and native AppImage identity above.
 
 **Apple Container is implemented, offered, and deliberately not certified.** Managed
 egress needs a network primitive the current CLI does not provide, so creation fails
@@ -191,8 +222,9 @@ steps with their status.
    `packaged-smoke.test.mjs`, `packaged-workspace-smoke.test.mjs`, and
    `scripts/verify-workspace-plugin.test.mjs` appear in no script and no workflow. Wire them
    into `test:architecture` or delete them; an unrun test reads as coverage it does not give.
-5. **Live recertification** at the current pin and images for Linux and physical mobile.
-   Apple Container is out of this list on purpose — see the note above.
+5. **Live recertification** at the current pin and images for Linux Kubernetes and physical mobile.
+   Linux Docker is complete; Linux Kubernetes and physical mobile remain. Apple Container
+   is out of this list on purpose — see the note above.
 
 ### Filed upstream (anomalyco/opencode)
 
