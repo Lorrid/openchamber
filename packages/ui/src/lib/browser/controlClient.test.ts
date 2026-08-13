@@ -3,11 +3,19 @@ import { afterEach, beforeEach, describe, expect, mock, test } from 'bun:test';
 type Listener = (event: { type: string; requestId: string; action: string; parameters: Record<string, unknown> }) => void;
 
 const posted: Array<{ requestId: string; ok: boolean; data?: unknown; error?: string }> = [];
+const claims: string[] = [];
+/** Flipped to false to play the client that lost the race for a request. */
+let grantClaims = true;
 let listener: Listener | null = null;
 
 mock.module('@/lib/runtime-fetch', () => ({
-  runtimeFetch: mock(async (_path: string, init?: { body?: string }) => {
-    posted.push(JSON.parse(init?.body ?? '{}'));
+  runtimeFetch: mock(async (path: string, init?: { body?: string }) => {
+    const body = JSON.parse(init?.body ?? '{}');
+    if (path.endsWith('/claim')) {
+      claims.push(body.requestId);
+      return { ok: true, status: 200, json: async () => ({ granted: grantClaims }) };
+    }
+    posted.push(body);
     return { ok: true, status: 200 };
   }),
 }));
@@ -32,6 +40,8 @@ const wait = (ms: number): Promise<void> => new Promise((resolve) => setTimeout(
 describe('opening a page before any view exists', () => {
   beforeEach(() => {
     posted.length = 0;
+    claims.length = 0;
+    grantClaims = true;
   });
 
   afterEach(() => {
@@ -66,6 +76,38 @@ describe('opening a page before any view exists', () => {
       viewportApplied: true,
       viewport: { mode: 'mobile', width: 390, height: 844 },
     });
+  });
+
+  test('does nothing at all when another client was granted the request', async () => {
+    grantClaims = false;
+    const opened: string[] = [];
+    const ran: string[] = [];
+    cleanups.push(registerBrowserOpener((url) => { opened.push(url); }));
+    cleanups.push(registerBrowserController({
+      run: async (action) => { ran.push(action); return {}; },
+    }));
+
+    emitOpen({ url: 'https://example.test' });
+    await wait(50);
+
+    expect(claims).toEqual(['req-1']);
+    // The losing client must not act: a late result cannot undo a click.
+    expect(ran).toEqual([]);
+    expect(opened).toEqual([]);
+    expect(posted).toEqual([]);
+  });
+
+  test('claims the request before touching a page', async () => {
+    const ran: string[] = [];
+    cleanups.push(registerBrowserController({
+      run: async (action) => { ran.push(action); return {}; },
+    }));
+
+    listener?.({ type: 'browser-control-request', requestId: 'req-1', action: 'browser.click', parameters: { selector: 'button' } });
+    await wait(50);
+
+    expect(claims).toEqual(['req-1']);
+    expect(ran).toEqual(['browser.click']);
   });
 
   test('does not wait for a view when no layout was requested', async () => {

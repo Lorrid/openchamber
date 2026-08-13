@@ -2,8 +2,12 @@ import { afterEach, beforeEach, describe, expect, mock, test } from 'bun:test';
 
 let apiBaseUrl = 'https://remote.example.test';
 
+let tunnelResult: unknown = { localPort: 52418, reused: false };
 mock.module('@/lib/desktopNative', () => ({
-  invokeDesktopCommand: mock(async () => ({ localPort: 52418, reused: false })),
+  invokeDesktopCommand: mock(async () => {
+    if (tunnelResult instanceof Error) throw tunnelResult;
+    return tunnelResult;
+  }),
 }));
 mock.module('@/lib/runtime-auth', () => ({
   getRuntimeBearerTokenSync: () => 'token',
@@ -14,7 +18,12 @@ mock.module('@/lib/runtime-switch', () => ({
   subscribeRuntimeEndpointChanged: () => () => {},
 }));
 
-const { resolveBrowsableUrl, shouldTunnelLoopbackUrl, toDisplayUrl } = await import('./devTunnel');
+const {
+  DevTunnelUnavailableError,
+  resolveBrowsableUrl,
+  shouldTunnelLoopbackUrl,
+  toDisplayUrl,
+} = await import('./devTunnel');
 
 const globalScope = globalThis as unknown as { window?: unknown };
 
@@ -27,6 +36,7 @@ const asDesktop = (value: boolean) => {
 describe('loopback navigations against a remote instance', () => {
   beforeEach(() => {
     apiBaseUrl = 'https://remote.example.test';
+    tunnelResult = { localPort: 52418, reused: false };
     asDesktop(true);
   });
 
@@ -49,6 +59,27 @@ describe('loopback navigations against a remote instance', () => {
 
   test('a public address is not loopback at all', () => {
     expect(shouldTunnelLoopbackUrl('https://openchamber.dev/docs/')).toBe(false);
+  });
+
+  test('an implicit port is the port the scheme means, not nothing', () => {
+    // http://localhost/ is port 80 on the host, and must be tunnelled like any
+    // other. Reading it as 0 would send the view to this machine instead.
+    expect(shouldTunnelLoopbackUrl('http://localhost/')).toBe(true);
+    expect(shouldTunnelLoopbackUrl('https://localhost/')).toBe(true);
+  });
+
+  test('a failed tunnel is reported, never answered by this machine', async () => {
+    tunnelResult = new Error('discovery unavailable');
+    let failed = false;
+    try {
+      // A port no earlier test opened: a successful tunnel is cached per target.
+      await resolveBrowsableUrl('http://localhost:3100/');
+    } catch (error) {
+      failed = error instanceof DevTunnelUnavailableError;
+    }
+    // Falling back to the plain loopback URL would show whatever runs on that
+    // port here, under the address of a server on another machine.
+    expect(failed).toBe(true);
   });
 
   test('a local instance resolves its own loopback correctly', () => {

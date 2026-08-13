@@ -164,3 +164,28 @@ describe('client capability', () => {
     expect(await inflight).toEqual({ url: 'http://localhost:3000/' });
   });
 });
+
+describe('one request, one performer', () => {
+  test('grants the request to the first claimant and refuses the rest', async () => {
+    const broker = createBrowserControlBroker({ emitRequest: () => 2, createId: () => 'req-1' });
+    const pending = broker.request('browser.click', { selector: 'button' });
+
+    expect(broker.claim('req-1')).toBe(true);
+    // A second desktop client is told no, so it never clicks.
+    expect(broker.claim('req-1')).toBe(false);
+
+    broker.resolve('req-1', { ok: true, data: { clicked: true } });
+    await expect(pending).resolves.toEqual({ clicked: true });
+  });
+
+  test('refuses a claim for a request that is already over', () => {
+    const broker = createBrowserControlBroker({ emitRequest: () => 1, createId: () => 'req-1' });
+    const pending = broker.request('browser.click', {});
+    broker.resolve('req-1', { ok: true, data: null });
+    void pending.catch(() => undefined);
+
+    // Acting now would change a page nobody is waiting on.
+    expect(broker.claim('req-1')).toBe(false);
+    expect(broker.claim('unknown')).toBe(false);
+  });
+});

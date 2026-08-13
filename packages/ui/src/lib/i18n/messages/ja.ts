@@ -1227,6 +1227,8 @@ export const dict: Record<I18nKey, string> = {
   'contextPanel.browser.loadFailed': 'このページを読み込めませんでした',
   'contextPanel.browser.waitingForServer': '開発サーバーを待っています',
   'contextPanel.browser.waitingForServerHint': 'まだ接続を受け付けていません。受け付け次第このページを読み込みます。',
+  'contextPanel.browser.tunnelFailed': 'この開発サーバーに接続できませんでした',
+  'contextPanel.browser.tunnelFailedHint': '{url} は OpenChamber が動いているマシン上にあり、そこへの接続を開けませんでした。あなたのマシンの内容はここには表示されません。',
   'contextPanel.browser.loadFailedUnknown': 'ページに到達できませんでした。',
   'contextPanel.browser.crashed': 'このページは応答しなくなりました',
   'contextPanel.browser.crashedHint': 'ページが繰り返しクラッシュしました。再読み込みして、もう一度お試しください。',

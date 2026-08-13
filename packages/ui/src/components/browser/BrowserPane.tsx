@@ -19,7 +19,12 @@ import { resolveAnnotationOverlayTheme } from '@/lib/browser/overlayTheme';
 import { registerBrowserController } from '@/lib/browser/controlClient';
 import { suggestFromHistory } from '@/lib/browser/history';
 import { selectBrowserHistory, useBrowserHistoryStore } from '@/stores/useBrowserHistoryStore';
-import { resolveBrowsableUrl, shouldTunnelLoopbackUrl, toDisplayUrl } from '@/lib/browser/devTunnel';
+import {
+  DevTunnelUnavailableError,
+  resolveBrowsableUrl,
+  shouldTunnelLoopbackUrl,
+  toDisplayUrl,
+} from '@/lib/browser/devTunnel';
 import {
   buildClickScript,
   buildInspectScript,
@@ -141,6 +146,8 @@ const WebviewBrowser: React.FC<BrowserPaneProps> = ({ initialUrl, directory, tab
     }, [persistUrl]),
   });
 
+  /** Set when a remote dev server could not be reached from this machine. */
+  const [tunnelFailedUrl, setTunnelFailedUrl] = React.useState<string | null>(null);
   const attachAnnotation = useAnnotationAttach(directory);
   const overlayLabels = useAnnotationOverlayLabels();
   const isLoading = navigation.status.kind === 'loading';
@@ -169,6 +176,7 @@ const WebviewBrowser: React.FC<BrowserPaneProps> = ({ initialUrl, directory, tab
     // where the bytes come from, and surfacing 127.0.0.1:<random> would be
     // confusing and useless to copy.
     setAddress(next);
+    setTunnelFailedUrl(null);
     void resolveBrowsableUrl(next).then((target) => {
       const webview = webviewRef.current;
       if (!webview) {
@@ -182,6 +190,10 @@ const WebviewBrowser: React.FC<BrowserPaneProps> = ({ initialUrl, directory, tab
         // Chromium applies once the view attaches.
         setInitialSrc(target);
       }
+    }).catch((error: unknown) => {
+      // Loading the address here anyway would answer from this machine while
+      // showing the remote one's address. Say what happened instead.
+      if (error instanceof DevTunnelUnavailableError) setTunnelFailedUrl(next);
     });
   }, []);
 
@@ -192,9 +204,17 @@ const WebviewBrowser: React.FC<BrowserPaneProps> = ({ initialUrl, directory, tab
     let active = true;
     void resolveBrowsableUrl(startUrl)
       .then((target) => { if (active) setInitialSrc(target); })
-      // Never leave the view unrendered: without a src the panel would stay
-      // permanently blank, which is worse than loading the untunneled URL.
-      .catch(() => { if (active) setInitialSrc(startUrl); });
+      .catch((error: unknown) => {
+        if (!active) return;
+        if (error instanceof DevTunnelUnavailableError) {
+          // The view still needs a src or the panel stays blank forever; it
+          // gets a blank one, with the failure stated over it.
+          setTunnelFailedUrl(startUrl);
+          setInitialSrc(BLANK_URL);
+          return;
+        }
+        setInitialSrc(startUrl);
+      });
     return () => { active = false; };
     // Only ever the initial navigation; later changes come from the user.
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -759,7 +779,15 @@ const WebviewBrowser: React.FC<BrowserPaneProps> = ({ initialUrl, directory, tab
             <span className="typography-micro text-muted-foreground">{t('contextPanel.browser.waitingForServerHint')}</span>
           </div>
         ) : null}
-        {failed ? (
+        {tunnelFailedUrl ? (
+          <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 bg-background p-6 text-center">
+            <span className="typography-ui-header text-foreground">{t('contextPanel.browser.tunnelFailed')}</span>
+            <span className="typography-micro text-muted-foreground">
+              {t('contextPanel.browser.tunnelFailedHint', { url: tunnelFailedUrl })}
+            </span>
+          </div>
+        ) : null}
+        {failed && !tunnelFailedUrl ? (
           <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 bg-background p-6 text-center">
             <span className="typography-ui-header text-foreground">
               {failed.crashed ? t('contextPanel.browser.crashed') : t('contextPanel.browser.loadFailed')}

@@ -6,6 +6,12 @@
  * event stream and waits for the client that owns the browser view to post the
  * result back.
  *
+ * The request goes to every client that could serve it, because the server
+ * cannot know which one is showing a page. Exactly one must act on it, so a
+ * client claims the request before touching anything and only the first claim
+ * is granted. Without that, two connected desktop clients would both click, and
+ * the losing one's late result would not undo what it had already done.
+ *
  * Two failure modes matter and are handled explicitly rather than as timeouts:
  *
  * - No client is listening. The agent is told immediately that the browser is
@@ -102,8 +108,23 @@ export const createBrowserControlBroker = ({
           });
         }, boundedTimeout);
 
-        pending.set(requestId, { finish, timer });
+        pending.set(requestId, { finish, timer, claimed: false });
       });
+    },
+
+    /**
+     * Grants the right to perform one request, to one client.
+     *
+     * The first caller wins; everyone else is told no and must do nothing. An
+     * unknown id is also a refusal: the request has already been settled, and
+     * acting on it now would change a page nobody is waiting on.
+     */
+    claim(requestId) {
+      if (typeof requestId !== 'string' || !requestId) return false;
+      const entry = pending.get(requestId);
+      if (!entry || entry.claimed) return false;
+      entry.claimed = true;
+      return true;
     },
 
     /**

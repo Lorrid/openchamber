@@ -14,6 +14,17 @@
 import net from 'node:net';
 import { WebSocket } from 'ws';
 
+/**
+ * What one connection may buffer while its WebSocket is still connecting.
+ *
+ * Enough for a request with generous headers, far short of a body worth
+ * holding: a local process could otherwise keep writing into a stalled
+ * handshake and grow the desktop app's memory without limit.
+ */
+const MAX_PENDING_BYTES = 256 * 1024;
+/** A handshake that has not completed by now is not going to. */
+const HANDSHAKE_TIMEOUT_MS = 15_000;
+
 const toWebSocketUrl = (baseUrl, port) => {
   const parsed = new URL('/api/dev-tunnel', baseUrl);
   parsed.protocol = parsed.protocol === 'https:' ? 'wss:' : 'ws:';
@@ -21,7 +32,11 @@ const toWebSocketUrl = (baseUrl, port) => {
   return parsed.toString();
 };
 
-export const createDevTunnelClient = ({ logger = console } = {}) => {
+export const createDevTunnelClient = ({
+  logger = console,
+  handshakeTimeoutMs = HANDSHAKE_TIMEOUT_MS,
+  maxPendingBytes = MAX_PENDING_BYTES,
+} = {}) => {
   /** Keyed by `${baseUrl}|${remotePort}` so repeat opens reuse one listener. */
   const tunnels = new Map();
 
@@ -63,17 +78,31 @@ export const createDevTunnelClient = ({ logger = console } = {}) => {
 
         const upstream = new WebSocket(target, { headers, perMessageDeflate: false });
         upstream.binaryType = 'nodebuffer';
-        const pendingWrites = [];
+        let pendingWrites = [];
+        let pendingBytes = 0;
 
-        const teardown = () => {
+        const handshakeTimer = setTimeout(() => {
+          logger.warn?.(`[dev-tunnel] handshake timed out for port ${remotePort}`);
+          teardown();
+        }, handshakeTimeoutMs);
+
+        function teardown() {
+          clearTimeout(handshakeTimer);
+          pendingWrites = [];
+          pendingBytes = 0;
           sockets.delete(socket);
           try { socket.destroy(); } catch { /* already gone */ }
           try { upstream.close(); } catch { /* already closing */ }
-        };
+        }
 
         upstream.on('open', () => {
+          clearTimeout(handshakeTimer);
           for (const chunk of pendingWrites) upstream.send(chunk);
-          pendingWrites.length = 0;
+          pendingWrites = [];
+          pendingBytes = 0;
+          // The local end was held back while there was nowhere to put its
+          // bytes; there is somewhere now.
+          socket.resume();
         });
         upstream.on('message', (data) => {
           if (socket.destroyed) return;
@@ -87,9 +116,22 @@ export const createDevTunnelClient = ({ logger = console } = {}) => {
 
         socket.on('data', (chunk) => {
           // Bytes can arrive before the WebSocket handshake completes; buffering
-          // them is what keeps the first HTTP request intact.
-          if (upstream.readyState === WebSocket.OPEN) upstream.send(chunk);
-          else if (upstream.readyState === WebSocket.CONNECTING) pendingWrites.push(chunk);
+          // them is what keeps the first HTTP request intact. The buffer is
+          // bounded, and the local end is paused rather than trusted to stop.
+          if (upstream.readyState === WebSocket.OPEN) {
+            upstream.send(chunk);
+            return;
+          }
+          if (upstream.readyState !== WebSocket.CONNECTING) return;
+
+          pendingWrites.push(chunk);
+          pendingBytes += chunk.length;
+          if (pendingBytes > maxPendingBytes) {
+            logger.warn?.(`[dev-tunnel] dropped a connection that buffered too much for port ${remotePort}`);
+            teardown();
+            return;
+          }
+          socket.pause();
         });
         socket.on('error', teardown);
         socket.on('close', teardown);

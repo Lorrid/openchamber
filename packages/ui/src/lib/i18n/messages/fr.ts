@@ -2901,6 +2901,8 @@ export const dict = {
   'contextPanel.browser.loadFailed': 'Impossible de charger cette page',
   'contextPanel.browser.waitingForServer': 'En attente du serveur de développement',
   'contextPanel.browser.waitingForServerHint': 'Il n’accepte pas encore de connexions. La page se chargera dès que ce sera le cas.',
+  'contextPanel.browser.tunnelFailed': 'Ce serveur de dev n’a pas pu être atteint',
+  'contextPanel.browser.tunnelFailedHint': '{url} tourne sur la machine où se trouve OpenChamber, et la connexion vers elle n’a pas pu être ouverte. Rien de votre propre machine n’est affiché ici.',
   'contextPanel.browser.loadFailedUnknown': 'La page n’a pas pu être atteinte.',
   'contextPanel.browser.crashed': 'Cette page ne répond plus',
   'contextPanel.browser.crashedHint': 'La page a planté plusieurs fois de suite. Rechargez pour réessayer.',

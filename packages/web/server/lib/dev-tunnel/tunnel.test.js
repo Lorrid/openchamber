@@ -113,6 +113,40 @@ describe('dev tunnel end to end', () => {
     expect(response.headers['x-dev-header']).toBe('kept');
   });
 
+  test('drops a connection that floods a handshake that never completes', async () => {
+    // A host that accepts the TCP connection and then says nothing: the
+    // WebSocket handshake hangs, which is when buffering could run away.
+    const stalled = net.createServer(() => {});
+    const stalledSockets = trackSockets(stalled);
+    const stalledPort = await listen(stalled);
+    started.push(stopServer(stalled, stalledSockets));
+
+    const client = createDevTunnelClient({
+      logger: { warn: () => {} },
+      handshakeTimeoutMs: 300,
+    });
+    started.push(() => client.closeAll());
+    const { localPort } = await client.open({ baseUrl: `http://127.0.0.1:${stalledPort}`, port: 4321 });
+
+    const closed = await new Promise((resolve) => {
+      const socket = net.createConnection({ port: localPort, host: '127.0.0.1' }, () => {
+        const chunk = Buffer.alloc(64 * 1024, 0x61);
+        const write = () => {
+          // Keep writing while the handshake hangs; the tunnel must stop this
+          // rather than hold every byte in the desktop app's memory.
+          if (socket.destroyed) return;
+          socket.write(chunk, () => setTimeout(write, 1));
+        };
+        write();
+      });
+      socket.on('close', () => resolve(true));
+      socket.on('error', () => resolve(true));
+      setTimeout(() => resolve(false), 3_000);
+    });
+
+    expect(closed).toBe(true);
+  });
+
   test('reuses one listener for repeat opens of the same target', async () => {
     const devPort = await startDevServer((_req, res) => res.end('ok'));
     const host = await startHost({ allowedPorts: [devPort] });

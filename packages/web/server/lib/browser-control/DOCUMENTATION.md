@@ -31,6 +31,12 @@ itself; it can only ask and wait.
 - `emitRequest` counts only clients that can serve the action. `browser.open`
   needs any client, because opening a tab is what creates a view; every other
   action needs a declared-capable one.
+- Exactly one client performs a request. The broadcast reaches everyone who
+  could serve it, so a client claims the request over
+  `POST /api/browser-control/claim` and acts only if granted; the first claim
+  wins and every other client does nothing. Deciding by whose result arrives
+  first would be too late, because by then each of them has already clicked.
+  A claim for a settled request is refused for the same reason.
 - Nobody listening is answered immediately with a 503 describing the
   environment, never by blocking for the full timeout. A blocked wait followed
   by a timeout cannot be told apart from a page that hung.

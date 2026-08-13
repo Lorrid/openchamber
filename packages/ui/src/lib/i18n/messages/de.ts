@@ -1081,6 +1081,8 @@ export const dict = {
   'contextPanel.browser.loadFailed': 'Diese Seite konnte nicht geladen werden',
   'contextPanel.browser.waitingForServer': 'Warte auf den Dev-Server',
   'contextPanel.browser.waitingForServerHint': 'Er nimmt noch keine Verbindungen an. Die Seite lädt, sobald er es tut.',
+  'contextPanel.browser.tunnelFailed': 'Dieser Dev-Server war nicht erreichbar',
+  'contextPanel.browser.tunnelFailedHint': '{url} läuft auf der Maschine, auf der OpenChamber läuft, und die Verbindung dorthin ließ sich nicht öffnen. Von deiner eigenen Maschine wird hier nichts angezeigt.',
   'contextPanel.browser.loadFailedUnknown': 'Die Seite war nicht erreichbar.',
   'contextPanel.browser.crashed': 'Diese Seite reagiert nicht mehr',
   'contextPanel.browser.crashedHint': 'Die Seite ist mehrfach abgestürzt. Lade neu, um es erneut zu versuchen.',

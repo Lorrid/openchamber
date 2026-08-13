@@ -1545,6 +1545,8 @@ export const dict: Record<I18nKey, string> = {
   'contextPanel.browser.loadFailed': 'Nie udało się wczytać tej strony',
   'contextPanel.browser.waitingForServer': 'Czekanie na serwer deweloperski',
   'contextPanel.browser.waitingForServerHint': 'Jeszcze nie przyjmuje połączeń. Strona wczyta się, gdy tylko zacznie.',
+  'contextPanel.browser.tunnelFailed': 'Nie udało się połączyć z tym serwerem deweloperskim',
+  'contextPanel.browser.tunnelFailedHint': '{url} działa na maszynie, na której jest OpenChamber, i nie udało się otworzyć do niej połączenia. Nic z twojej własnej maszyny nie jest tu pokazywane.',
   'contextPanel.browser.loadFailedUnknown': 'Nie udało się połączyć ze stroną.',
   'contextPanel.browser.crashed': 'Ta strona przestała odpowiadać',
   'contextPanel.browser.crashedHint': 'Strona kilkakrotnie uległa awarii. Odśwież, aby spróbować ponownie.',

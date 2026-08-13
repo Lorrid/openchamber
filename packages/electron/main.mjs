@@ -1164,6 +1164,25 @@ const FAVICON_MIME_TYPES = new Set([
   'image/svg+xml',
 ]);
 
+/**
+ * Resolves a web contents id to a browser-panel view, or refuses.
+ *
+ * These commands take an id from the renderer, and an id is guessable. Without
+ * this a compromised renderer could point capture or the debugger at another
+ * window's contents. Membership of the panel's own session is the proof: only
+ * views created with that partition have it, and nothing else in the app does.
+ */
+const resolveBrowserPanelContents = (rawId) => {
+  const id = Number.isFinite(rawId) ? Math.trunc(rawId) : null;
+  if (id === null || id < 0) throw new Error('webContentsId is required');
+  const target = webContents.fromId(id);
+  if (!target || target.isDestroyed()) throw new Error('WebContents not found');
+  if (target.session !== session.fromPartition(BROWSER_PANEL_PARTITION)) {
+    throw new Error('That view is not a browser panel page');
+  }
+  return target;
+};
+
 const hardenBrowserPanelSession = () => {
   const panelSession = session.fromPartition(BROWSER_PANEL_PARTITION);
 
@@ -3854,11 +3873,8 @@ const handleInvoke = async (browserWindow, command, args = {}) => {
      * that session and resets the moment it detaches.
      */
     case 'desktop_browser_set_color_scheme': {
-      const wcId = Number.isFinite(args.webContentsId) ? Math.trunc(args.webContentsId) : null;
-      if (wcId === null || wcId < 0) throw new Error('webContentsId is required');
       const scheme = args.scheme === 'light' || args.scheme === 'dark' ? args.scheme : 'system';
-      const target = webContents.fromId(wcId);
-      if (!target || target.isDestroyed()) throw new Error('WebContents not found');
+      const target = resolveBrowserPanelContents(args.webContentsId);
 
       if (!target.debugger.isAttached()) {
         try {
@@ -3921,8 +3937,11 @@ const handleInvoke = async (browserWindow, command, args = {}) => {
     // Scoped to the browser panel's own partition, so clearing it can never
     // touch OpenChamber's session or any other window's storage.
     case 'desktop_browser_clear_data': {
+      // Exact match, not a prefix: a prefix would also accept a partition that
+      // merely starts with this name, which is not what the comment above
+      // promises and would quietly stop being true if one were ever added.
       const partition = typeof args.partition === 'string' ? args.partition.trim() : '';
-      if (!partition.startsWith(BROWSER_PANEL_PARTITION)) {
+      if (partition !== BROWSER_PANEL_PARTITION) {
         throw new Error('Unsupported browser partition');
       }
       const storages = [];
@@ -3937,10 +3956,7 @@ const handleInvoke = async (browserWindow, command, args = {}) => {
     }
 
     case 'desktop_browser_capture_page': {
-      const wcId = Number.isFinite(args.webContentsId) ? Math.trunc(args.webContentsId) : null;
-      if (wcId === null || wcId < 0) throw new Error('webContentsId is required');
-      const wc = webContents.fromId(wcId);
-      if (!wc || wc.isDestroyed()) throw new Error('WebContents not found');
+      const wc = resolveBrowserPanelContents(args.webContentsId);
       const image = await wc.capturePage();
       const buffer = image.toJPEG(82);
       return {

@@ -46,6 +46,12 @@ and what made it fragile per framework.
 - Concurrency is capped per host, not per page, because one page load opens
   many sockets.
 - A connection that cannot be established fails the socket rather than holding
-  it open; a stalled connect is bounded by an explicit timeout.
+  it open; a stalled connect is bounded by an explicit timeout, and so is the
+  WebSocket handshake. While it is pending the local socket is paused and its
+  buffered bytes are capped, so a local process writing into a stalled
+  handshake cannot grow the desktop app's memory.
+- A tunnel that cannot be opened is reported to the panel, never replaced by the
+  plain loopback URL. On a remote instance that substitution would change which
+  machine answers and show local content under a remote address.
 - Closing either end closes the other. A half-open pipe would leave the page
   waiting on bytes that will never arrive.

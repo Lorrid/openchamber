@@ -2,10 +2,10 @@
  * Client half of agent browser control.
  *
  * The server broadcasts a browser request to every connected client, because it
- * cannot know which one is showing the browser panel. Exactly one client should
- * answer, so a request is only handled when this client currently owns a
- * browser view; otherwise it is ignored and another client (or the timeout)
- * decides the outcome.
+ * cannot know which one is showing the browser panel. More than one may be able
+ * to serve it, so a client asks the server for the request before doing
+ * anything, and acts only if it is granted. Deciding by whose result arrives
+ * first would be too late — by then every client has already clicked.
  *
  * `browser.open` is the exception: it is handled even with no view attached,
  * since opening a tab is precisely what creates one. The view it creates then
@@ -50,6 +50,27 @@ let unsubscribe: (() => void) | null = null;
  * silence is what once turned a missing body parser into an unexplained
  * twenty-second timeout.
  */
+/**
+ * Asks for the exclusive right to perform a request.
+ *
+ * A refusal is the normal outcome for a client that lost the race, and so is a
+ * failure to ask at all: acting without a grant is what this exists to prevent.
+ */
+const claimRequest = async (requestId: string): Promise<boolean> => {
+  try {
+    const response = await runtimeFetch('/api/browser-control/claim', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ requestId }),
+    });
+    if (!response.ok) return false;
+    const body = await response.json() as { granted?: boolean };
+    return body?.granted === true;
+  } catch {
+    return false;
+  }
+};
+
 const postResult = async (requestId: string, outcome: { ok: boolean; data?: unknown; error?: string }): Promise<void> => {
   try {
     const response = await runtimeFetch('/api/browser-control/result', {
@@ -90,6 +111,9 @@ const handleRequest = async (request: BrowserControlRequest): Promise<void> => {
   const controller = activeController;
 
   if (!controller && !(isOpen && opener)) return;
+
+  // Nothing below this line may touch a page without the server's grant.
+  if (!await claimRequest(request.requestId)) return;
 
   try {
     if (isOpen && !controller) {

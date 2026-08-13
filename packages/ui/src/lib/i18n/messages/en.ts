@@ -1230,6 +1230,8 @@ export const dict = {
   'contextPanel.browser.loadFailed': 'This page could not be loaded',
   'contextPanel.browser.waitingForServer': 'Waiting for the dev server',
   'contextPanel.browser.waitingForServerHint': 'It is not accepting connections yet. This page will load as soon as it does.',
+  'contextPanel.browser.tunnelFailed': 'This dev server could not be reached',
+  'contextPanel.browser.tunnelFailedHint': '{url} runs on the machine OpenChamber is on, and the connection to it could not be opened. Nothing from your own machine is shown here.',
   'contextPanel.browser.loadFailedUnknown': 'The page could not be reached.',
   'contextPanel.browser.crashed': 'This page stopped responding',
   'contextPanel.browser.crashedHint': 'The page crashed repeatedly. Reload to try again.',

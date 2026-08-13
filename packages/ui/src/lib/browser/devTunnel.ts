@@ -43,6 +43,20 @@ const isRemoteRuntime = (baseUrl: string): boolean => {
   }
 };
 
+/**
+ * The port a loopback URL addresses, including the one it leaves implicit.
+ * Both callers must agree on this: an omitted port is 80 or 443, not nothing.
+ */
+const loopbackPort = (url: string): number => {
+  try {
+    const parsed = new URL(url);
+    const port = Number.parseInt(parsed.port || (parsed.protocol === 'https:' ? '443' : '80'), 10);
+    return Number.isInteger(port) && port > 0 ? port : 0;
+  } catch {
+    return 0;
+  }
+};
+
 const rewriteToLocalPort = (url: string, localPort: number): string => {
   try {
     const parsed = new URL(url);
@@ -55,13 +69,24 @@ const rewriteToLocalPort = (url: string, localPort: number): string => {
   }
 };
 
+/** Thrown when a remote dev server exists but could not be reached from here. */
+export class DevTunnelUnavailableError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = 'DevTunnelUnavailableError';
+  }
+}
+
 /**
  * Returns the URL the browser view should actually load.
  *
- * A tunnel failure returns the original URL rather than throwing: the page will
- * simply fail to load, which is the same outcome the user would get without
- * this mechanism, and it keeps a broken tunnel from blocking navigation to
- * URLs that need no tunnel at all.
+ * A failure to tunnel is reported rather than papered over. Loading the
+ * original loopback URL instead would not be "the same outcome without this
+ * mechanism": on a remote instance it changes which machine answers, so the
+ * user would be shown whatever happens to run on that port here — possibly a
+ * different application — under the address they asked for. The refusal is
+ * often authoritative, too: discovery unavailable, port not offered,
+ * authentication rejected. None of that should look like a page.
  */
 export const resolveBrowsableUrl = async (url: string): Promise<string> => {
   if (!url || !isDesktopRuntime() || !isLoopbackUrl(url)) return url;
@@ -69,14 +94,8 @@ export const resolveBrowsableUrl = async (url: string): Promise<string> => {
   const baseUrl = getRuntimeApiBaseUrl();
   if (!isRemoteRuntime(baseUrl)) return url;
 
-  let port = 0;
-  try {
-    const parsed = new URL(url);
-    port = Number.parseInt(parsed.port || (parsed.protocol === 'https:' ? '443' : '80'), 10);
-  } catch {
-    return url;
-  }
-  if (!Number.isInteger(port) || port <= 0) return url;
+  const port = loopbackPort(url);
+  if (!port) return url;
 
   const key = `${baseUrl}|${port}`;
   const cached = localPortByTarget.get(key);
@@ -96,7 +115,9 @@ export const resolveBrowsableUrl = async (url: string): Promise<string> => {
       clientToken: getRuntimeBearerTokenSync(),
       requestHeaders: getRuntimeExtraHeadersSync(),
     });
-    if (!result || !Number.isInteger(result.localPort) || result.localPort <= 0) return url;
+    if (!result || !Number.isInteger(result.localPort) || result.localPort <= 0) {
+      throw new DevTunnelUnavailableError(url);
+    }
     localPortByTarget.set(key, result.localPort);
     try {
       originByLocalPort.set(result.localPort, new URL(url).origin);
@@ -104,8 +125,9 @@ export const resolveBrowsableUrl = async (url: string): Promise<string> => {
       // Unparseable input never reaches here; nothing to record.
     }
     return rewriteToLocalPort(url, result.localPort);
-  } catch {
-    return url;
+  } catch (error) {
+    if (error instanceof DevTunnelUnavailableError) throw error;
+    throw new DevTunnelUnavailableError(url);
   }
 };
 
@@ -125,13 +147,8 @@ export const resolveBrowsableUrl = async (url: string): Promise<string> => {
 export const shouldTunnelLoopbackUrl = (url: string): boolean => {
   if (!url || !isDesktopRuntime() || !isLoopbackUrl(url)) return false;
   if (!isRemoteRuntime(getRuntimeApiBaseUrl())) return false;
-  try {
-    const parsed = new URL(url);
-    const port = Number.parseInt(parsed.port || '0', 10);
-    return !originByLocalPort.has(port);
-  } catch {
-    return false;
-  }
+  const port = loopbackPort(url);
+  return port > 0 && !originByLocalPort.has(port);
 };
 
 /**
