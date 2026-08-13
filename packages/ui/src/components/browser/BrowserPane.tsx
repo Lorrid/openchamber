@@ -669,9 +669,13 @@ const WebviewBrowser: React.FC<BrowserPaneProps> = ({ initialUrl, directory, tab
         ) : null}
         {failed ? (
           <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 bg-background p-6 text-center">
-            <span className="typography-ui-header text-foreground">{t('contextPanel.browser.loadFailed')}</span>
+            <span className="typography-ui-header text-foreground">
+              {failed.crashed ? t('contextPanel.browser.crashed') : t('contextPanel.browser.loadFailed')}
+            </span>
             <span className="typography-micro text-muted-foreground">
-              {failed.description || t('contextPanel.browser.loadFailedUnknown')}
+              {failed.crashed
+                ? t('contextPanel.browser.crashedHint')
+                : failed.description || t('contextPanel.browser.loadFailedUnknown')}
             </span>
           </div>
         ) : null}

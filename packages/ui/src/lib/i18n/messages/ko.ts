@@ -1223,6 +1223,8 @@ export const dict: Record<I18nKey, string> = {
   'contextPanel.browser.waitingForServer': '개발 서버를 기다리는 중',
   'contextPanel.browser.waitingForServerHint': '아직 연결을 받지 않습니다. 준비되는 대로 이 페이지를 불러옵니다.',
   'contextPanel.browser.loadFailedUnknown': '페이지에 접근할 수 없습니다.',
+  'contextPanel.browser.crashed': '이 페이지가 응답하지 않습니다',
+  'contextPanel.browser.crashedHint': '페이지가 반복해서 중단되었습니다. 다시 시도하려면 새로 고치세요.',
   'contextPanel.browser.devServers.title': '실행 중인 개발 서버',
   'projectActions.toast.multipleServers': '여러 서버가 시작되었습니다. 브라우저 패널에서 선택하세요',
   'contextPanel.browser.devServers.justStarted': '방금 시작됨',

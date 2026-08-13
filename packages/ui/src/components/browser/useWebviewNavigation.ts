@@ -1,6 +1,11 @@
 import React from 'react';
 
 import { IDLE_NAV_STATUS, type BrowserNavStatus } from '@/lib/browser/contract';
+import {
+  INITIAL_CRASH_RECOVERY_STATE,
+  planCrashRecovery,
+  type CrashRecoveryState,
+} from '@/lib/browser/crashRecovery';
 
 /**
  * Translates `<webview>` lifecycle events into a single navigation status.
@@ -22,6 +27,10 @@ import { IDLE_NAV_STATUS, type BrowserNavStatus } from '@/lib/browser/contract';
  * `<webview>` puts its event payload directly on the event object rather than
  * under `detail`, so reading `detail` yields a failure with no code and no
  * description — an error screen that says nothing. Both shapes are read here.
+ *
+ * A lost renderer is handled here too. It is reported by neither of the above:
+ * the page simply stops existing, and the panel would otherwise stay blank with
+ * no indication that anything happened.
  */
 
 /** Chromium's code for "this navigation was replaced by another one". */
@@ -74,6 +83,10 @@ export const useWebviewNavigation = (
 
   const urlChangeRef = React.useRef(onUrlChange);
   urlChangeRef.current = onUrlChange;
+
+  // Survives re-attaches so a view that keeps crashing cannot restart its own
+  // budget by being remounted.
+  const crashStateRef = React.useRef<CrashRecoveryState>(INITIAL_CRASH_RECOVERY_STATE);
 
   React.useEffect(() => {
     if (!webview) return;
@@ -153,12 +166,38 @@ export const useWebviewNavigation = (
       });
     };
 
+    let recoveryTimer: ReturnType<typeof setTimeout> | null = null;
+
+    const onCrashed = () => {
+      const target = readCurrentUrl();
+      const plan = planCrashRecovery(crashStateRef.current, Date.now());
+      if (!plan) {
+        // Out of attempts: say what happened rather than reload again. The
+        // toolbar's own reload stays available, which is the user's call.
+        setStatus({ kind: 'failed', url: target, code: 0, description: '', crashed: true });
+        return;
+      }
+      crashStateRef.current = plan.state;
+      setStatus({ kind: 'loading', url: target });
+      recoveryTimer = setTimeout(() => {
+        recoveryTimer = null;
+        try {
+          webview.reload();
+        } catch {
+          setStatus({ kind: 'failed', url: target, code: 0, description: '', crashed: true });
+        }
+      }, plan.delayMs);
+    };
+
     webview.addEventListener('did-start-loading', onStartLoading);
     webview.addEventListener('did-stop-loading', onStopLoading);
     webview.addEventListener('did-navigate', onNavigate);
     webview.addEventListener('did-navigate-in-page', onNavigate);
     webview.addEventListener('page-title-updated', onTitleUpdated);
     webview.addEventListener('did-fail-load', onFailLoad);
+    // Electron renamed this event; older builds still emit only the old name.
+    webview.addEventListener('render-process-gone', onCrashed);
+    webview.addEventListener('crashed', onCrashed);
 
     // The webview may already be settled by the time this effect runs. Only
     // treat it as settled when a page is actually loaded: a freshly created
@@ -172,6 +211,9 @@ export const useWebviewNavigation = (
     }
 
     return () => {
+      if (recoveryTimer !== null) clearTimeout(recoveryTimer);
+      webview.removeEventListener('render-process-gone', onCrashed);
+      webview.removeEventListener('crashed', onCrashed);
       webview.removeEventListener('did-start-loading', onStartLoading);
       webview.removeEventListener('did-stop-loading', onStopLoading);
       webview.removeEventListener('did-navigate', onNavigate);

@@ -1219,6 +1219,8 @@ export const dict: Record<I18nKey, string> = {
   'contextPanel.browser.waitingForServer': '開発サーバーを待っています',
   'contextPanel.browser.waitingForServerHint': 'まだ接続を受け付けていません。受け付け次第このページを読み込みます。',
   'contextPanel.browser.loadFailedUnknown': 'ページに到達できませんでした。',
+  'contextPanel.browser.crashed': 'このページは応答しなくなりました',
+  'contextPanel.browser.crashedHint': 'ページが繰り返しクラッシュしました。再読み込みして、もう一度お試しください。',
   'contextPanel.browser.devServers.title': '実行中の開発サーバー',
   'projectActions.toast.multipleServers': '複数のサーバーが起動しました。ブラウザパネルで選んでください',
   'contextPanel.browser.devServers.justStarted': '起動したばかり',

@@ -1,3 +1,7 @@
+## [Unreleased]
+
+- Browser: the preview and browser panels are now one panel. It embeds the page directly, so a site that refuses to be embedded no longer opens here; annotating a page, letting an agent drive it, and viewing dev servers from a remote OpenChamber need the desktop app.
+
 ## [1.18.2] - 2026-08-10
 
 - **Settings:** OpenCode configuration changes now accumulate behind a single Apply & Restart action instead of restarting OpenCode after every edit; the confirmation warns when active chats will be stopped (thanks to @makeittech).

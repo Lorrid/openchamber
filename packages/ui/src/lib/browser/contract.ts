@@ -15,7 +15,14 @@ export type BrowserNavStatus =
   | { readonly kind: 'idle' }
   | { readonly kind: 'loading'; readonly url: string }
   | { readonly kind: 'ready'; readonly url: string; readonly title: string }
-  | { readonly kind: 'failed'; readonly url: string; readonly code: number; readonly description: string };
+  | {
+    readonly kind: 'failed';
+    readonly url: string;
+    readonly code: number;
+    readonly description: string;
+    /** The page's renderer died rather than the load failing; worth saying so. */
+    readonly crashed?: boolean;
+  };
 
 export const IDLE_NAV_STATUS: BrowserNavStatus = { kind: 'idle' };
 

@@ -1223,6 +1223,8 @@ export const dict: Record<I18nKey, string> = {
   'contextPanel.browser.waitingForServer': '正在等待开发服务器',
   'contextPanel.browser.waitingForServerHint': '它还没有开始接受连接。一旦可用，本页就会加载。',
   'contextPanel.browser.loadFailedUnknown': '无法访问该页面。',
+  'contextPanel.browser.crashed': '此页面已停止响应',
+  'contextPanel.browser.crashedHint': '页面反复崩溃。请重新加载后再试。',
   'contextPanel.browser.devServers.title': '正在运行的开发服务器',
   'projectActions.toast.multipleServers': '启动了多个服务器 — 请在浏览器面板中选择',
   'contextPanel.browser.devServers.justStarted': '刚刚启动',

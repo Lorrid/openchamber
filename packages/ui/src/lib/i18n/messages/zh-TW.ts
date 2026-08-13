@@ -1235,6 +1235,8 @@ export const dict: Record<I18nKey, string> = {
   'contextPanel.browser.waitingForServer': '正在等待開發伺服器',
   'contextPanel.browser.waitingForServerHint': '它尚未開始接受連線。一旦可用，本頁就會載入。',
   'contextPanel.browser.loadFailedUnknown': '無法連線到該頁面。',
+  'contextPanel.browser.crashed': '此頁面已停止回應',
+  'contextPanel.browser.crashedHint': '頁面反覆當機。請重新載入後再試。',
   'contextPanel.browser.devServers.title': '執行中的開發伺服器',
   'projectActions.toast.multipleServers': '啟動了多個伺服器 — 請在瀏覽器面板中選擇',
   'contextPanel.browser.devServers.justStarted': '剛剛啟動',

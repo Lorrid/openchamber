@@ -4,6 +4,13 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+- **Browser panel:** the preview and browser panels are now one panel backed by a real browser view on the desktop app. Pages that previously refused to load because they were being rewritten now open normally, logins and cookies persist between sessions, and developer tools are available. Dev servers are listed from what is actually listening on the machine, so a server is offered no matter how it was started.
+- **Agent browser control:** agents can now open a page in the browser panel and work with it — read what is on screen, click, type, scroll, look at how an element renders, and switch between mobile, tablet and desktop layouts — so they can check their own work instead of describing what they expect. Available as a separate OpenChamber Web tool that can be turned off on its own.
+- Browser: point at an element or drag a region, write a comment, and send it to chat together with a screenshot of what you marked. Freehand drawing is available for anything a single element does not cover.
+- Browser: the toolbar adds a hard reload, page zoom, clearing cookies and cached data for the panel only, a device bar with common phone, tablet and desktop sizes, and a light/dark switch that applies to the page rather than the app.
+- Browser: opening a dev server that is still starting now waits for it and loads as soon as it answers, instead of showing a connection error you have to retry by hand.
+- Browser: when OpenChamber runs on another machine, the desktop app opens its dev servers through a local port, so pages load with working hot reload and developer tools. In a web browser tab, only dev servers on your own machine can be opened.
+- Settings: a new OpenChamber Tools section collects the tools agents are given; the agent control tool and the OpenChamber Web tool can each be turned on or off there.
 - Remote access: pairing QR codes created while the app is open through a public domain (for example behind a reverse proxy) now include that domain as a connection address, so paired phones can reach the server over it instead of relying only on the local network address or the relay.
 - Usage: quota limits enabled for display now refresh every three minutes on desktop, mobile, and VS Code, with a manual refresh action available at any time.
 

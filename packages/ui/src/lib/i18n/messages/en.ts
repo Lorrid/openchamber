@@ -1222,6 +1222,8 @@ export const dict = {
   'contextPanel.browser.waitingForServer': 'Waiting for the dev server',
   'contextPanel.browser.waitingForServerHint': 'It is not accepting connections yet. This page will load as soon as it does.',
   'contextPanel.browser.loadFailedUnknown': 'The page could not be reached.',
+  'contextPanel.browser.crashed': 'This page stopped responding',
+  'contextPanel.browser.crashedHint': 'The page crashed repeatedly. Reload to try again.',
   'contextPanel.browser.devServers.title': 'Running dev servers',
   'projectActions.toast.multipleServers': 'Several servers started — pick one in the browser panel',
   'contextPanel.browser.devServers.justStarted': 'Just started',

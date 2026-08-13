@@ -1223,6 +1223,8 @@ export const dict: Record<I18nKey, string> = {
   "contextPanel.browser.waitingForServer": "Aguardando o servidor de desenvolvimento",
   "contextPanel.browser.waitingForServerHint": "Ele ainda não aceita conexões. A página carregará assim que aceitar.",
   "contextPanel.browser.loadFailedUnknown": "Não foi possível acessar a página.",
+  "contextPanel.browser.crashed": "Esta página parou de responder",
+  "contextPanel.browser.crashedHint": "A página falhou várias vezes seguidas. Recarregue para tentar de novo.",
   "contextPanel.browser.devServers.title": "Servidores de desenvolvimento em execução",
   "projectActions.toast.multipleServers": "Vários servidores iniciaram — escolha um no painel do navegador",
   "contextPanel.browser.devServers.justStarted": "Recém-iniciados",
