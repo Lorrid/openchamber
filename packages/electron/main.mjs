@@ -1129,6 +1129,46 @@ const injectRuntimeConfigIntoHtml = (html) => {
   return `${initScript}${html}`;
 };
 
+/**
+ * The browser panel's own session, kept separate from OpenChamber's.
+ *
+ * Every page the user opens in the panel shares this partition, which is what
+ * lets a dev-server login persist between sessions without touching the app's
+ * own storage.
+ */
+const BROWSER_PANEL_PARTITION = 'persist:openchamber-browser';
+
+/**
+ * Denies device and location access to pages shown in the browser panel.
+ *
+ * Electron grants permission requests by default when no handler is set. The
+ * panel loads whatever address the user types, so that default would hand a
+ * page the camera, the microphone, or the user's location without anything
+ * being asked or shown — a browser people would not tolerate.
+ *
+ * This denies rather than prompts: a prompt is the right end state, but a
+ * silent grant is the one outcome that must not stay. Denials are logged so a
+ * page that legitimately needs something is diagnosable rather than mysterious.
+ */
+const hardenBrowserPanelSession = () => {
+  const panelSession = session.fromPartition(BROWSER_PANEL_PARTITION);
+
+  panelSession.setPermissionRequestHandler((_contents, permission, callback, details) => {
+    log.info('[electron] browser panel denied a permission request', {
+      permission,
+      origin: details?.requestingUrl || '',
+    });
+    callback(false);
+  });
+
+  // Asked before some features even request; answering here keeps a page from
+  // reporting a capability it would then be denied.
+  panelSession.setPermissionCheckHandler(() => false);
+
+  // Serial, HID and USB device pickers.
+  panelSession.setDevicePermissionHandler(() => false);
+};
+
 const registerPackagedUiProtocol = () => {
   if (!shouldUsePackagedUi()) return;
   protocol.handle(UI_PROTOCOL, async (request) => {
@@ -3830,7 +3870,7 @@ const handleInvoke = async (browserWindow, command, args = {}) => {
     // touch OpenChamber's session or any other window's storage.
     case 'desktop_browser_clear_data': {
       const partition = typeof args.partition === 'string' ? args.partition.trim() : '';
-      if (!partition.startsWith('persist:openchamber-browser')) {
+      if (!partition.startsWith(BROWSER_PANEL_PARTITION)) {
         throw new Error('Unsupported browser partition');
       }
       const storages = [];
@@ -5263,6 +5303,7 @@ app.whenReady().then(async () => {
   });
   nativeTheme.themeSource = readThemeSource();
   registerPackagedUiProtocol();
+  hardenBrowserPanelSession();
   setupAutoUpdater();
 
   if (process.platform === 'darwin') {

@@ -151,6 +151,11 @@ Use an explicit override when testing a different OpenCode CLI build or when a u
 - SSH uses OpenSSH ControlMaster on macOS/Linux. Windows uses independent hidden OpenSSH processes for setup commands and each long-lived forward because Win32 OpenSSH does not support ControlMaster reliably.
 - Tunnel lifecycle integration through the web server runtime.
 - Auto-update checks, downloads, and restart/apply flow.
+- The browser panel's own session (`persist:openchamber-browser`): its storage is
+  cleared only through the scoped clear-data command, and camera, microphone,
+  location, and device-picker requests from pages shown there are denied. Electron
+  grants permission requests by default when no handler is set, and the panel
+  loads whatever address the user types.
 
 ## IPC Pattern
 
