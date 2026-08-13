@@ -9,6 +9,16 @@ El panel del navegador abre cualquier página justo al lado del chat. Ábrelo co
 
 En la aplicación de escritorio es un navegador de verdad: tus sesiones se mantienen, la recarga en caliente funciona y las herramientas de desarrollo están a un clic. En una pestaña del navegador el panel puede mostrar una página, pero no mirar dentro de ella: las herramientas de anotación de abajo son solo de escritorio.
 
+Las páginas que abras aquí no pueden usar tu cámara, tu micrófono ni tu ubicación: esas peticiones se rechazan.
+
+## La barra de herramientas
+
+La barra de direcciones recuerda las páginas que has abierto en este proyecto y las ofrece mientras escribes, buscando en parte de la dirección o del título de la página. Las flechas recorren la lista, Enter abre la entrada resaltada y el botón de una fila la quita.
+
+Al lado está **Recargar**, junto con una **recarga forzada** que ignora la caché cuando un cambio se niega a aparecer, y los controles de zoom, que escalan solo la página.
+
+**Borrar cookies** y **Borrar datos en caché** afectan únicamente a este panel. Tu sesión de OpenChamber y cualquier otra ventana quedan intactas.
+
 ## Anotar una página
 
 Pulsa **Anotar** y aparecerá una barra sobre la página con tres herramientas:
@@ -23,11 +33,15 @@ La página en sí nunca se modifica: anotar solo marca lo que ya está ahí. `Es
 
 ## Dejar que el agente maneje
 
-El agente puede usar el panel del navegador por su cuenta — abrir una página, leer lo que hay en ella, hacer clic, escribir y desplazarse — para comprobar su propio trabajo en lugar de pedírtelo a ti. Lo verás ocurrir en el panel.
+El agente puede usar el panel del navegador por su cuenta — abrir una página, leer lo que hay en ella, hacer clic, escribir, desplazarse y alternar entre diseño móvil, de tableta y de escritorio — para comprobar su propio trabajo en lugar de pedírtelo a ti. Lo verás ocurrir en el panel.
 
 El agente no puede ejecutar código arbitrario en la página. El navegador conserva tus sesiones reales, así que se limita a las acciones anteriores.
 
-Forma parte de la herramienta de agente de OpenChamber, que puedes desactivar en **Ajustes → General → OpenCode CLI**.
+También puede guardar una imagen de lo que está viendo en `.openchamber/screenshots/` de tu proyecto y mostrártela en su respuesta. Eso es lo que hace posible un antes y después, y el archivo se queda ahí para adjuntarlo a un pull request.
+
+Las acciones del navegador son la **herramienta OpenChamber Web**, que se activa y desactiva por separado en **Ajustes → General → Herramientas de OpenChamber**.
+
+Esto necesita la aplicación de escritorio: una página mostrada en una pestaña del navegador no se puede controlar.
 
 ## Herramientas de desarrollo
 
@@ -36,3 +50,4 @@ Pulsa el botón de terminal de la barra para abrir las herramientas de desarroll
 ## Relacionado
 
 - [Vista previa y servidores de desarrollo](/preview/) — abrir tu aplicación en marcha, también en una máquina remota
+- [Herramienta de control para agentes](/es/agent-control-tool/) — sesiones, worktrees y tareas programadas desde el chat

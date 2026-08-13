@@ -9,6 +9,16 @@ The browser panel opens any page right next to your chat. Open it from the globe
 
 On the desktop app it is a real browser: your logins persist, hot reload works, and developer tools are one click away. In a web browser tab the panel can still display a page, but it cannot look inside one — the annotation tools below are desktop-only.
 
+Pages opened here cannot use your camera, microphone, or location: those requests are refused.
+
+## The toolbar
+
+The address bar remembers pages you have opened in this project and offers them as you type, matching part of an address or a page title. Arrow keys move through the list, Enter opens the highlighted entry, and the button on a row removes it.
+
+**Reload** is next to it, along with a **hard reload** that ignores the cache when a change refuses to show up, and zoom controls that scale the page only.
+
+**Clear cookies** and **Clear cached data** apply to this panel alone. Your OpenChamber session and any other window are untouched.
+
 ## Annotate a page
 
 Press **Annotate** and a toolbar appears over the page with three tools:
@@ -27,7 +37,11 @@ The agent can use the browser panel itself — opening a page, reading what is o
 
 The agent cannot run arbitrary code in the page. The browser keeps your real logins, so it is limited to the specific actions above.
 
-This is part of the OpenChamber agent tool, which you can turn off in **Settings → General → OpenCode CLI**.
+It can also save a picture of what it is looking at into `.openchamber/screenshots/` in your project and show it to you in its reply. That is what makes a before-and-after possible, and the file stays there afterwards to attach to a pull request.
+
+The browser actions are the **OpenChamber Web tool**, which can be turned on and off on its own in **Settings → General → OpenChamber Tools**.
+
+This needs the desktop app: a page shown in a web browser tab cannot be driven.
 
 ## Size and appearance
 
@@ -46,3 +60,4 @@ Press the terminal button in the toolbar to open Chromium's own developer tools 
 ## Related
 
 - [Preview & Dev Servers](/preview/) — opening your running app, including on a remote machine
+- [Agent Control Tool](/agent-control-tool/) — sessions, worktrees and scheduled tasks from chat
