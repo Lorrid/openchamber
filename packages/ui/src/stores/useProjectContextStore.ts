@@ -12,19 +12,25 @@
 import { create } from 'zustand';
 
 import {
+  createProjectNote,
   createProjectPlan,
+  deleteProjectNote,
   deleteProjectPlan,
   fetchProjectContext,
   resolveProjectContextId,
-  saveProjectNotesAndTodos,
+  saveProjectTodos,
+  setProjectPlanPinned,
+  updateProjectNote,
   updateProjectPlan,
+  type ProjectNote,
+  type ProjectNoteSource,
   type ProjectPlanLink,
   type ProjectRef,
   type ProjectTodoItem,
 } from '@/lib/projectContextApi';
 
 interface ProjectContextEntry {
-  notes: string;
+  notes: ProjectNote[];
   todos: ProjectTodoItem[];
   plans: ProjectPlanLink[];
   /** True once an authoritative load has succeeded at least once. */
@@ -35,9 +41,11 @@ interface ProjectContextEntry {
 }
 
 interface MutationFlags {
-  /** A notes/todos write is in flight; a slower load must not overwrite it. */
-  notesTodos: boolean;
-  /** A plan create/delete is in flight; same rule. */
+  /** A note write is in flight; a slower load must not overwrite the list. */
+  notes: boolean;
+  /** A todo write is in flight; same rule. */
+  todos: boolean;
+  /** A plan write is in flight; same rule. */
   plans: boolean;
 }
 
@@ -48,10 +56,17 @@ interface ProjectContextState {
 interface ProjectContextActions {
   getEntry: (project: ProjectRef | null | undefined) => ProjectContextEntry;
   load: (project: ProjectRef, options?: { force?: boolean }) => Promise<void>;
-  saveNotesAndTodos: (project: ProjectRef, value: { notes: string; todos: ProjectTodoItem[] }) => Promise<boolean>;
-  appendNotes: (project: ProjectRef, addition: string) => Promise<boolean>;
+  saveTodos: (project: ProjectRef, todos: ProjectTodoItem[]) => Promise<boolean>;
+  createNote: (
+    project: ProjectRef,
+    value: { body: string; source?: ProjectNoteSource; origin?: { sessionId: string; messageId?: string } },
+  ) => Promise<ProjectNote | null>;
+  saveNoteBody: (project: ProjectRef, noteId: string, body: string) => Promise<boolean>;
+  setNotePinned: (project: ProjectRef, noteId: string, pinned: boolean) => Promise<boolean>;
+  deleteNote: (project: ProjectRef, noteId: string) => Promise<boolean>;
   createPlan: (project: ProjectRef, value: { title: string; body: string }) => Promise<ProjectPlanLink | null>;
   savePlan: (project: ProjectRef, planId: string, raw: string) => Promise<boolean>;
+  setPlanPinned: (project: ProjectRef, planId: string, pinned: boolean) => Promise<boolean>;
   deletePlan: (project: ProjectRef, planId: string) => Promise<boolean>;
   reset: () => void;
 }
@@ -59,7 +74,7 @@ interface ProjectContextActions {
 type ProjectContextStore = ProjectContextState & ProjectContextActions;
 
 export const EMPTY_PROJECT_CONTEXT_ENTRY: ProjectContextEntry = {
-  notes: '',
+  notes: [],
   todos: [],
   plans: [],
   loaded: false,
@@ -80,7 +95,7 @@ const mutationFlags = new Map<string, MutationFlags>();
 const flagsFor = (projectId: string): MutationFlags => {
   const existing = mutationFlags.get(projectId);
   if (existing) return existing;
-  const created: MutationFlags = { notesTodos: false, plans: false };
+  const created: MutationFlags = { notes: false, todos: false, plans: false };
   mutationFlags.set(projectId, created);
   return created;
 };
@@ -148,8 +163,8 @@ export const useProjectContextStore = create<ProjectContextStore>((set, get) => 
         // A mutation that started after this load began is newer than the
         // snapshot; keep the local value for that field group only.
         patchEntry(projectId, {
-          notes: flags.notesTodos ? committed.notes : data.notes,
-          todos: flags.notesTodos ? committed.todos : data.todos,
+          notes: flags.notes ? committed.notes : data.notes,
+          todos: flags.todos ? committed.todos : data.todos,
           plans: flags.plans ? committed.plans : data.plans,
           loaded: true,
           loading: false,
@@ -164,64 +179,152 @@ export const useProjectContextStore = create<ProjectContextStore>((set, get) => 
     },
 
     /**
-     * Optimistically apply notes/todos, then persist.
+     * Optimistically apply todos, then persist.
      *
-     * On failure the previous value is restored, so the panel never shows a
-     * value that is not on disk without also showing the error.
+     * On failure the previous list is restored, so the panel never shows a
+     * state that is not on disk without also showing the error.
      */
-    saveNotesAndTodos: async (project, value) => {
+    saveTodos: async (project, todos) => {
       const projectId = resolveProjectContextId(project);
       if (!projectId) return false;
 
-      const previous = currentEntry(projectId);
-      patchEntry(projectId, { notes: value.notes, todos: value.todos, error: null });
+      const previous = currentEntry(projectId).todos;
+      patchEntry(projectId, { todos, error: null });
 
       const flags = flagsFor(projectId);
-      flags.notesTodos = true;
+      flags.todos = true;
 
       try {
-        const committed = await enqueueWrite(projectId, () => saveProjectNotesAndTodos(project, value));
-        patchEntry(projectId, { notes: committed.notes, todos: committed.todos, loaded: true });
+        const committed = await enqueueWrite(projectId, () => saveProjectTodos(project, todos));
+        patchEntry(projectId, { todos: committed.todos, loaded: true });
         return true;
       } catch (error) {
         patchEntry(projectId, {
-          notes: previous.notes,
-          todos: previous.todos,
-          error: errorMessage(error, 'Failed to save project notes'),
+          todos: previous,
+          error: errorMessage(error, 'Failed to save project todos'),
         });
         return false;
       } finally {
-        flags.notesTodos = false;
+        flags.todos = false;
       }
     },
 
     /**
-     * Append a line to notes without clobbering a concurrent editor.
+     * Create a note. Not optimistic: the id and timestamps come from the
+     * server, and a placeholder row that cannot be edited or pinned is worse
+     * than a brief wait.
      *
-     * Reads the freshest authoritative value first: the caller may be a chat
-     * action running while the panel is not even mounted, so the in-memory
-     * copy can be stale or absent.
-     *
-     * Joins with a single newline, matching how distilled chat insights have
-     * always been stacked in the notes field.
+     * The caller may be a chat action running while the panel is not mounted,
+     * so the committed list is adopted wholesale rather than spliced into a
+     * possibly-empty local one.
      */
-    appendNotes: async (project, addition) => {
+    createNote: async (project, value) => {
       const projectId = resolveProjectContextId(project);
-      const trimmed = addition.trim();
+      const body = value.body.trim();
+      if (!projectId || !body) return null;
+
+      const flags = flagsFor(projectId);
+      flags.notes = true;
+
+      try {
+        const { note, context } = await enqueueWrite(
+          projectId,
+          () => createProjectNote(project, { ...value, body }),
+        );
+        patchEntry(projectId, { notes: context.notes, loaded: true, error: null });
+        return note;
+      } catch (error) {
+        patchEntry(projectId, { error: errorMessage(error, 'Failed to create note') });
+        return null;
+      } finally {
+        flags.notes = false;
+      }
+    },
+
+    saveNoteBody: async (project, noteId, body) => {
+      const projectId = resolveProjectContextId(project);
+      const trimmed = body.trim();
       if (!projectId || !trimmed) return false;
 
-      const entry = currentEntry(projectId);
-      if (!entry.loaded) {
-        await get().load(project);
-        if (currentEntry(projectId).error) return false;
-      }
-
-      const existing = currentEntry(projectId).notes;
-      const combined = existing.trim() ? `${existing.trimEnd()}\n${trimmed}` : trimmed;
-      return get().saveNotesAndTodos(project, {
-        notes: combined,
-        todos: currentEntry(projectId).todos,
+      const previous = currentEntry(projectId).notes;
+      patchEntry(projectId, {
+        notes: previous.map((note) => (note.id === noteId ? { ...note, body: trimmed } : note)),
+        error: null,
       });
+
+      const flags = flagsFor(projectId);
+      flags.notes = true;
+
+      try {
+        const saved = await enqueueWrite(projectId, () => updateProjectNote(project, noteId, { body: trimmed }));
+        if (!saved) {
+          patchEntry(projectId, { notes: currentEntry(projectId).notes.filter((note) => note.id !== noteId) });
+          return false;
+        }
+        patchEntry(projectId, {
+          notes: currentEntry(projectId).notes.map((note) => (note.id === noteId ? saved : note)),
+        });
+        return true;
+      } catch (error) {
+        patchEntry(projectId, { notes: previous, error: errorMessage(error, 'Failed to save note') });
+        return false;
+      } finally {
+        flags.notes = false;
+      }
+    },
+
+    /** Sends `pinned` alone, so it cannot roll back a concurrent body edit. */
+    setNotePinned: async (project, noteId, pinned) => {
+      const projectId = resolveProjectContextId(project);
+      if (!projectId) return false;
+
+      const previous = currentEntry(projectId).notes;
+      patchEntry(projectId, {
+        notes: previous.map((note) => (note.id === noteId ? { ...note, pinned } : note)),
+        error: null,
+      });
+
+      const flags = flagsFor(projectId);
+      flags.notes = true;
+
+      try {
+        const saved = await enqueueWrite(projectId, () => updateProjectNote(project, noteId, { pinned }));
+        if (!saved) {
+          patchEntry(projectId, { notes: currentEntry(projectId).notes.filter((note) => note.id !== noteId) });
+          return false;
+        }
+        patchEntry(projectId, {
+          notes: currentEntry(projectId).notes.map((note) => (note.id === noteId ? saved : note)),
+        });
+        return true;
+      } catch (error) {
+        patchEntry(projectId, { notes: previous, error: errorMessage(error, 'Failed to save note') });
+        return false;
+      } finally {
+        flags.notes = false;
+      }
+    },
+
+    deleteNote: async (project, noteId) => {
+      const projectId = resolveProjectContextId(project);
+      if (!projectId) return false;
+
+      const previous = currentEntry(projectId).notes;
+      patchEntry(projectId, { notes: previous.filter((note) => note.id !== noteId), error: null });
+
+      const flags = flagsFor(projectId);
+      flags.notes = true;
+
+      try {
+        const context = await enqueueWrite(projectId, () => deleteProjectNote(project, noteId));
+        patchEntry(projectId, { notes: context.notes });
+        return true;
+      } catch (error) {
+        patchEntry(projectId, { notes: previous, error: errorMessage(error, 'Failed to delete note') });
+        return false;
+      } finally {
+        flags.notes = false;
+      }
     },
 
     /**
@@ -275,6 +378,37 @@ export const useProjectContextStore = create<ProjectContextStore>((set, get) => 
         return true;
       } catch (error) {
         patchEntry(projectId, { error: errorMessage(error, 'Failed to save plan') });
+        return false;
+      } finally {
+        flags.plans = false;
+      }
+    },
+
+    setPlanPinned: async (project, planId, pinned) => {
+      const projectId = resolveProjectContextId(project);
+      if (!projectId) return false;
+
+      const previous = currentEntry(projectId).plans;
+      patchEntry(projectId, {
+        plans: previous.map((plan) => (plan.id === planId ? { ...plan, pinned } : plan)),
+        error: null,
+      });
+
+      const flags = flagsFor(projectId);
+      flags.plans = true;
+
+      try {
+        const saved = await enqueueWrite(projectId, () => setProjectPlanPinned(project, planId, pinned));
+        if (!saved) {
+          patchEntry(projectId, { plans: currentEntry(projectId).plans.filter((plan) => plan.id !== planId) });
+          return false;
+        }
+        patchEntry(projectId, {
+          plans: currentEntry(projectId).plans.map((plan) => (plan.id === planId ? saved : plan)),
+        });
+        return true;
+      } catch (error) {
+        patchEntry(projectId, { plans: previous, error: errorMessage(error, 'Failed to update plan') });
         return false;
       } finally {
         flags.plans = false;

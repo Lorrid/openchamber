@@ -1,43 +1,94 @@
 import { beforeEach, describe, expect, mock, test } from 'bun:test';
 
-interface ContextPayload {
-  notes: string;
-  todos: { id: string; text: string; completed: boolean; createdAt: number }[];
-  plans: { id: string; file: string; title: string; createdAt: number }[];
+interface NotePayload {
+  id: string;
+  body: string;
+  createdAt: number;
+  updatedAt: number;
+  source: 'manual' | 'selection' | 'agent';
+  pinned: boolean;
 }
 
-const emptyPayload = (): ContextPayload => ({ notes: '', todos: [], plans: [] });
+interface ContextPayload {
+  notes: NotePayload[];
+  todos: { id: string; text: string; completed: boolean; createdAt: number }[];
+  plans: { id: string; file: string; title: string; createdAt: number; pinned: boolean }[];
+}
+
+const emptyPayload = (): ContextPayload => ({ notes: [], todos: [], plans: [] });
+
+const note = (overrides: Partial<NotePayload> = {}): NotePayload => ({
+  id: 'n1',
+  body: 'body',
+  createdAt: 1,
+  updatedAt: 1,
+  source: 'manual',
+  pinned: false,
+  ...overrides,
+});
+
+const planLink = (overrides: Partial<ContextPayload['plans'][number]> = {}) => ({
+  id: 'p1',
+  file: 'a.md',
+  title: 'A',
+  createdAt: 1,
+  pinned: false,
+  ...overrides,
+});
 
 // The UI tsconfig does not load bun's test globals, so these tests follow the
 // local precedent of swapping plain handlers instead of using mock helpers.
 const handlers = {
   fetch: async (): Promise<ContextPayload> => emptyPayload(),
-  save: async (_project: unknown, value: { notes: string; todos: ContextPayload['todos'] }): Promise<ContextPayload> => ({
-    notes: value.notes,
-    todos: value.todos,
+  saveTodos: async (todos: ContextPayload['todos']): Promise<ContextPayload> => ({
+    notes: [],
+    todos,
     plans: [],
   }),
+  createNote: async (): Promise<{ note: NotePayload; context: ContextPayload }> => ({
+    note: note(),
+    context: { notes: [note()], todos: [], plans: [] },
+  }),
+  updateNote: async (): Promise<NotePayload | null> => note(),
+  deleteNote: async (): Promise<ContextPayload> => emptyPayload(),
   create: async (): Promise<{ plan: ContextPayload['plans'][number]; context: ContextPayload }> => ({
-    plan: { id: 'p1', file: 'a.md', title: 'A', createdAt: 1 },
-    context: { notes: '', todos: [], plans: [{ id: 'p1', file: 'a.md', title: 'A', createdAt: 1 }] },
+    plan: planLink(),
+    context: { notes: [], todos: [], plans: [planLink()] },
   }),
   update: async (): Promise<{ plan: ContextPayload['plans'][number]; raw: string } | null> => ({
-    plan: { id: 'p1', file: 'a.md', title: 'A', createdAt: 1 },
+    plan: planLink(),
     raw: '# A',
   }),
+  pinPlan: async (): Promise<ContextPayload['plans'][number] | null> => planLink({ pinned: true }),
   remove: async (): Promise<ContextPayload> => emptyPayload(),
 };
 
-const calls = { fetch: 0, save: 0, create: 0, update: 0, remove: 0 };
+const calls = { fetch: 0, saveTodos: 0, createNote: 0, updateNote: 0, deleteNote: 0, create: 0, update: 0, pinPlan: 0, remove: 0 };
 
 mock.module('@/lib/projectContextApi', () => ({
   fetchProjectContext: () => {
     calls.fetch += 1;
     return handlers.fetch();
   },
-  saveProjectNotesAndTodos: (project: unknown, value: { notes: string; todos: ContextPayload['todos'] }) => {
-    calls.save += 1;
-    return handlers.save(project, value);
+  saveProjectTodos: (_project: unknown, todos: ContextPayload['todos']) => {
+    calls.saveTodos += 1;
+    return handlers.saveTodos(todos);
+  },
+  createProjectNote: () => {
+    calls.createNote += 1;
+    return handlers.createNote();
+  },
+  updateProjectNote: () => {
+    calls.updateNote += 1;
+    return handlers.updateNote();
+  },
+  deleteProjectNote: () => {
+    calls.deleteNote += 1;
+    return handlers.deleteNote();
+  },
+  setProjectPlanPinned: () => {
+    calls.pinPlan += 1;
+    return handlers.pinPlan();
   },
   createProjectPlan: () => {
     calls.create += 1;
@@ -75,24 +126,29 @@ const failWith = (message: string) => async (): Promise<never> => {
 beforeEach(() => {
   store().reset();
   calls.fetch = 0;
-  calls.save = 0;
+  calls.saveTodos = 0;
+  calls.createNote = 0;
+  calls.updateNote = 0;
+  calls.deleteNote = 0;
   calls.create = 0;
   calls.update = 0;
+  calls.pinPlan = 0;
   calls.remove = 0;
 
   handlers.fetch = async () => emptyPayload();
-  handlers.save = async (_project, value) => ({ notes: value.notes, todos: value.todos, plans: [] });
-  handlers.create = async () => ({
-    plan: { id: 'p1', file: 'a.md', title: 'A', createdAt: 1 },
-    context: { notes: '', todos: [], plans: [{ id: 'p1', file: 'a.md', title: 'A', createdAt: 1 }] },
-  });
-  handlers.update = async () => ({ plan: { id: 'p1', file: 'a.md', title: 'A', createdAt: 1 }, raw: '# A' });
+  handlers.saveTodos = async (todos) => ({ notes: [], todos, plans: [] });
+  handlers.createNote = async () => ({ note: note(), context: { notes: [note()], todos: [], plans: [] } });
+  handlers.updateNote = async () => note();
+  handlers.deleteNote = async () => emptyPayload();
+  handlers.create = async () => ({ plan: planLink(), context: { notes: [], todos: [], plans: [planLink()] } });
+  handlers.update = async () => ({ plan: planLink(), raw: '# A' });
+  handlers.pinPlan = async () => planLink({ pinned: true });
   handlers.remove = async () => emptyPayload();
 });
 
 describe('getEntry', () => {
   test('returns a stable empty entry for an unknown project', () => {
-    expect(entry()).toEqual({ notes: '', todos: [], plans: [], loaded: false, loading: false, error: null });
+    expect(entry()).toEqual({ notes: [], todos: [], plans: [], loaded: false, loading: false, error: null });
   });
 
   test('returns the empty entry for a project without a path', () => {
@@ -103,14 +159,14 @@ describe('getEntry', () => {
 describe('load', () => {
   test('populates from the server', async () => {
     handlers.fetch = async () => ({
-      notes: 'server notes',
+      notes: [note({ body: 'server note' })],
       todos: [{ id: 't1', text: 'a', completed: false, createdAt: 1 }],
-      plans: [{ id: 'p1', file: 'a.md', title: 'A', createdAt: 1 }],
+      plans: [planLink()],
     });
 
     await store().load(PROJECT);
 
-    expect(entry().notes).toBe('server notes');
+    expect(entry().notes.map((entryNote) => entryNote.body)).toEqual(['server note']);
     expect(entry().todos).toHaveLength(1);
     expect(entry().plans).toHaveLength(1);
     expect(entry().loaded).toBe(true);
@@ -130,13 +186,13 @@ describe('load', () => {
   });
 
   test('a failed load preserves previously loaded data instead of clearing it', async () => {
-    handlers.fetch = async () => ({ notes: 'kept', todos: [], plans: [] });
+    handlers.fetch = async () => ({ notes: [note({ body: 'kept' })], todos: [], plans: [] });
     await store().load(PROJECT);
 
     handlers.fetch = failWith('offline');
     await store().load(PROJECT, { force: true });
 
-    expect(entry().notes).toBe('kept');
+    expect(entry().notes.map((entryNote) => entryNote.body)).toEqual(['kept']);
     expect(entry().loaded).toBe(true);
     expect(entry().error).toBe('offline');
   });
@@ -147,7 +203,7 @@ describe('load', () => {
     await store().load(PROJECT);
 
     expect(entry().loaded).toBe(false);
-    expect(entry().notes).toBe('');
+    expect(entry().notes).toEqual([]);
     expect(entry().error).toBe('boom');
   });
 
@@ -157,109 +213,157 @@ describe('load', () => {
   });
 });
 
-describe('saveNotesAndTodos', () => {
+describe('saveTodos', () => {
   test('applies optimistically before the request resolves', async () => {
     const gate = deferred<ContextPayload>();
-    handlers.save = () => gate.promise;
+    handlers.saveTodos = () => gate.promise;
 
-    const pending = store().saveNotesAndTodos(PROJECT, { notes: 'typed', todos: [] });
-    expect(entry().notes).toBe('typed');
+    const pending = store().saveTodos(PROJECT, [{ id: 't1', text: 'typed', completed: false, createdAt: 1 }]);
+    expect(entry().todos).toHaveLength(1);
 
-    gate.resolve({ notes: 'typed', todos: [], plans: [] });
+    gate.resolve({ notes: [], todos: [{ id: 't1', text: 'typed', completed: false, createdAt: 1 }], plans: [] });
     expect(await pending).toBe(true);
-    expect(entry().notes).toBe('typed');
+    expect(entry().todos).toHaveLength(1);
   });
 
   test('rolls back and reports the error on failure', async () => {
-    await store().saveNotesAndTodos(PROJECT, { notes: 'original', todos: [] });
-    handlers.save = failWith('disk full');
+    await store().saveTodos(PROJECT, [{ id: 't1', text: 'original', completed: false, createdAt: 1 }]);
+    handlers.saveTodos = failWith('disk full');
 
-    expect(await store().saveNotesAndTodos(PROJECT, { notes: 'doomed', todos: [] })).toBe(false);
-    expect(entry().notes).toBe('original');
+    expect(await store().saveTodos(PROJECT, [])).toBe(false);
+    expect(entry().todos.map((todo) => todo.text)).toEqual(['original']);
     expect(entry().error).toBe('disk full');
   });
 
-  test('serializes concurrent saves in call order', async () => {
+  test('serializes concurrent writes in call order', async () => {
     const order: string[] = [];
-    handlers.save = async (_project, value) => {
-      order.push(`start:${value.notes}`);
+    handlers.saveTodos = async (todos) => {
+      const label = todos[0]?.text ?? 'empty';
+      order.push(`start:${label}`);
       await new Promise((resolve) => setTimeout(resolve, 5));
-      order.push(`end:${value.notes}`);
-      return { notes: value.notes, todos: value.todos, plans: [] };
+      order.push(`end:${label}`);
+      return { notes: [], todos, plans: [] };
     };
 
     await Promise.all([
-      store().saveNotesAndTodos(PROJECT, { notes: 'first', todos: [] }),
-      store().saveNotesAndTodos(PROJECT, { notes: 'second', todos: [] }),
+      store().saveTodos(PROJECT, [{ id: '1', text: 'first', completed: false, createdAt: 1 }]),
+      store().saveTodos(PROJECT, [{ id: '2', text: 'second', completed: false, createdAt: 2 }]),
     ]);
 
     expect(order).toEqual(['start:first', 'end:first', 'start:second', 'end:second']);
-    expect(entry().notes).toBe('second');
   });
 
-  test('a load that resolves during an in-flight save does not clobber the save', async () => {
+  test('a load resolving during an in-flight write does not clobber it', async () => {
     const gate = deferred<ContextPayload>();
-    handlers.save = () => gate.promise;
-    handlers.fetch = async () => ({ notes: 'stale server value', todos: [], plans: [] });
-
-    const pendingSave = store().saveNotesAndTodos(PROJECT, { notes: 'local edit', todos: [] });
-    await store().load(PROJECT);
-
-    expect(entry().notes).toBe('local edit');
-
-    gate.resolve({ notes: 'local edit', todos: [], plans: [] });
-    await pendingSave;
-    expect(entry().notes).toBe('local edit');
-  });
-
-  test('a load during an in-flight save still applies plans it did not conflict with', async () => {
-    const gate = deferred<ContextPayload>();
-    handlers.save = () => gate.promise;
+    handlers.saveTodos = () => gate.promise;
     handlers.fetch = async () => ({
-      notes: 'stale',
-      todos: [],
-      plans: [{ id: 'p9', file: 'z.md', title: 'Z', createdAt: 9 }],
+      notes: [note({ body: 'from server' })],
+      todos: [{ id: 'stale', text: 'stale', completed: false, createdAt: 0 }],
+      plans: [],
     });
 
-    const pendingSave = store().saveNotesAndTodos(PROJECT, { notes: 'local', todos: [] });
+    const pending = store().saveTodos(PROJECT, [{ id: 'local', text: 'local', completed: false, createdAt: 1 }]);
     await store().load(PROJECT);
 
-    expect(entry().notes).toBe('local');
-    expect(entry().plans.map((plan) => plan.id)).toEqual(['p9']);
+    expect(entry().todos.map((todo) => todo.id)).toEqual(['local']);
+    // The same snapshot still delivers the fields the write did not touch.
+    expect(entry().notes.map((entryNote) => entryNote.body)).toEqual(['from server']);
 
-    gate.resolve({ notes: 'local', todos: [], plans: [] });
-    await pendingSave;
+    gate.resolve({ notes: [], todos: [{ id: 'local', text: 'local', completed: false, createdAt: 1 }], plans: [] });
+    await pending;
   });
 
   test('ignores a project without a resolvable path', async () => {
-    expect(await store().saveNotesAndTodos({ id: 'x', path: '' }, { notes: 'x', todos: [] })).toBe(false);
-    expect(calls.save).toBe(0);
+    expect(await store().saveTodos({ id: 'x', path: '' }, [])).toBe(false);
+    expect(calls.saveTodos).toBe(0);
   });
 });
 
-describe('appendNotes', () => {
-  test('loads first, then appends on a new line', async () => {
-    handlers.fetch = async () => ({ notes: 'existing', todos: [], plans: [] });
+describe('notes', () => {
+  test('createNote adopts the committed list', async () => {
+    handlers.createNote = async () => ({
+      note: note({ id: 'n9', body: 'fresh' }),
+      context: { notes: [note({ id: 'n9', body: 'fresh' })], todos: [], plans: [] },
+    });
 
-    expect(await store().appendNotes(PROJECT, 'added')).toBe(true);
-    expect(entry().notes).toBe('existing\nadded');
+    const created = await store().createNote(PROJECT, { body: 'fresh' });
+    expect(created?.id).toBe('n9');
+    expect(entry().notes.map((entryNote) => entryNote.id)).toEqual(['n9']);
   });
 
-  test('does not add a separator when there are no notes yet', async () => {
-    expect(await store().appendNotes(PROJECT, 'first note')).toBe(true);
-    expect(entry().notes).toBe('first note');
+  test('createNote refuses a whitespace-only body without calling the server', async () => {
+    expect(await store().createNote(PROJECT, { body: '   ' })).toBeNull();
+    expect(calls.createNote).toBe(0);
   });
 
-  test('ignores whitespace-only additions', async () => {
-    expect(await store().appendNotes(PROJECT, '   ')).toBe(false);
-    expect(calls.save).toBe(0);
+  test('createNote reports failure without inserting a placeholder row', async () => {
+    handlers.createNote = failWith('no space');
+
+    expect(await store().createNote(PROJECT, { body: 'x' })).toBeNull();
+    expect(entry().notes).toEqual([]);
+    expect(entry().error).toBe('no space');
   });
 
-  test('does not write when the preceding load failed', async () => {
-    handlers.fetch = failWith('offline');
+  test('saveNoteBody applies optimistically and commits the server copy', async () => {
+    await store().createNote(PROJECT, { body: 'before' });
+    handlers.updateNote = async () => note({ body: 'after', updatedAt: 9 });
 
-    expect(await store().appendNotes(PROJECT, 'lost')).toBe(false);
-    expect(calls.save).toBe(0);
+    expect(await store().saveNoteBody(PROJECT, 'n1', 'after')).toBe(true);
+    expect(entry().notes[0].body).toBe('after');
+    expect(entry().notes[0].updatedAt).toBe(9);
+  });
+
+  test('saveNoteBody rolls back on failure', async () => {
+    await store().createNote(PROJECT, { body: 'before' });
+    handlers.updateNote = failWith('read only');
+
+    expect(await store().saveNoteBody(PROJECT, 'n1', 'after')).toBe(false);
+    expect(entry().notes[0].body).toBe('body');
+    expect(entry().error).toBe('read only');
+  });
+
+  test('saveNoteBody drops a note the server reports as gone', async () => {
+    await store().createNote(PROJECT, { body: 'before' });
+    handlers.updateNote = async () => null;
+
+    expect(await store().saveNoteBody(PROJECT, 'n1', 'after')).toBe(false);
+    expect(entry().notes).toEqual([]);
+  });
+
+  test('setNotePinned applies optimistically', async () => {
+    await store().createNote(PROJECT, { body: 'x' });
+    const gate = deferred<NotePayload | null>();
+    handlers.updateNote = () => gate.promise;
+
+    const pending = store().setNotePinned(PROJECT, 'n1', true);
+    expect(entry().notes[0].pinned).toBe(true);
+
+    gate.resolve(note({ pinned: true }));
+    expect(await pending).toBe(true);
+  });
+
+  test('setNotePinned rolls back on failure', async () => {
+    await store().createNote(PROJECT, { body: 'x' });
+    handlers.updateNote = failWith('locked');
+
+    expect(await store().setNotePinned(PROJECT, 'n1', true)).toBe(false);
+    expect(entry().notes[0].pinned).toBe(false);
+  });
+
+  test('deleteNote removes optimistically and restores on failure', async () => {
+    await store().createNote(PROJECT, { body: 'x' });
+    handlers.deleteNote = failWith('busy');
+
+    expect(await store().deleteNote(PROJECT, 'n1')).toBe(false);
+    expect(entry().notes.map((entryNote) => entryNote.id)).toEqual(['n1']);
+    expect(entry().error).toBe('busy');
+  });
+
+  test('deleteNote commits the server list on success', async () => {
+    await store().createNote(PROJECT, { body: 'x' });
+
+    expect(await store().deleteNote(PROJECT, 'n1')).toBe(true);
+    expect(entry().notes).toEqual([]);
   });
 });
 
@@ -294,7 +398,7 @@ describe('plans', () => {
 
   test('savePlan folds the refreshed title back into the list', async () => {
     await store().createPlan(PROJECT, { title: 'A', body: 'x' });
-    handlers.update = async () => ({ plan: { id: 'p1', file: 'a.md', title: 'Renamed', createdAt: 1 }, raw: '# Renamed' });
+    handlers.update = async () => ({ plan: planLink({ title: 'Renamed' }), raw: '# Renamed' });
 
     expect(await store().savePlan(PROJECT, 'p1', '# Renamed')).toBe(true);
     expect(entry().plans[0].title).toBe('Renamed');
@@ -315,6 +419,22 @@ describe('plans', () => {
     expect(await store().savePlan(PROJECT, 'p1', '# X')).toBe(false);
     expect(entry().plans.map((item) => item.id)).toEqual(['p1']);
     expect(entry().error).toBe('read only');
+  });
+
+  test('setPlanPinned applies optimistically and rolls back on failure', async () => {
+    await store().createPlan(PROJECT, { title: 'A', body: 'x' });
+    handlers.pinPlan = failWith('locked');
+
+    expect(await store().setPlanPinned(PROJECT, 'p1', true)).toBe(false);
+    expect(entry().plans[0].pinned).toBe(false);
+    expect(entry().error).toBe('locked');
+  });
+
+  test('setPlanPinned commits the server copy', async () => {
+    await store().createPlan(PROJECT, { title: 'A', body: 'x' });
+
+    expect(await store().setPlanPinned(PROJECT, 'p1', true)).toBe(true);
+    expect(entry().plans[0].pinned).toBe(true);
   });
 
   test('deletePlan restores the row when the request fails', async () => {

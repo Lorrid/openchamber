@@ -12,8 +12,9 @@
  * directory never invalidates a reference.
  */
 
-const PROJECT_CONTEXT_VERSION = 1;
-const PROJECT_NOTES_MAX_LENGTH = 3000;
+const PROJECT_CONTEXT_VERSION = 2;
+const PROJECT_NOTE_BODY_MAX_LENGTH = 3000;
+const PROJECT_NOTE_MAX_ITEMS = 200;
 const PROJECT_TODO_TEXT_MAX_LENGTH = 120;
 const PROJECT_PLAN_TITLE_MAX_LENGTH = 160;
 const PROJECT_PLAN_BODY_MAX_LENGTH = 200_000;
@@ -36,7 +37,64 @@ const clampLength = (value, maxLength) => {
 
 const isObjectRecord = (value) => Boolean(value) && typeof value === 'object' && !Array.isArray(value);
 
-const sanitizeNotes = (value) => (typeof value === 'string' ? clampLength(value, PROJECT_NOTES_MAX_LENGTH) : '');
+const NOTE_SOURCES = new Set(['manual', 'selection', 'agent']);
+
+const sanitizeNoteOrigin = (value) => {
+  if (!isObjectRecord(value)) return null;
+  const sessionId = asNonEmptyString(value.sessionId);
+  const messageId = asNonEmptyString(value.messageId);
+  if (!sessionId) return null;
+  return messageId ? { sessionId, messageId } : { sessionId };
+};
+
+/**
+ * Notes are a list of entries.
+ *
+ * Version 1 stored a single string. It is converted here rather than in a
+ * separate migration pass so that any read — including one that races another
+ * writer — sees the same shape.
+ */
+const sanitizeNotes = (value, now) => {
+  if (typeof value === 'string') {
+    const body = clampLength(value, PROJECT_NOTE_BODY_MAX_LENGTH).trim();
+    if (!body) return [];
+    return [{
+      id: `note_legacy_${now}`,
+      body,
+      createdAt: now,
+      updatedAt: now,
+      source: 'manual',
+      pinned: false,
+    }];
+  }
+
+  if (!Array.isArray(value)) return [];
+
+  const result = [];
+  const seen = new Set();
+  for (const entry of value) {
+    if (result.length >= PROJECT_NOTE_MAX_ITEMS) break;
+    if (!isObjectRecord(entry)) continue;
+    const id = asNonEmptyString(entry.id);
+    const body = clampLength(typeof entry.body === 'string' ? entry.body : '', PROJECT_NOTE_BODY_MAX_LENGTH).trim();
+    if (!id || !body || seen.has(id)) continue;
+    seen.add(id);
+
+    const createdAt = Number.isFinite(entry.createdAt) && entry.createdAt >= 0 ? entry.createdAt : now;
+    const origin = sanitizeNoteOrigin(entry.origin);
+    result.push({
+      id,
+      body,
+      createdAt,
+      updatedAt: Number.isFinite(entry.updatedAt) && entry.updatedAt >= 0 ? entry.updatedAt : createdAt,
+      source: NOTE_SOURCES.has(entry.source) ? entry.source : 'manual',
+      pinned: entry.pinned === true,
+      ...(origin ? { origin } : {}),
+    });
+  }
+
+  return result.sort((a, b) => b.createdAt - a.createdAt);
+};
 
 const sanitizeTodos = (value, now) => {
   if (!Array.isArray(value)) return [];
@@ -114,6 +172,7 @@ const sanitizePlanLinks = (value, now) => {
       file,
       title: sanitizePlanTitle(entry.title) || 'Plan',
       createdAt: Number.isFinite(entry.createdAt) && entry.createdAt >= 0 ? entry.createdAt : now,
+      pinned: entry.pinned === true,
     });
   }
   return result.sort((a, b) => b.createdAt - a.createdAt);
@@ -121,7 +180,7 @@ const sanitizePlanLinks = (value, now) => {
 
 const createEmptyContext = () => ({
   version: PROJECT_CONTEXT_VERSION,
-  notes: '',
+  notes: [],
   todos: [],
   plans: [],
 });
@@ -262,7 +321,7 @@ export const createProjectContextRuntime = (deps) => {
 
     const migrated = {
       version: PROJECT_CONTEXT_VERSION,
-      notes: sanitizeNotes(legacy.value.projectNotes),
+      notes: sanitizeNotes(legacy.value.projectNotes, now),
       todos: sanitizeTodos(legacy.value.projectTodos, now),
       plans: sanitizePlanLinks(links, now),
     };
@@ -305,7 +364,7 @@ export const createProjectContextRuntime = (deps) => {
       if (migrated) {
         return {
           version: PROJECT_CONTEXT_VERSION,
-          notes: sanitizeNotes(migrated.notes),
+          notes: sanitizeNotes(migrated.notes, now),
           todos: sanitizeTodos(migrated.todos, now),
           plans: sanitizePlanLinks(migrated.plans, now),
         };
@@ -315,7 +374,7 @@ export const createProjectContextRuntime = (deps) => {
 
     return {
       version: PROJECT_CONTEXT_VERSION,
-      notes: sanitizeNotes(stored.value.notes),
+      notes: sanitizeNotes(stored.value.notes, now),
       todos: sanitizeTodos(stored.value.todos, now),
       plans: sanitizePlanLinks(stored.value.plans, now),
     };
@@ -330,17 +389,105 @@ export const createProjectContextRuntime = (deps) => {
     });
   };
 
-  const saveNotesAndTodos = async (projectId, value) => {
+  const saveTodos = async (projectId, todos) => {
     return withWriteLock(projectId, async () => {
       const now = Date.now();
       const current = await readContext(projectId);
-      const next = {
-        ...current,
-        notes: sanitizeNotes(value?.notes),
-        todos: sanitizeTodos(value?.todos, now),
-      };
+      const next = { ...current, todos: sanitizeTodos(todos, now) };
       await writeContext(projectId, next);
       return next;
+    });
+  };
+
+  /**
+   * Notes are addressed individually.
+   *
+   * Splitting them from todos is what lets the panel stop writing both fields
+   * on every keystroke-driven save: a todo toggle can no longer clobber notes
+   * the user is still typing, and an agent-authored note can no longer lose a
+   * concurrent todo change.
+   */
+  const createNote = async (projectId, value) => {
+    const body = clampLength(typeof value?.body === 'string' ? value.body : '', PROJECT_NOTE_BODY_MAX_LENGTH).trim();
+    if (!body) {
+      throw new Error('body is required');
+    }
+
+    return withWriteLock(projectId, async () => {
+      const now = Date.now();
+      const current = await readContext(projectId);
+      if (current.notes.length >= PROJECT_NOTE_MAX_ITEMS) {
+        throw new Error(`A project can hold at most ${PROJECT_NOTE_MAX_ITEMS} notes`);
+      }
+
+      const note = {
+        id: idFactory(),
+        body,
+        createdAt: now,
+        updatedAt: now,
+        source: NOTE_SOURCES.has(value?.source) ? value.source : 'manual',
+        pinned: false,
+        ...(sanitizeNoteOrigin(value?.origin) ? { origin: sanitizeNoteOrigin(value.origin) } : {}),
+      };
+
+      const next = { ...current, notes: [note, ...current.notes] };
+      await writeContext(projectId, next);
+      return { note, context: next };
+    });
+  };
+
+  /**
+   * Patch one note. Omitted fields are left alone, so pinning a note cannot
+   * roll back an edit that landed between the two requests.
+   */
+  const updateNote = async (projectId, noteId, patch) => {
+    const id = asNonEmptyString(noteId);
+    if (!id) {
+      throw new Error('noteId is required');
+    }
+    const hasBody = typeof patch?.body === 'string';
+    const hasPinned = typeof patch?.pinned === 'boolean';
+    if (!hasBody && !hasPinned) {
+      throw new Error('body or pinned is required');
+    }
+    const body = hasBody ? clampLength(patch.body, PROJECT_NOTE_BODY_MAX_LENGTH).trim() : null;
+    if (hasBody && !body) {
+      throw new Error('body is required');
+    }
+
+    return withWriteLock(projectId, async () => {
+      const now = Date.now();
+      const current = await readContext(projectId);
+      const existing = current.notes.find((note) => note.id === id);
+      if (!existing) {
+        return null;
+      }
+
+      const note = {
+        ...existing,
+        ...(hasBody ? { body, updatedAt: now } : {}),
+        ...(hasPinned ? { pinned: patch.pinned } : {}),
+      };
+      const next = { ...current, notes: current.notes.map((entry) => (entry.id === id ? note : entry)) };
+      await writeContext(projectId, next);
+      return { note, context: next };
+    });
+  };
+
+  const deleteNote = async (projectId, noteId) => {
+    const id = asNonEmptyString(noteId);
+    if (!id) {
+      throw new Error('noteId is required');
+    }
+
+    return withWriteLock(projectId, async () => {
+      const current = await readContext(projectId);
+      if (!current.notes.some((note) => note.id === id)) {
+        return { deleted: false, context: current };
+      }
+      const next = { ...current, notes: current.notes.filter((note) => note.id !== id) };
+      await writeContext(projectId, next);
+      return { deleted: true, context: next };
     });
   };
 
@@ -449,7 +596,7 @@ export const createProjectContextRuntime = (deps) => {
 
       await fsPromises.writeFile(path.join(plansDir, file), formatPlanMarkdown(title, body), 'utf8');
 
-      const link = { id: idFactory(), file, title, createdAt };
+      const link = { id: idFactory(), file, title, createdAt, pinned: false };
       const next = { ...current, plans: [link, ...current.plans] };
       await writeContext(projectId, next);
       return { plan: link, context: next };
@@ -463,6 +610,26 @@ export const createProjectContextRuntime = (deps) => {
    * the UI showing a plan that no longer opens. The leftover markdown is
    * unreferenced and harmless.
    */
+  /** Pin state is patched on its own so it cannot roll back a concurrent edit. */
+  const setPlanPinned = async (projectId, planId, pinned) => {
+    const id = asNonEmptyString(planId);
+    if (!id) {
+      throw new Error('planId is required');
+    }
+
+    return withWriteLock(projectId, async () => {
+      const current = await readContext(projectId);
+      const existing = current.plans.find((entry) => entry.id === id);
+      if (!existing) {
+        return null;
+      }
+      const plan = { ...existing, pinned: pinned === true };
+      const next = { ...current, plans: current.plans.map((entry) => (entry.id === id ? plan : entry)) };
+      await writeContext(projectId, next);
+      return { plan, context: next };
+    });
+  };
+
   const deletePlan = async (projectId, planId) => {
     const id = asNonEmptyString(planId);
     if (!id) {
@@ -485,10 +652,14 @@ export const createProjectContextRuntime = (deps) => {
 
   return {
     readContext,
-    saveNotesAndTodos,
+    saveTodos,
+    createNote,
+    updateNote,
+    deleteNote,
     readPlan,
     updatePlan,
     createPlan,
+    setPlanPinned,
     deletePlan,
     contextPathFor,
     plansDirFor,

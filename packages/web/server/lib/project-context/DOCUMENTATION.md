@@ -23,12 +23,30 @@ Nothing outside this module may write `context.json` or the `plans` directory.
 
 ```json
 {
-  "version": 1,
-  "notes": "",
+  "version": 2,
+  "notes": [{
+    "id": "", "body": "", "createdAt": 0, "updatedAt": 0,
+    "source": "manual | selection | agent",
+    "pinned": false,
+    "origin": { "sessionId": "", "messageId": "" }
+  }],
   "todos": [{ "id": "", "text": "", "completed": false, "createdAt": 0 }],
-  "plans": [{ "id": "", "file": "1700000000-title.md", "title": "", "createdAt": 0 }]
+  "plans": [{ "id": "", "file": "1700000000-title.md", "title": "", "createdAt": 0, "pinned": false }]
 }
 ```
+
+Notes are entries, not one blob. Version 1 stored a single string; it converts
+to a single `manual` note on read (an empty string converts to no notes at
+all). The conversion lives in the read path rather than a separate migration
+pass so that every reader — including one racing a writer — sees one shape.
+
+`source` records where a note came from, and `origin` links it back to the
+message it was distilled from, so a note taken off a chat selection can be
+traced to its conversation.
+
+Notes and todos are written through separate routes. That split is what stops a
+todo toggle from persisting half-typed notes alongside it, and stops an
+agent-authored note from clobbering a concurrent todo change.
 
 Plan links store a **base name**, never a path. The file always lives in
 `<projectId>/plans/`, so moving the project storage directory cannot invalidate
@@ -42,7 +60,11 @@ the two ever disagree.
 | Method | Route | Notes |
 |---|---|---|
 | GET | `/api/project-context/:projectId` | full context; missing file is `200` empty |
-| PUT | `/api/project-context/:projectId/notes-todos` | replaces both; returns committed context |
+| PUT | `/api/project-context/:projectId/todos` | replaces the whole list; returns committed context |
+| POST | `/api/project-context/:projectId/notes` | `201`; takes `{body, source?, origin?}` |
+| PATCH | `/api/project-context/:projectId/notes/:noteId` | patches `body` and/or `pinned`; `404` when unknown |
+| DELETE | `/api/project-context/:projectId/notes/:noteId` | `404` when unknown |
+| PATCH | `/api/project-context/:projectId/plans/:planId` | pin state only; `404` when unknown |
 | GET | `/api/project-context/:projectId/plans/:planId` | `404` when the link or its markdown is gone |
 | POST | `/api/project-context/:projectId/plans` | `201`; takes `{title, body}`, never a path |
 | PUT | `/api/project-context/:projectId/plans/:planId` | takes the whole `{raw}` document; `404` when the link or its markdown is gone |
@@ -75,6 +97,15 @@ and I/O failures are `500`.
 - **Plan update refuses to recreate a deleted file.** If the markdown vanished
   underneath an open editor the link is already dead; writing would resurrect
   content the user believes was discarded, so it returns `404` instead.
+- **A note patch touches only the fields it names.** Pinning sends `pinned`
+  alone, so it cannot roll back an edit that landed between the two requests,
+  and editing does not reset a pin. Editing bumps `updatedAt`; pinning does not,
+  because a pin is not a change to what the note says.
+- **A note body can be clamped but never blanked.** An empty body is rejected
+  rather than stored, since a note with nothing in it is indistinguishable from
+  a delete the user did not ask for.
+- **Notes are capped at 200 per project.** Past that, creation fails loudly
+  instead of silently evicting the oldest entry.
 - **Per-entry sanitization never fails the whole read.** A malformed todo or
   plan link is dropped; the rest of the context still loads.
 
@@ -102,6 +133,10 @@ when a project id changes. Its `mergeProjectContextFiles` step must run before
 `moveDirectoryContents`, because that mover only renames into a free
 destination and would otherwise discard the old `context.json` whenever the
 destination already had one.
+
+`mergeProjectContextFiles` merges every list by identity and deliberately does
+not convert a version 1 string note: this module owns that conversion, and
+doing it in two places would mean two definitions of the same migration.
 
 `mergeProjectConfigData` still merges the legacy `projectNotes` /
 `projectTodos` / `projectPlanFiles` keys. That is deliberate: a project whose

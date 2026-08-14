@@ -22,6 +22,8 @@ const respondWithError = (res, error, fallbackMessage) => {
   return res.status(500).json({ error: message || fallbackMessage });
 };
 
+const isValidNoteSource = (value) => value === 'manual' || value === 'selection' || value === 'agent';
+
 const hasValidTodosShape = (value) => (
   Array.isArray(value)
   && value.every((todo) => (
@@ -44,26 +46,108 @@ export const registerProjectContextRoutes = (app, dependencies) => {
     }
   });
 
-  app.put('/api/project-context/:projectId/notes-todos', async (req, res) => {
+  app.put('/api/project-context/:projectId/todos', async (req, res) => {
     const body = req.body;
     if (!isObjectRecord(body)) {
       return res.status(400).json({ error: 'Body must be an object' });
     }
-    if (body.notes !== undefined && typeof body.notes !== 'string') {
-      return res.status(400).json({ error: 'notes must be a string' });
-    }
-    if (body.todos !== undefined && !hasValidTodosShape(body.todos)) {
+    if (!hasValidTodosShape(body.todos)) {
       return res.status(400).json({ error: 'todos must be an array of todo items' });
     }
 
     try {
-      const context = await projectContextRuntime.saveNotesAndTodos(req.params.projectId, {
-        notes: body.notes ?? '',
-        todos: body.todos ?? [],
+      return res.json(await projectContextRuntime.saveTodos(req.params.projectId, body.todos));
+    } catch (error) {
+      return respondWithError(res, error, 'Failed to save project todos');
+    }
+  });
+
+  app.post('/api/project-context/:projectId/notes', async (req, res) => {
+    const body = req.body;
+    if (!isObjectRecord(body)) {
+      return res.status(400).json({ error: 'Body must be an object' });
+    }
+    if (typeof body.body !== 'string') {
+      return res.status(400).json({ error: 'body must be a string' });
+    }
+    if (body.source !== undefined && !isValidNoteSource(body.source)) {
+      return res.status(400).json({ error: 'source must be manual, selection, or agent' });
+    }
+    if (body.origin !== undefined && !isObjectRecord(body.origin)) {
+      return res.status(400).json({ error: 'origin must be an object' });
+    }
+
+    try {
+      const { note, context } = await projectContextRuntime.createNote(req.params.projectId, {
+        body: body.body,
+        source: body.source,
+        origin: body.origin,
       });
+      return res.status(201).json({ note, context });
+    } catch (error) {
+      return respondWithError(res, error, 'Failed to create note');
+    }
+  });
+
+  app.patch('/api/project-context/:projectId/notes/:noteId', async (req, res) => {
+    const body = req.body;
+    if (!isObjectRecord(body)) {
+      return res.status(400).json({ error: 'Body must be an object' });
+    }
+    if (body.body !== undefined && typeof body.body !== 'string') {
+      return res.status(400).json({ error: 'body must be a string' });
+    }
+    if (body.pinned !== undefined && typeof body.pinned !== 'boolean') {
+      return res.status(400).json({ error: 'pinned must be a boolean' });
+    }
+
+    try {
+      const result = await projectContextRuntime.updateNote(req.params.projectId, req.params.noteId, {
+        ...(body.body !== undefined ? { body: body.body } : {}),
+        ...(body.pinned !== undefined ? { pinned: body.pinned } : {}),
+      });
+      if (!result) {
+        return res.status(404).json({ error: 'Note not found' });
+      }
+      return res.json(result);
+    } catch (error) {
+      return respondWithError(res, error, 'Failed to save note');
+    }
+  });
+
+  app.delete('/api/project-context/:projectId/notes/:noteId', async (req, res) => {
+    try {
+      const { deleted, context } = await projectContextRuntime.deleteNote(
+        req.params.projectId,
+        req.params.noteId,
+      );
+      if (!deleted) {
+        return res.status(404).json({ error: 'Note not found' });
+      }
       return res.json(context);
     } catch (error) {
-      return respondWithError(res, error, 'Failed to save project notes and todos');
+      return respondWithError(res, error, 'Failed to delete note');
+    }
+  });
+
+  app.patch('/api/project-context/:projectId/plans/:planId', async (req, res) => {
+    const body = req.body;
+    if (!isObjectRecord(body) || typeof body.pinned !== 'boolean') {
+      return res.status(400).json({ error: 'pinned must be a boolean' });
+    }
+
+    try {
+      const result = await projectContextRuntime.setPlanPinned(
+        req.params.projectId,
+        req.params.planId,
+        body.pinned,
+      );
+      if (!result) {
+        return res.status(404).json({ error: 'Plan not found' });
+      }
+      return res.json(result);
+    } catch (error) {
+      return respondWithError(res, error, 'Failed to update plan');
     }
   });
 

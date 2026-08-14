@@ -138,6 +138,7 @@ import { ComposerAutocompletePopups } from './composer/ui/ComposerAutocompletePo
 import { ComposerFooter } from './composer/ui/ComposerFooter';
 import { MobilePillComposer } from './composer/ui/MobilePillComposer';
 import { ComposerContextChips } from './composer/ui/ComposerContextChips';
+import { ComposerPinnedContextChip } from './composer/ui/ComposerPinnedContextChip';
 import { LinkedReferenceRow } from './composer/ui/LinkedReferenceRow';
 import { RevertedMessageDock } from './composer/ui/RevertedMessageDock';
 import { SessionSuggestionChip } from '@/components/chat/SessionSuggestionChip';
@@ -2481,6 +2482,7 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({ onOpenSettings, scrollTo
                     onSendMessage={handleQueuedMessageSend}
                 />
                 <AutoReviewBanner />
+                <ComposerPinnedContextChip />
                 {hasDrafts ? (
                     <ComposerContextChips
                         terminalDrafts={terminalContextDrafts}

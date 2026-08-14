@@ -1,6 +1,8 @@
 import React from 'react';
 
 import { toast } from '@/components/ui';
+import { Icon } from '@/components/icon/Icon';
+import { Input } from '@/components/ui/input';
 import { useI18n } from '@/lib/i18n';
 import { resolveProjectContextId, type ProjectRef, type ProjectTodoItem } from '@/lib/projectContextApi';
 import { cn } from '@/lib/utils';
@@ -9,7 +11,6 @@ import { TodoSendDialog } from '../TodoSendDialog';
 import { NotesSection } from './NotesSection';
 import { PlansSection } from './PlansSection';
 import { TodosSection } from './TodosSection';
-import { useProjectNotesDraft } from './useProjectNotesDraft';
 import { useProjectTodoSend } from './useProjectTodoSend';
 
 interface ProjectNotesTodoPanelProps {
@@ -33,7 +34,7 @@ const sortTodosWithCompletedLast = (items: ProjectTodoItem[]): ProjectTodoItem[]
  *
  * Storage is server-owned and reached through `useProjectContextStore`. This
  * container owns only what the sections genuinely share: the loaded snapshot,
- * and the notes draft that a todo write has to be persisted alongside.
+ * the search query, and the todo write.
  */
 export const ProjectNotesTodoPanel: React.FC<ProjectNotesTodoPanelProps> = ({
   projectRef,
@@ -50,7 +51,8 @@ export const ProjectNotesTodoPanel: React.FC<ProjectNotesTodoPanelProps> = ({
     (state) => (projectContextId ? state.entries[projectContextId] : undefined) ?? EMPTY_PROJECT_CONTEXT_ENTRY,
   );
   const loadProjectContext = useProjectContextStore((state) => state.load);
-  const saveNotesAndTodos = useProjectContextStore((state) => state.saveNotesAndTodos);
+  const saveTodos = useProjectContextStore((state) => state.saveTodos);
+  const [query, setQuery] = React.useState('');
 
   // Completed items sink to the bottom in the list; storage order is untouched.
   const todos = React.useMemo(
@@ -58,31 +60,6 @@ export const ProjectNotesTodoPanel: React.FC<ProjectNotesTodoPanelProps> = ({
     [contextEntry.todos],
   );
   const isLoading = contextEntry.loading && !contextEntry.loaded;
-
-  const persist = React.useCallback(
-    async (nextNotes: string, nextTodos: ProjectTodoItem[]) => {
-      if (!projectRef) {
-        return false;
-      }
-      // The store owns per-project write serialization and rollback; the panel
-      // only decides what to persist and how to report a failure.
-      const saved = await saveNotesAndTodos(projectRef, { notes: nextNotes, todos: nextTodos });
-      if (!saved) {
-        toast.error(t('rightSidebar.contextNotesTodo.toast.saveNotesFailed'));
-      }
-      return saved;
-    },
-    [projectRef, saveNotesAndTodos, t]
-  );
-
-  const { notes, setNotes, handleNotesBlur } = useProjectNotesDraft({
-    projectRef,
-    projectContextId,
-    storedNotes: contextEntry.notes,
-    loaded: contextEntry.loaded,
-    todos,
-    persist,
-  });
 
   const send = useProjectTodoSend({ projectRef, canCreateWorktree, onActionComplete });
 
@@ -110,11 +87,26 @@ export const ProjectNotesTodoPanel: React.FC<ProjectNotesTodoPanelProps> = ({
     }
   }, [contextEntry.error, contextEntry.loaded, t]);
 
+  // Reset the filter when the project changes: a query that matched the old
+  // project would silently hide everything in the new one.
+  React.useEffect(() => {
+    setQuery('');
+  }, [projectContextId]);
+
   const handlePersistTodos = React.useCallback(
     (nextTodos: ProjectTodoItem[]) => {
-      void persist(notes, nextTodos);
+      if (!projectRef) {
+        return;
+      }
+      // The store owns per-project write serialization and rollback; the panel
+      // only decides what to persist and how to report a failure.
+      void saveTodos(projectRef, nextTodos).then((saved) => {
+        if (!saved) {
+          toast.error(t('rightSidebar.contextNotesTodo.toast.saveNotesFailed'));
+        }
+      });
     },
-    [notes, persist]
+    [projectRef, saveTodos, t]
   );
 
   if (!projectRef) {
@@ -129,17 +121,41 @@ export const ProjectNotesTodoPanel: React.FC<ProjectNotesTodoPanelProps> = ({
 
   return (
     <div className={cn('w-full min-w-0 space-y-3 p-3', className)}>
+      <div className="relative">
+        <Icon
+          name="search"
+          className="pointer-events-none absolute left-2 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground"
+        />
+        <Input
+          value={query}
+          onChange={(event) => setQuery(event.target.value)}
+          placeholder={t('rightSidebar.contextNotesTodo.search.placeholder')}
+          className="h-8 pl-7 pr-7"
+        />
+        {query ? (
+          <button
+            type="button"
+            onClick={() => setQuery('')}
+            className="absolute right-1.5 top-1/2 inline-flex h-5 w-5 -translate-y-1/2 items-center justify-center rounded-md text-muted-foreground hover:text-foreground hover:bg-interactive-hover/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50"
+            aria-label={t('rightSidebar.contextNotesTodo.search.clear')}
+            title={t('rightSidebar.contextNotesTodo.search.clear')}
+          >
+            <Icon name="close" className="h-3.5 w-3.5" />
+          </button>
+        ) : null}
+      </div>
+
       <NotesSection
         projectRef={projectRef}
         projectLabel={projectLabel}
-        notes={notes}
-        onNotesChange={setNotes}
-        onNotesBlur={handleNotesBlur}
+        notes={contextEntry.notes}
         disabled={isLoading}
+        query={query}
       />
 
       <TodosSection
         todos={todos}
+        query={query}
         disabled={isLoading}
         canCreateWorktree={canCreateWorktree}
         sendingTodoId={send.sendingTodoId}
@@ -152,6 +168,7 @@ export const ProjectNotesTodoPanel: React.FC<ProjectNotesTodoPanelProps> = ({
       <PlansSection
         projectRef={projectRef}
         plans={contextEntry.plans}
+        query={query}
         onOpenPlan={onOpenPlan}
       />
 

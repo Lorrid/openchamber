@@ -12,6 +12,7 @@ const createRouteRegistry = () => {
     app: {
       get: register('GET'),
       put: register('PUT'),
+      patch: register('PATCH'),
       post: register('POST'),
       delete: register('DELETE'),
     },
@@ -48,11 +49,15 @@ const createMockResponse = () => {
   };
 };
 
-const emptyContext = { version: 1, notes: '', todos: [], plans: [] };
+const emptyContext = { version: 2, notes: [], todos: [], plans: [] };
 
 const createRuntimeStub = (overrides = {}) => ({
   readContext: async () => emptyContext,
-  saveNotesAndTodos: async () => emptyContext,
+  saveTodos: async () => emptyContext,
+  createNote: async () => ({ note: { id: 'n1', body: 'x', createdAt: 1, updatedAt: 1, source: 'manual', pinned: false }, context: emptyContext }),
+  updateNote: async () => ({ note: { id: 'n1', body: 'x', createdAt: 1, updatedAt: 2, source: 'manual', pinned: true }, context: emptyContext }),
+  deleteNote: async () => ({ deleted: true, context: emptyContext }),
+  setPlanPinned: async () => ({ plan: { id: 'p1', file: 'a.md', title: 'A', createdAt: 1, pinned: true }, context: emptyContext }),
   readPlan: async () => null,
   createPlan: async () => ({ plan: { id: 'p1', file: 'a.md', title: 'A', createdAt: 1 }, context: emptyContext }),
   updatePlan: async () => ({
@@ -104,10 +109,10 @@ describe('project context routes', () => {
     expect(res.body).toEqual({ error: 'Stored project context is malformed' });
   });
 
-  it('rejects a non-object notes-todos body', async () => {
+  it('rejects a non-object todos body', async () => {
     const registry = setup();
 
-    const res = await registry.call('PUT', '/api/project-context/:projectId/notes-todos', {
+    const res = await registry.call('PUT', '/api/project-context/:projectId/todos', {
       params: { projectId: 'path_x' },
       body: 'nope',
     });
@@ -117,29 +122,116 @@ describe('project context routes', () => {
   it('rejects malformed todo shapes', async () => {
     const registry = setup();
 
-    const res = await registry.call('PUT', '/api/project-context/:projectId/notes-todos', {
+    const res = await registry.call('PUT', '/api/project-context/:projectId/todos', {
       params: { projectId: 'path_x' },
-      body: { notes: '', todos: [{ id: 1, text: 'bad id type' }] },
+      body: { todos: [{ id: 1, text: 'bad id type' }] },
     });
     expect(res.statusCode).toBe(400);
   });
 
-  it('saves notes and todos and returns the committed context', async () => {
+  it('saves todos and returns the committed context', async () => {
     let received = null;
     const registry = setup({
-      saveNotesAndTodos: async (_projectId, value) => {
-        received = value;
-        return { ...emptyContext, notes: value.notes };
+      saveTodos: async (_projectId, todos) => {
+        received = todos;
+        return { ...emptyContext, todos };
       },
     });
 
-    const res = await registry.call('PUT', '/api/project-context/:projectId/notes-todos', {
+    const res = await registry.call('PUT', '/api/project-context/:projectId/todos', {
       params: { projectId: 'path_x' },
-      body: { notes: 'saved', todos: [] },
+      body: { todos: [{ id: 't1', text: 'one' }] },
     });
     expect(res.statusCode).toBe(200);
-    expect(res.body.notes).toBe('saved');
-    expect(received).toEqual({ notes: 'saved', todos: [] });
+    expect(received).toEqual([{ id: 't1', text: 'one' }]);
+  });
+
+  it('creates a note with 201', async () => {
+    const registry = setup();
+
+    const res = await registry.call('POST', '/api/project-context/:projectId/notes', {
+      params: { projectId: 'path_x' },
+      body: { body: 'hello' },
+    });
+    expect(res.statusCode).toBe(201);
+    expect(res.body.note.id).toBe('n1');
+  });
+
+  it('rejects a note create without a string body', async () => {
+    const registry = setup();
+
+    const res = await registry.call('POST', '/api/project-context/:projectId/notes', {
+      params: { projectId: 'path_x' },
+      body: {},
+    });
+    expect(res.statusCode).toBe(400);
+  });
+
+  it('rejects an unknown note source', async () => {
+    const registry = setup();
+
+    const res = await registry.call('POST', '/api/project-context/:projectId/notes', {
+      params: { projectId: 'path_x' },
+      body: { body: 'hello', source: 'somewhere-else' },
+    });
+    expect(res.statusCode).toBe(400);
+  });
+
+  it('forwards only the note fields that were supplied', async () => {
+    let received = null;
+    const registry = setup({
+      updateNote: async (_projectId, _noteId, patch) => {
+        received = patch;
+        return { note: { id: 'n1', body: 'x', createdAt: 1, updatedAt: 2, source: 'manual', pinned: true }, context: emptyContext };
+      },
+    });
+
+    const res = await registry.call('PATCH', '/api/project-context/:projectId/notes/:noteId', {
+      params: { projectId: 'path_x', noteId: 'n1' },
+      body: { pinned: true },
+    });
+    expect(res.statusCode).toBe(200);
+    expect(received).toEqual({ pinned: true });
+  });
+
+  it('returns 404 when patching a note that does not exist', async () => {
+    const registry = setup({ updateNote: async () => null });
+
+    const res = await registry.call('PATCH', '/api/project-context/:projectId/notes/:noteId', {
+      params: { projectId: 'path_x', noteId: 'nope' },
+      body: { body: 'x' },
+    });
+    expect(res.statusCode).toBe(404);
+  });
+
+  it('returns 404 when deleting a note that does not exist', async () => {
+    const registry = setup({ deleteNote: async () => ({ deleted: false, context: emptyContext }) });
+
+    const res = await registry.call('DELETE', '/api/project-context/:projectId/notes/:noteId', {
+      params: { projectId: 'path_x', noteId: 'nope' },
+    });
+    expect(res.statusCode).toBe(404);
+  });
+
+  it('rejects a plan pin patch without a boolean', async () => {
+    const registry = setup();
+
+    const res = await registry.call('PATCH', '/api/project-context/:projectId/plans/:planId', {
+      params: { projectId: 'path_x', planId: 'p1' },
+      body: { pinned: 'yes' },
+    });
+    expect(res.statusCode).toBe(400);
+  });
+
+  it('pins a plan', async () => {
+    const registry = setup();
+
+    const res = await registry.call('PATCH', '/api/project-context/:projectId/plans/:planId', {
+      params: { projectId: 'path_x', planId: 'p1' },
+      body: { pinned: true },
+    });
+    expect(res.statusCode).toBe(200);
+    expect(res.body.plan.pinned).toBe(true);
   });
 
   it('returns 404 for an unknown plan', async () => {

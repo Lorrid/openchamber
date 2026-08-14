@@ -6,6 +6,7 @@ import { requestFileAccess } from '@/lib/desktop';
 import { getCurrentIntlLocale, useI18n } from '@/lib/i18n';
 import { parsePlanMarkdown, type ProjectPlanLink, type ProjectRef } from '@/lib/projectContextApi';
 import { runtimeFetch } from '@/lib/runtime-fetch';
+import { cn } from '@/lib/utils';
 import { useDirectoryStore } from '@/stores/useDirectoryStore';
 import { useProjectContextStore } from '@/stores/useProjectContextStore';
 import { useUIStore } from '@/stores/useUIStore';
@@ -19,15 +20,18 @@ import { useUIStore } from '@/stores/useUIStore';
 export const PlansSection: React.FC<{
   projectRef: ProjectRef;
   plans: ProjectPlanLink[];
+  /** Panel-wide filter, matched against plan titles. */
+  query: string;
   /** Hosts without a ContextPanel (mobile) render their own plan viewer. */
   onOpenPlan?: (plan: { id: string; title: string }) => void;
-}> = ({ projectRef, plans, onOpenPlan }) => {
+}> = ({ projectRef, plans, query, onOpenPlan }) => {
   const { t } = useI18n();
   const fileInputRef = React.useRef<HTMLInputElement | null>(null);
   const [isImporting, setIsImporting] = React.useState(false);
   const [deletingPlanId, setDeletingPlanId] = React.useState<string | null>(null);
   const createPlan = useProjectContextStore((state) => state.createPlan);
   const removePlan = useProjectContextStore((state) => state.deletePlan);
+  const setPlanPinned = useProjectContextStore((state) => state.setPlanPinned);
   const currentDirectory = useDirectoryStore((state) => state.currentDirectory);
   const openContextPanelTab = useUIStore((state) => state.openContextPanelTab);
 
@@ -130,6 +134,12 @@ export const PlansSection: React.FC<{
     [importPlanFromText, t]
   );
 
+  const visiblePlans = React.useMemo(() => {
+    const needle = query.trim().toLowerCase();
+    if (!needle) return plans;
+    return plans.filter((plan) => plan.title.toLowerCase().includes(needle));
+  }, [plans, query]);
+
   const handleOpenPlan = React.useCallback(
     (plan: ProjectPlanLink) => {
       if (onOpenPlan) {
@@ -187,13 +197,15 @@ export const PlansSection: React.FC<{
       </div>
 
       <div className="max-h-56 overflow-y-auto rounded-lg border border-border/60 bg-background/40">
-        {plans.length === 0 ? (
+        {visiblePlans.length === 0 ? (
           <p className="px-3 py-3 typography-meta text-muted-foreground">
-            {t('rightSidebar.contextNotesTodo.plans.empty')}
+            {query.trim()
+              ? t('rightSidebar.contextNotesTodo.search.noResults', { query: query.trim() })
+              : t('rightSidebar.contextNotesTodo.plans.empty')}
           </p>
         ) : (
           <ul className="divide-y divide-border/50">
-            {plans.map((plan) => (
+            {visiblePlans.map((plan) => (
               <li key={plan.id} className="flex items-center gap-1.5 px-2.5 py-1.5">
                 <button
                   type="button"
@@ -204,6 +216,23 @@ export const PlansSection: React.FC<{
                   <span className="flex-shrink-0 typography-micro text-muted-foreground">
                     {new Date(plan.createdAt).toLocaleDateString(getCurrentIntlLocale())}
                   </span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => void setPlanPinned(projectRef, plan.id, !plan.pinned)}
+                  className={cn(
+                    'inline-flex h-6 w-6 flex-shrink-0 items-center justify-center rounded-md hover:bg-interactive-hover/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50',
+                    plan.pinned ? 'text-primary' : 'text-muted-foreground hover:text-foreground'
+                  )}
+                  aria-pressed={plan.pinned}
+                  aria-label={plan.pinned
+                    ? t('rightSidebar.contextNotesTodo.notes.actions.unpin')
+                    : t('rightSidebar.contextNotesTodo.notes.actions.pin')}
+                  title={plan.pinned
+                    ? t('rightSidebar.contextNotesTodo.notes.actions.unpin')
+                    : t('rightSidebar.contextNotesTodo.notes.actions.pin')}
+                >
+                  <Icon name="pushpin" className="h-3.5 w-3.5" />
                 </button>
                 <button
                   type="button"

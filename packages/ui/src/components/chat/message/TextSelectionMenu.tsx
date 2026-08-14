@@ -9,7 +9,7 @@ import { cn } from '@/lib/utils';
 import { copyTextToClipboard } from '@/lib/clipboard';
 import { toast } from '@/components/ui';
 import { Icon } from "@/components/icon/Icon";
-import { PROJECT_NOTES_MAX_LENGTH } from '@/lib/projectContextApi';
+import { PROJECT_NOTE_BODY_MAX_LENGTH } from '@/lib/projectContextApi';
 import { useProjectContextStore } from '@/stores/useProjectContextStore';
 import { summarizeSelectionForNotes } from '@/lib/smallModel';
 import { resolveProjectForSessionDirectory } from '@/lib/projectResolution';
@@ -36,7 +36,7 @@ interface SelectionPayload {
 }
 
 const normalizeDistilledInsight = (insight: string): string => (
-  insight.trim().replace(/^[-*+]\s+/, '').slice(0, PROJECT_NOTES_MAX_LENGTH)
+  insight.trim().replace(/^[-*+]\s+/, '').slice(0, PROJECT_NOTE_BODY_MAX_LENGTH)
 );
 
 const DESKTOP_MENU_SIDE_MARGIN_PX = 8;
@@ -366,7 +366,13 @@ export const TextSelectionMenu: React.FC<TextSelectionMenuProps> = ({ containerR
         toast.error(t('chat.textSelection.toast.addToNotesFailed'));
         return;
       }
-      const saved = await useProjectContextStore.getState().appendNotes(currentProjectRef, insight);
+      // Recorded as its own note with provenance, so the distilled insight can
+      // later be traced back to the conversation it came from.
+      const saved = await useProjectContextStore.getState().createNote(currentProjectRef, {
+        body: insight,
+        source: 'selection',
+        ...(currentSessionId ? { origin: { sessionId: currentSessionId } } : {}),
+      });
       if (!saved) {
         toast.error(t('chat.textSelection.toast.addToNotesFailed'));
         return;

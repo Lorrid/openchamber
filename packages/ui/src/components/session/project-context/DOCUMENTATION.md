@@ -7,11 +7,10 @@ surface in the desktop context rail and by the mobile workspace drawer.
 
 | File | Owns |
 |---|---|
-| `ProjectNotesTodoPanel.tsx` | container: store subscription, load, failure toast, the shared notes/todos write |
-| `NotesSection.tsx` | notes header, character counter, textarea (presentational) |
+| `ProjectNotesTodoPanel.tsx` | container: store subscription, load, failure toast, search query, the todo write |
+| `NotesSection.tsx` | note composer, note list, per-note edit/pin/delete |
 | `TodosSection.tsx` | todo list, add/toggle/delete/clear, drag reorder, list resize |
-| `PlansSection.tsx` | plan list, import, delete, open |
-| `useProjectNotesDraft.ts` | notes draft, hydration, debounced save |
+| `PlansSection.tsx` | plan list, import, pin, delete, open |
 | `useProjectTodoSend.ts` | sending a todo to a current/new/worktree session |
 
 ## Data flow
@@ -30,30 +29,51 @@ There is deliberately no cross-panel event. An earlier version broadcast
 window and every mounted panel re-read the whole config in response. Writers now
 mutate the store and readers re-render from it.
 
-## Why the container owns the notes draft
+## Where writes live
 
-`saveNotesAndTodos` writes both fields at once, so a todo mutation has to
-persist the current notes alongside it. If `NotesSection` owned the draft, todo
-writes would save whatever notes were last committed and silently discard
-unsaved typing. The container therefore holds the draft (via
-`useProjectNotesDraft`) and hands `TodosSection` an `onPersistTodos` callback
-that already closes over it. `TodosSection` never learns that notes exist.
+Notes, todos, and plans each have their own routes, so each section owns its
+writes end to end and no section has to persist a neighbour's state alongside
+its own. `NotesSection` and `PlansSection` call the store directly. Todos still
+route through the container only because the container already holds the list it
+sorts for display.
 
-Plan mutations touch neither field, so `PlansSection` calls the store directly.
+An earlier version wrote notes and todos together in one request. That forced
+the container to own the notes draft, because otherwise a todo toggle would
+persist whatever notes were last committed and discard unsaved typing. Splitting
+the routes removed the coupling rather than managing it.
+
+## Search
+
+One query in the container filters all three sections. Filtering is
+display-only: every mutation still acts on the full list, so reordering or
+clearing completed todos while a filter is active cannot drop hidden items. The
+query resets when the project changes, since a query that matched the old
+project would silently hide everything in the new one.
 
 ## Invariants
 
-- **The draft is seeded once per project, not synced every render.** Re-reading
-  the store on each render would fight the debounced write and reset the caret.
-- **An external notes change is adopted only while the editor is untouched**
-  since its last save. "Add to notes" from a chat selection must reach an open
-  panel, but must never overwrite what the user is typing.
+- **Each note row keeps a local, debounced draft.** Writing on every keystroke
+  would put a request behind every character, and re-reading the store each
+  render would fight the caret.
+- **An external note change is adopted only while that row is untouched** since
+  its last save. "Add to notes" from a chat selection must reach an open panel,
+  but must never overwrite what the user is typing.
+- **A blanked note body is never persisted.** The server rejects it, so the row
+  restores its last saved text on blur rather than showing a phantom failure.
+  Deleting is an explicit action.
 - **A load failure never blanks the panel.** The store keeps the last good
   snapshot; the panel toasts once, and only when nothing had loaded yet.
 - **Completed todos sink to the bottom for display only.** Stored order is what
   the user dragged.
 - **Plan creation is not optimistic.** The id and file name come from the
   server, and a row that cannot be opened is worse than a brief wait.
+
+## Pinned context
+
+The pin toggle on a note or plan marks it as standing context for the agent.
+Assembly and delivery live in `packages/ui/src/lib/projectContextPinning.ts`;
+this surface only owns the toggle. `ComposerPinnedContextChip` shows the user
+what is riding along.
 
 ## Related
 

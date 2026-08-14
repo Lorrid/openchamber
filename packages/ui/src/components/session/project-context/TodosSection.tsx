@@ -102,17 +102,19 @@ const SortableTodoItem: React.FC<{
 
 export const TodosSection: React.FC<{
   todos: ProjectTodoItem[];
+  /** Panel-wide filter. Mutations still act on the full list. */
+  query: string;
   disabled: boolean;
   canCreateWorktree: boolean;
   sendingTodoId: string | null;
-  /** Persists the whole list. Notes are supplied by the container, which owns
-      the editor draft they have to be written alongside. */
+  /** Persists the whole list through the container's store write. */
   onPersistTodos: (next: ProjectTodoItem[]) => void;
   onSendToCurrentSession: (todoText: string) => void;
   onSendToNewSession: (todoId: string, todoText: string) => void;
   onSendToNewWorktreeSession: (todoId: string, todoText: string) => void;
 }> = ({
   todos,
+  query,
   disabled,
   canCreateWorktree,
   sendingTodoId,
@@ -259,6 +261,14 @@ export const TodosSection: React.FC<{
   const completedTodoCount = todos.reduce((count, todo) => count + (todo.completed ? 1 : 0), 0);
   const isScrollable = todos.length >= TODO_PANEL_SCROLL_THRESHOLD;
 
+  // Filtering is display-only: every handler above still edits the full list,
+  // so reordering or clearing while a filter is active cannot drop hidden items.
+  const visibleTodos = React.useMemo(() => {
+    const needle = query.trim().toLowerCase();
+    if (!needle) return todos;
+    return todos.filter((todo) => todo.text.toLowerCase().includes(needle));
+  }, [query, todos]);
+
   return (
     <div className="space-y-2">
       <div className="flex items-center justify-between gap-2">
@@ -320,9 +330,11 @@ export const TodosSection: React.FC<{
             : undefined
         }
       >
-        {todos.length === 0 ? (
+        {visibleTodos.length === 0 ? (
           <p className="px-3 py-3 typography-meta text-muted-foreground">
-            {t('rightSidebar.contextNotesTodo.todo.empty')}
+            {query.trim()
+              ? t('rightSidebar.contextNotesTodo.search.noResults', { query: query.trim() })
+              : t('rightSidebar.contextNotesTodo.todo.empty')}
           </p>
         ) : (
           <DndContext
@@ -331,11 +343,11 @@ export const TodosSection: React.FC<{
             onDragEnd={handleTodoReorder}
           >
             <SortableContext
-              items={todos.map((todo) => todo.id)}
+              items={visibleTodos.map((todo) => todo.id)}
               strategy={verticalListSortingStrategy}
             >
               <ul className="divide-y divide-border/50">
-                {todos.map((todo) => {
+                {visibleTodos.map((todo) => {
                   const isExpandedTodo = expandedTodoIds.has(todo.id);
                   return (
                     <SortableTodoItem key={todo.id} id={todo.id}>

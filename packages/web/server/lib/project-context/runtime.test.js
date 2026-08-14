@@ -48,8 +48,8 @@ describe('projectId validation', () => {
 describe('readContext', () => {
   test('missing file is authoritative empty', async () => {
     expect(await runtime.readContext(PROJECT_ID)).toEqual({
-      version: 1,
-      notes: '',
+      version: 2,
+      notes: [],
       todos: [],
       plans: [],
     });
@@ -63,8 +63,8 @@ describe('readContext', () => {
 
   test('drops malformed todo and plan entries without failing the read', async () => {
     await writeJson(contextPath(), {
-      version: 1,
-      notes: 'kept',
+      version: 2,
+      notes: [{ id: 'n1', body: 'kept', createdAt: 1, updatedAt: 1, source: 'manual' }],
       todos: [{ id: 'a', text: 'ok', completed: false, createdAt: 1 }, { id: '', text: 'no id' }, { text: 'no id' }],
       plans: [
         { id: 'p1', file: 'a.md', title: 'A', createdAt: 2 },
@@ -74,14 +74,47 @@ describe('readContext', () => {
     });
 
     const context = await runtime.readContext(PROJECT_ID);
-    expect(context.notes).toBe('kept');
+    expect(context.notes.map((note) => note.body)).toEqual(['kept']);
     expect(context.todos.map((todo) => todo.id)).toEqual(['a']);
     expect(context.plans.map((plan) => plan.id)).toEqual(['p1']);
   });
 
-  test('clamps notes to the maximum length', async () => {
-    await writeJson(contextPath(), { version: 1, notes: 'x'.repeat(5000), todos: [], plans: [] });
-    expect((await runtime.readContext(PROJECT_ID)).notes).toHaveLength(3000);
+  test('clamps a note body to the maximum length', async () => {
+    await writeJson(contextPath(), {
+      version: 2,
+      notes: [{ id: 'n1', body: 'x'.repeat(5000), createdAt: 1, updatedAt: 1 }],
+      todos: [],
+      plans: [],
+    });
+    expect((await runtime.readContext(PROJECT_ID)).notes[0].body).toHaveLength(3000);
+  });
+
+  test('converts a version 1 string note into a single entry', async () => {
+    await writeJson(contextPath(), { version: 1, notes: 'legacy blob', todos: [], plans: [] });
+
+    const notes = (await runtime.readContext(PROJECT_ID)).notes;
+    expect(notes).toHaveLength(1);
+    expect(notes[0].body).toBe('legacy blob');
+    expect(notes[0].source).toBe('manual');
+    expect(notes[0].pinned).toBe(false);
+  });
+
+  test('an empty version 1 string converts to no notes at all', async () => {
+    await writeJson(contextPath(), { version: 1, notes: '   ', todos: [], plans: [] });
+    expect((await runtime.readContext(PROJECT_ID)).notes).toEqual([]);
+  });
+
+  test('newest note is listed first', async () => {
+    await writeJson(contextPath(), {
+      version: 2,
+      notes: [
+        { id: 'old', body: 'old', createdAt: 1, updatedAt: 1 },
+        { id: 'new', body: 'new', createdAt: 9, updatedAt: 9 },
+      ],
+      todos: [],
+      plans: [],
+    });
+    expect((await runtime.readContext(PROJECT_ID)).notes.map((note) => note.id)).toEqual(['new', 'old']);
   });
 });
 
@@ -99,9 +132,9 @@ describe('legacy migration', () => {
     });
 
     const context = await runtime.readContext(PROJECT_ID);
-    expect(context.notes).toBe('legacy notes');
+    expect(context.notes.map((note) => note.body)).toEqual(['legacy notes']);
     expect(context.todos).toEqual([{ id: 't1', text: 'legacy todo', completed: true, createdAt: 5 }]);
-    expect(context.plans).toEqual([{ id: 'p1', file: '10-old.md', title: 'Old plan', createdAt: 10 }]);
+    expect(context.plans).toEqual([{ id: 'p1', file: '10-old.md', title: 'Old plan', createdAt: 10, pinned: false }]);
 
     const remaining = await readJson(legacyConfigPath());
     expect(remaining).toEqual({
@@ -119,7 +152,7 @@ describe('legacy migration', () => {
     });
 
     const context = await runtime.readContext(PROJECT_ID);
-    expect(context.plans).toEqual([{ id: 'p1', file: 'stray.md', title: 'Stray', createdAt: 10 }]);
+    expect(context.plans).toEqual([{ id: 'p1', file: 'stray.md', title: 'Stray', createdAt: 10, pinned: false }]);
     expect(await fsPromises.readFile(path.join(plansDir(), 'stray.md'), 'utf8')).toContain('recovered');
   });
 
@@ -130,14 +163,14 @@ describe('legacy migration', () => {
     });
 
     const context = await runtime.readContext(PROJECT_ID);
-    expect(context.notes).toBe('kept');
+    expect(context.notes.map((note) => note.body)).toEqual(['kept']);
     expect(context.plans).toEqual([]);
   });
 
   test('does not run when the legacy config holds no context keys', async () => {
     await writeJson(legacyConfigPath(), { 'setup-worktree': ['bun install'] });
 
-    expect(await runtime.readContext(PROJECT_ID)).toEqual({ version: 1, notes: '', todos: [], plans: [] });
+    expect(await runtime.readContext(PROJECT_ID)).toEqual({ version: 2, notes: [], todos: [], plans: [] });
     await expect(fsPromises.access(contextPath())).rejects.toThrow();
     expect(await readJson(legacyConfigPath())).toEqual({ 'setup-worktree': ['bun install'] });
   });
@@ -160,51 +193,150 @@ describe('legacy migration', () => {
       runtime.readContext(PROJECT_ID),
     ]);
     for (const result of results) {
-      expect(result.notes).toBe('concurrent');
+      expect(result.notes.map((note) => note.body)).toEqual(['concurrent']);
     }
-    expect((await readJson(contextPath())).notes).toBe('concurrent');
+    expect((await readJson(contextPath())).notes[0].body).toBe('concurrent');
   });
 });
 
-describe('saveNotesAndTodos', () => {
+describe('todos', () => {
   test('round-trips through disk', async () => {
-    await runtime.saveNotesAndTodos(PROJECT_ID, {
-      notes: 'hello',
-      todos: [{ id: 't1', text: 'do it', completed: false, createdAt: 1 }],
-    });
+    await runtime.saveTodos(PROJECT_ID, [{ id: 't1', text: 'do it', completed: false, createdAt: 1 }]);
 
-    const context = await runtime.readContext(PROJECT_ID);
-    expect(context.notes).toBe('hello');
-    expect(context.todos).toEqual([{ id: 't1', text: 'do it', completed: false, createdAt: 1 }]);
+    expect((await runtime.readContext(PROJECT_ID)).todos).toEqual([
+      { id: 't1', text: 'do it', completed: false, createdAt: 1 },
+    ]);
   });
 
-  test('preserves plans it does not write', async () => {
+  test('preserves notes and plans it does not write', async () => {
+    const { note } = await runtime.createNote(PROJECT_ID, { body: 'keep me' });
     const { plan } = await runtime.createPlan(PROJECT_ID, { title: 'Keep me', body: 'x' });
-    await runtime.saveNotesAndTodos(PROJECT_ID, { notes: 'n', todos: [] });
 
-    expect((await runtime.readContext(PROJECT_ID)).plans.map((entry) => entry.id)).toEqual([plan.id]);
+    await runtime.saveTodos(PROJECT_ID, [{ id: 't1', text: 'todo', createdAt: 1 }]);
+
+    const context = await runtime.readContext(PROJECT_ID);
+    expect(context.notes.map((entry) => entry.id)).toEqual([note.id]);
+    expect(context.plans.map((entry) => entry.id)).toEqual([plan.id]);
   });
 
   test('serializes concurrent writes without losing one', async () => {
     await Promise.all([
-      runtime.saveNotesAndTodos(PROJECT_ID, { notes: 'a', todos: [{ id: '1', text: 'one', createdAt: 1 }] }),
-      runtime.saveNotesAndTodos(PROJECT_ID, { notes: 'b', todos: [{ id: '2', text: 'two', createdAt: 2 }] }),
+      runtime.saveTodos(PROJECT_ID, [{ id: '1', text: 'one', createdAt: 1 }]),
+      runtime.saveTodos(PROJECT_ID, [{ id: '2', text: 'two', createdAt: 2 }]),
     ]);
 
-    const context = await runtime.readContext(PROJECT_ID);
-    expect(['a', 'b']).toContain(context.notes);
-    expect(context.todos).toHaveLength(1);
+    expect((await runtime.readContext(PROJECT_ID)).todos).toHaveLength(1);
   });
 
-  test('clamps oversized notes and todo text', async () => {
-    await runtime.saveNotesAndTodos(PROJECT_ID, {
-      notes: 'y'.repeat(4000),
-      todos: [{ id: 't1', text: 'z'.repeat(300), createdAt: 1 }],
+  test('clamps oversized todo text', async () => {
+    await runtime.saveTodos(PROJECT_ID, [{ id: 't1', text: 'z'.repeat(300), createdAt: 1 }]);
+    expect((await runtime.readContext(PROJECT_ID)).todos[0].text).toHaveLength(120);
+  });
+});
+
+describe('notes', () => {
+  test('create returns the stored note and prepends it', async () => {
+    const first = await runtime.createNote(PROJECT_ID, { body: 'first' });
+    const second = await runtime.createNote(PROJECT_ID, { body: 'second' });
+
+    expect(first.note.source).toBe('manual');
+    expect(first.note.pinned).toBe(false);
+    expect(second.context.notes.map((note) => note.body)).toEqual(['second', 'first']);
+  });
+
+  test('create records provenance for a note distilled from a chat selection', async () => {
+    const { note } = await runtime.createNote(PROJECT_ID, {
+      body: 'insight',
+      source: 'selection',
+      origin: { sessionId: 'ses_1', messageId: 'msg_1' },
     });
 
-    const context = await runtime.readContext(PROJECT_ID);
-    expect(context.notes).toHaveLength(3000);
-    expect(context.todos[0].text).toHaveLength(120);
+    expect(note.source).toBe('selection');
+    expect(note.origin).toEqual({ sessionId: 'ses_1', messageId: 'msg_1' });
+  });
+
+  test('create drops an origin with no session', async () => {
+    const { note } = await runtime.createNote(PROJECT_ID, { body: 'x', origin: { messageId: 'msg_1' } });
+    expect(note.origin).toBeUndefined();
+  });
+
+  test('create rejects an empty body', async () => {
+    await expect(runtime.createNote(PROJECT_ID, { body: '   ' })).rejects.toThrow('body is required');
+  });
+
+  test('create clamps an oversized body', async () => {
+    const { note } = await runtime.createNote(PROJECT_ID, { body: 'y'.repeat(4000) });
+    expect(note.body).toHaveLength(3000);
+  });
+
+  test('update patches the body and bumps updatedAt without touching createdAt', async () => {
+    const { note } = await runtime.createNote(PROJECT_ID, { body: 'before' });
+    await new Promise((resolve) => setTimeout(resolve, 2));
+
+    const result = await runtime.updateNote(PROJECT_ID, note.id, { body: 'after' });
+    expect(result.note.body).toBe('after');
+    expect(result.note.createdAt).toBe(note.createdAt);
+    expect(result.note.updatedAt).toBeGreaterThan(note.updatedAt);
+  });
+
+  test('pinning alone leaves the body and updatedAt untouched', async () => {
+    const { note } = await runtime.createNote(PROJECT_ID, { body: 'body' });
+
+    const result = await runtime.updateNote(PROJECT_ID, note.id, { pinned: true });
+    expect(result.note.pinned).toBe(true);
+    expect(result.note.body).toBe('body');
+    expect(result.note.updatedAt).toBe(note.updatedAt);
+  });
+
+  test('update rejects an empty patch', async () => {
+    const { note } = await runtime.createNote(PROJECT_ID, { body: 'body' });
+    await expect(runtime.updateNote(PROJECT_ID, note.id, {})).rejects.toThrow('body or pinned is required');
+  });
+
+  test('update rejects blanking the body', async () => {
+    const { note } = await runtime.createNote(PROJECT_ID, { body: 'body' });
+    await expect(runtime.updateNote(PROJECT_ID, note.id, { body: '  ' })).rejects.toThrow('body is required');
+  });
+
+  test('update returns null for an unknown note', async () => {
+    expect(await runtime.updateNote(PROJECT_ID, 'missing', { body: 'x' })).toBeNull();
+  });
+
+  test('delete removes only the requested note', async () => {
+    const keep = await runtime.createNote(PROJECT_ID, { body: 'keep' });
+    const drop = await runtime.createNote(PROJECT_ID, { body: 'drop' });
+
+    const result = await runtime.deleteNote(PROJECT_ID, drop.note.id);
+    expect(result.deleted).toBe(true);
+    expect(result.context.notes.map((note) => note.id)).toEqual([keep.note.id]);
+  });
+
+  test('deleting an unknown note reports no deletion', async () => {
+    const result = await runtime.deleteNote(PROJECT_ID, 'missing');
+    expect(result.deleted).toBe(false);
+  });
+
+  test('refuses to grow past the note limit', async () => {
+    const notes = Array.from({ length: 200 }, (_unused, index) => ({
+      id: `n${index}`,
+      body: `note ${index}`,
+      createdAt: index,
+      updatedAt: index,
+    }));
+    await writeJson(contextPath(), { version: 2, notes, todos: [], plans: [] });
+
+    await expect(runtime.createNote(PROJECT_ID, { body: 'one too many' })).rejects.toThrow('at most 200 notes');
+  });
+
+  test('concurrent creates all survive', async () => {
+    await Promise.all([
+      runtime.createNote(PROJECT_ID, { body: 'a' }),
+      runtime.createNote(PROJECT_ID, { body: 'b' }),
+      runtime.createNote(PROJECT_ID, { body: 'c' }),
+    ]);
+
+    const bodies = (await runtime.readContext(PROJECT_ID)).notes.map((note) => note.body);
+    expect(bodies.sort()).toEqual(['a', 'b', 'c']);
   });
 });
 
@@ -308,17 +440,35 @@ describe('plans', () => {
   });
 
   test('update does not disturb notes or todos', async () => {
-    await runtime.saveNotesAndTodos(PROJECT_ID, {
-      notes: 'keep me',
-      todos: [{ id: 't1', text: 'keep', completed: false, createdAt: 1 }],
-    });
+    await runtime.createNote(PROJECT_ID, { body: 'keep me' });
+    await runtime.saveTodos(PROJECT_ID, [{ id: 't1', text: 'keep', completed: false, createdAt: 1 }]);
     const { plan } = await runtime.createPlan(PROJECT_ID, { title: 'A', body: 'x' });
 
     await runtime.updatePlan(PROJECT_ID, plan.id, { raw: '# B\n\ny' });
 
     const context = await runtime.readContext(PROJECT_ID);
-    expect(context.notes).toBe('keep me');
+    expect(context.notes.map((note) => note.body)).toEqual(['keep me']);
     expect(context.todos).toHaveLength(1);
+  });
+
+  test('pinning a plan leaves its title and file alone', async () => {
+    const { plan } = await runtime.createPlan(PROJECT_ID, { title: 'Pin me', body: 'x' });
+
+    const result = await runtime.setPlanPinned(PROJECT_ID, plan.id, true);
+    expect(result.plan).toEqual({ ...plan, pinned: true });
+    expect((await runtime.readContext(PROJECT_ID)).plans[0].pinned).toBe(true);
+  });
+
+  test('pinning an unknown plan returns null', async () => {
+    expect(await runtime.setPlanPinned(PROJECT_ID, 'missing', true)).toBeNull();
+  });
+
+  test('editing a plan preserves its pin state', async () => {
+    const { plan } = await runtime.createPlan(PROJECT_ID, { title: 'A', body: 'x' });
+    await runtime.setPlanPinned(PROJECT_ID, plan.id, true);
+
+    const result = await runtime.updatePlan(PROJECT_ID, plan.id, { raw: '# B\n\ny' });
+    expect(result.plan.pinned).toBe(true);
   });
 
   test('an untitled body still produces a titled markdown file', async () => {

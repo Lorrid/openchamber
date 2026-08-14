@@ -25,10 +25,24 @@ export interface ProjectPlanLink {
   file: string;
   title: string;
   createdAt: number;
+  pinned: boolean;
+}
+
+export type ProjectNoteSource = 'manual' | 'selection' | 'agent';
+
+export interface ProjectNote {
+  id: string;
+  body: string;
+  createdAt: number;
+  updatedAt: number;
+  source: ProjectNoteSource;
+  pinned: boolean;
+  /** The message this note was distilled from, when it came from a chat. */
+  origin?: { sessionId: string; messageId?: string };
 }
 
 interface ProjectContextData {
-  notes: string;
+  notes: ProjectNote[];
   todos: ProjectTodoItem[];
   plans: ProjectPlanLink[];
 }
@@ -43,7 +57,7 @@ export interface ProjectRef {
   path: string;
 }
 
-export const PROJECT_NOTES_MAX_LENGTH = 3000;
+export const PROJECT_NOTE_BODY_MAX_LENGTH = 3000;
 export const PROJECT_TODO_TEXT_MAX_LENGTH = 120;
 
 /**
@@ -108,7 +122,7 @@ const parseContext = (payload: unknown): ProjectContextData => {
     throw new Error('Malformed project context response');
   }
   return {
-    notes: typeof record.notes === 'string' ? record.notes : '',
+    notes: Array.isArray(record.notes) ? record.notes : [],
     todos: Array.isArray(record.todos) ? record.todos : [],
     plans: Array.isArray(record.plans) ? record.plans : [],
   };
@@ -128,19 +142,112 @@ export const fetchProjectContext = async (
   return parseContext(await response.json());
 };
 
-export const saveProjectNotesAndTodos = async (
+export const saveProjectTodos = async (
   project: ProjectRef,
-  value: { notes: string; todos: ProjectTodoItem[] },
+  todos: ProjectTodoItem[],
 ): Promise<ProjectContextData> => {
-  const response = await runtimeFetch(`${basePath(requireProjectId(project))}/notes-todos`, {
+  const response = await runtimeFetch(`${basePath(requireProjectId(project))}/todos`, {
     method: 'PUT',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ notes: value.notes, todos: value.todos }),
+    body: JSON.stringify({ todos }),
   });
   if (!response.ok) {
-    throw new Error(await readErrorMessage(response, 'Failed to save project notes'));
+    throw new Error(await readErrorMessage(response, 'Failed to save project todos'));
   }
   return parseContext(await response.json());
+};
+
+export const createProjectNote = async (
+  project: ProjectRef,
+  value: { body: string; source?: ProjectNoteSource; origin?: { sessionId: string; messageId?: string } },
+): Promise<{ note: ProjectNote; context: ProjectContextData }> => {
+  const response = await runtimeFetch(`${basePath(requireProjectId(project))}/notes`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      body: value.body,
+      ...(value.source ? { source: value.source } : {}),
+      ...(value.origin ? { origin: value.origin } : {}),
+    }),
+  });
+  if (!response.ok) {
+    throw new Error(await readErrorMessage(response, 'Failed to create note'));
+  }
+  const payload = await response.json() as { note?: ProjectNote; context?: unknown };
+  if (!payload?.note) {
+    throw new Error('Malformed note create response');
+  }
+  return { note: payload.note, context: parseContext(payload.context) };
+};
+
+/**
+ * Patch a note. Only the supplied fields are sent, so pinning cannot roll back
+ * an edit that landed between the two requests.
+ *
+ * Resolves `null` when the note is gone.
+ */
+export const updateProjectNote = async (
+  project: ProjectRef,
+  noteId: string,
+  patch: { body?: string; pinned?: boolean },
+): Promise<ProjectNote | null> => {
+  const response = await runtimeFetch(
+    `${basePath(requireProjectId(project))}/notes/${encodeURIComponent(noteId)}`,
+    {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(patch),
+    },
+  );
+  if (response.status === 404) {
+    return null;
+  }
+  if (!response.ok) {
+    throw new Error(await readErrorMessage(response, 'Failed to save note'));
+  }
+  const payload = await response.json() as { note?: ProjectNote };
+  if (!payload?.note) {
+    throw new Error('Malformed note save response');
+  }
+  return payload.note;
+};
+
+export const deleteProjectNote = async (
+  project: ProjectRef,
+  noteId: string,
+): Promise<ProjectContextData> => {
+  const response = await runtimeFetch(
+    `${basePath(requireProjectId(project))}/notes/${encodeURIComponent(noteId)}`,
+    { method: 'DELETE' },
+  );
+  if (!response.ok) {
+    throw new Error(await readErrorMessage(response, 'Failed to delete note'));
+  }
+  return parseContext(await response.json());
+};
+
+/** Resolves `null` when the plan is gone. */
+export const setProjectPlanPinned = async (
+  project: ProjectRef,
+  planId: string,
+  pinned: boolean,
+): Promise<ProjectPlanLink | null> => {
+  const response = await runtimeFetch(
+    `${basePath(requireProjectId(project))}/plans/${encodeURIComponent(planId)}`,
+    {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ pinned }),
+    },
+  );
+  if (response.status === 404) {
+    return null;
+  }
+  if (!response.ok) {
+    throw new Error(await readErrorMessage(response, 'Failed to update plan'));
+  }
+  const payload = await response.json() as { plan?: ProjectPlanLink };
+  return payload?.plan ?? null;
 };
 
 /**

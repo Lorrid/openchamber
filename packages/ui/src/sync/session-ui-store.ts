@@ -20,6 +20,7 @@ import { opencodeClient } from "@/lib/opencode/client"
 import { runtimeFetch } from "@/lib/runtime-fetch"
 import { useConfigStore } from "@/stores/useConfigStore"
 import { useProjectsStore } from "@/stores/useProjectsStore"
+import { forgetPinnedContextForSession, markPinnedContextSent, resolvePinnedContextPart } from "@/lib/projectContextPinning"
 import { useGlobalSessionsStore, resolveGlobalSessionDirectory } from "@/stores/useGlobalSessionsStore"
 import { useDirectoryStore } from "@/stores/useDirectoryStore"
 import { useSessionFoldersStore } from "@/stores/useSessionFoldersStore"
@@ -1285,9 +1286,18 @@ export const useSessionUIStore = create<SessionUIState>()((set, get) => ({
       })
       if (!createdDraftSession) throw new Error("Failed to create session")
 
-      const mergedAdditionalParts = createdDraftSession.syntheticParts?.length
+      const draftParts = createdDraftSession.syntheticParts?.length
         ? [...(additionalParts || []), ...createdDraftSession.syntheticParts]
         : additionalParts
+      const draftPinned = await resolvePinnedContextPart({
+        sessionId: createdDraftSession.sessionId,
+        directory: createdDraftSession.directory,
+        projects: useProjectsStore.getState().projects,
+        worktreesByProject: get().availableWorktreesByProject,
+      })
+      const mergedAdditionalParts = draftPinned
+        ? [{ text: draftPinned.text, synthetic: true }, ...(draftParts || [])]
+        : draftParts
 
       notifyMessageSent(createdDraftSession.sessionId)
 
@@ -1324,6 +1334,11 @@ export const useSessionUIStore = create<SessionUIState>()((set, get) => ({
           })),
         })),
       })
+      // Recorded only after the send resolves: a failed send must carry the
+      // pinned context again rather than assume the agent already saw it.
+      if (draftPinned) {
+        markPinnedContextSent(draftPinned.sessionId, draftPinned.signature)
+      }
       return
     }
 
@@ -1383,6 +1398,20 @@ export const useSessionUIStore = create<SessionUIState>()((set, get) => ({
     if (targetSessionId) {
       await applyArmedGoal(targetSessionId, currentSessionDirectory)
     }
+
+    // Standing project context the user pinned. Prepended so it reads as
+    // background before the message it accompanies, and resolved to null unless
+    // the pinned set actually changed since this session last received it.
+    const pinnedContext = await resolvePinnedContextPart({
+      sessionId: targetSessionId || "",
+      directory: currentSessionDirectory,
+      projects: useProjectsStore.getState().projects,
+      worktreesByProject: get().availableWorktreesByProject,
+    })
+    const partsWithPinnedContext = pinnedContext
+      ? [{ text: pinnedContext.text, synthetic: true }, ...(additionalParts || [])]
+      : additionalParts
+
     await routeMessage({
       runtimeKey: capturedTarget?.runtimeKey,
       sessionId: targetSessionId || "",
@@ -1396,7 +1425,7 @@ export const useSessionUIStore = create<SessionUIState>()((set, get) => ({
       inputMode,
       files,
       delivery: options?.delivery,
-      additionalParts: additionalParts?.map((p) => ({
+      additionalParts: partsWithPinnedContext?.map((p) => ({
         text: p.text,
         synthetic: p.synthetic,
         files: p.attachments?.map((a) => ({
@@ -1407,6 +1436,9 @@ export const useSessionUIStore = create<SessionUIState>()((set, get) => ({
         })),
       })),
     })
+    if (pinnedContext) {
+      markPinnedContextSent(pinnedContext.sessionId, pinnedContext.signature)
+    }
   },
 
   // ---------------------------------------------------------------------------
@@ -1440,9 +1472,23 @@ export const useSessionUIStore = create<SessionUIState>()((set, get) => ({
   // ---------------------------------------------------------------------------
   // deleteSession — calls SDK, SSE event updates child store
   // ---------------------------------------------------------------------------
-  deleteSession: (id, options) => deleteSessionAction(id, options),
+  deleteSession: async (id, options) => {
+    const deleted = await deleteSessionAction(id, options)
+    if (deleted) {
+      // A recycled session id must not inherit the old session's belief that it
+      // already received the pinned context.
+      forgetPinnedContextForSession(id)
+    }
+    return deleted
+  },
 
-  deleteSessions: (ids, options) => deleteSessionsAction(ids, options),
+  deleteSessions: async (ids, options) => {
+    const result = await deleteSessionsAction(ids, options)
+    for (const id of result.deletedIds) {
+      forgetPinnedContextForSession(id)
+    }
+    return result
+  },
 
   archiveSession: (id) => archiveSessionAction(id),
 
