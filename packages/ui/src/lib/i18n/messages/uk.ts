@@ -1540,7 +1540,6 @@ export const dict: Record<I18nKey, string> = {
   "rightSidebar.contextNotesTodo.tabs.notes": "Нотатки",
   "rightSidebar.contextNotesTodo.tabs.todos": "Todo",
   "rightSidebar.contextNotesTodo.tabs.plans": "Плани",
-  "rightSidebar.contextNotesTodo.notes.composerHint": "Нова нотатка",
   "rightSidebar.contextNotesTodo.todo.clearCompleted": "Очистити завершені",
   "rightSidebar.contextNotesTodo.todo.inputPlaceholder": "Додати завдання",
   "rightSidebar.contextNotesTodo.todo.addAria": "Додати завдання",

@@ -1558,7 +1558,6 @@ export const dict: Record<I18nKey, string> = {
   'rightSidebar.contextNotesTodo.tabs.notes': 'ノート',
   'rightSidebar.contextNotesTodo.tabs.todos': 'Todo',
   'rightSidebar.contextNotesTodo.tabs.plans': '計画',
-  'rightSidebar.contextNotesTodo.notes.composerHint': '新しいノート',
   'rightSidebar.contextNotesTodo.todo.clearCompleted': '完了をクリア',
   'rightSidebar.contextNotesTodo.todo.inputPlaceholder': 'TODOを追加',
   'rightSidebar.contextNotesTodo.todo.addAria': 'TODOを追加',

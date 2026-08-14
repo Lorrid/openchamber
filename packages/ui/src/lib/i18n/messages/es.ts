@@ -1540,7 +1540,6 @@ export const dict: Record<I18nKey, string> = {
   "rightSidebar.contextNotesTodo.tabs.notes": "Notas",
   "rightSidebar.contextNotesTodo.tabs.todos": "Tareas",
   "rightSidebar.contextNotesTodo.tabs.plans": "Planes",
-  "rightSidebar.contextNotesTodo.notes.composerHint": "Nueva nota",
   "rightSidebar.contextNotesTodo.todo.clearCompleted": "Limpiar completadas",
   "rightSidebar.contextNotesTodo.todo.inputPlaceholder": "Añade una tarea pendiente",
   "rightSidebar.contextNotesTodo.todo.addAria": "Añadir tarea pendiente",

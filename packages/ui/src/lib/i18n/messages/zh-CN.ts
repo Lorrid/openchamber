@@ -1528,7 +1528,6 @@ export const dict: Record<I18nKey, string> = {
   'rightSidebar.contextNotesTodo.tabs.notes': '笔记',
   'rightSidebar.contextNotesTodo.tabs.todos': '待办',
   'rightSidebar.contextNotesTodo.tabs.plans': '计划',
-  'rightSidebar.contextNotesTodo.notes.composerHint': '新建笔记',
   'rightSidebar.contextNotesTodo.todo.clearCompleted': '清除已完成',
   'rightSidebar.contextNotesTodo.todo.inputPlaceholder': '添加待办',
   'rightSidebar.contextNotesTodo.todo.addAria': '添加待办',

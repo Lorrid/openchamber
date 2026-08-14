@@ -2643,7 +2643,6 @@ export const dict: Record<I18nKey, string> = {
   'rightSidebar.contextNotesTodo.tabs.notes': 'Notatki',
   'rightSidebar.contextNotesTodo.tabs.todos': 'Zadania',
   'rightSidebar.contextNotesTodo.tabs.plans': 'Plany',
-  'rightSidebar.contextNotesTodo.notes.composerHint': 'Nowa notatka',
   'saveProjectPlanDialog.actions.cancel': 'Anuluj',
   'saveProjectPlanDialog.actions.save': 'Zapisz',
   'saveProjectPlanDialog.actions.saving': 'Saving...',

@@ -1564,7 +1564,6 @@ export const dict: Record<I18nKey, string> = {
   'rightSidebar.contextNotesTodo.tabs.notes': '노트',
   'rightSidebar.contextNotesTodo.tabs.todos': '할 일',
   'rightSidebar.contextNotesTodo.tabs.plans': '계획',
-  'rightSidebar.contextNotesTodo.notes.composerHint': '새 노트',
   'rightSidebar.contextNotesTodo.todo.clearCompleted': '완료 항목 지우기',
   'rightSidebar.contextNotesTodo.todo.inputPlaceholder': 'Todo 추가',
   'rightSidebar.contextNotesTodo.todo.addAria': 'Todo 추가',

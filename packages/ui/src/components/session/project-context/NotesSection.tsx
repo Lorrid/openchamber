@@ -247,37 +247,36 @@ export const NotesSection: React.FC<{
 
   return (
     <div className="space-y-2">
-      <div className="flex items-center justify-between gap-2">
-        <span className="typography-meta text-muted-foreground">
-          {t('rightSidebar.contextNotesTodo.notes.composerHint')}
-        </span>
-        <span className="typography-meta text-muted-foreground">
-          {composerText.length}/{PROJECT_NOTE_BODY_MAX_LENGTH}
-        </span>
-      </div>
-
-      <div className="flex items-start gap-1.5">
-        <Textarea
-          value={composerText}
-          onChange={(event) => setComposerText(event.target.value.slice(0, PROJECT_NOTE_BODY_MAX_LENGTH))}
-          placeholder={t('rightSidebar.contextNotesTodo.notes.placeholder')}
-          resizedHeight={notesPanelHeight}
-          onResizeHeightChange={setNotesPanelHeight}
-          useScrollShadow
-          scrollShadowSize={56}
-          disabled={disabled}
-        />
-        <button
-          type="button"
-          onClick={() => void handleAdd()}
-          disabled={disabled || composerText.trim().length === 0}
-          className="inline-flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-md border border-border/70 text-muted-foreground hover:text-foreground hover:bg-interactive-hover/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50 disabled:cursor-not-allowed disabled:opacity-50"
-          aria-label={t('rightSidebar.contextNotesTodo.notes.addAria')}
-          title={t('rightSidebar.contextNotesTodo.notes.addAria')}
-        >
-          <Icon name="add" className="h-4 w-4" />
-        </button>
-      </div>
+      {/* Counter and add live in the textarea's own footer slot: beside it they
+          cost width the panel does not have and leave the button floating
+          against a tall field. */}
+      <Textarea
+        value={composerText}
+        onChange={(event) => setComposerText(event.target.value.slice(0, PROJECT_NOTE_BODY_MAX_LENGTH))}
+        placeholder={t('rightSidebar.contextNotesTodo.notes.placeholder')}
+        resizedHeight={notesPanelHeight}
+        onResizeHeightChange={setNotesPanelHeight}
+        useScrollShadow
+        scrollShadowSize={56}
+        disabled={disabled}
+        endSlot={(
+          <>
+            <span className="typography-meta text-muted-foreground">
+              {composerText.length}/{PROJECT_NOTE_BODY_MAX_LENGTH}
+            </span>
+            <button
+              type="button"
+              onClick={() => void handleAdd()}
+              disabled={disabled || composerText.trim().length === 0}
+              className="inline-flex h-6 w-6 items-center justify-center rounded-md text-muted-foreground hover:text-foreground hover:bg-interactive-hover/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50 disabled:cursor-not-allowed disabled:opacity-40"
+              aria-label={t('rightSidebar.contextNotesTodo.notes.addAria')}
+              title={t('rightSidebar.contextNotesTodo.notes.addAria')}
+            >
+              <Icon name="add" className="h-4 w-4" />
+            </button>
+          </>
+        )}
+      />
 
       <div className="rounded-lg border border-border/60 bg-background/40">
         {visibleNotes.length === 0 ? (

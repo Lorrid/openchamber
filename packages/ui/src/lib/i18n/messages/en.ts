@@ -1562,7 +1562,6 @@ export const dict = {
   'rightSidebar.contextNotesTodo.tabs.notes': 'Notes',
   'rightSidebar.contextNotesTodo.tabs.todos': 'Todo',
   'rightSidebar.contextNotesTodo.tabs.plans': 'Plans',
-  'rightSidebar.contextNotesTodo.notes.composerHint': 'New note',
   'rightSidebar.contextNotesTodo.todo.clearCompleted': 'Clear completed',
   'rightSidebar.contextNotesTodo.todo.inputPlaceholder': 'Add a todo',
   'rightSidebar.contextNotesTodo.todo.addAria': 'Add todo',

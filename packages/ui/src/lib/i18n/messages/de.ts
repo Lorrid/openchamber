@@ -1405,7 +1405,6 @@ export const dict = {
   'rightSidebar.contextNotesTodo.tabs.notes': 'Notizen',
   'rightSidebar.contextNotesTodo.tabs.todos': 'Todo',
   'rightSidebar.contextNotesTodo.tabs.plans': 'Pläne',
-  'rightSidebar.contextNotesTodo.notes.composerHint': 'Neue Notiz',
   'rightSidebar.contextNotesTodo.todo.clearCompleted': 'Abgeschlossene löschen',
   'rightSidebar.contextNotesTodo.todo.inputPlaceholder': 'Eine Aufgabe hinzufügen',
   'rightSidebar.contextNotesTodo.todo.addAria': 'Aufgabe hinzufügen',
