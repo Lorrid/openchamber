@@ -1513,6 +1513,8 @@ export const dict: Record<I18nKey, string> = {
   'rightSidebar.contextNotesTodo.notes.placeholder': '记录上下文、提醒或链接',
   'rightSidebar.contextNotesTodo.notes.addAria': '添加笔记',
   'rightSidebar.contextNotesTodo.notes.empty': '还没有笔记。可以记录上下文、提醒或链接。',
+  'rightSidebar.contextNotesTodo.notes.actions.expand': '展开笔记',
+  'rightSidebar.contextNotesTodo.notes.actions.collapse': '折叠笔记',
   'rightSidebar.contextNotesTodo.notes.actions.delete': '删除笔记',
   'rightSidebar.contextNotesTodo.notes.actions.pin': '固定到智能体上下文',
   'rightSidebar.contextNotesTodo.notes.actions.unpin': '从智能体上下文取消固定',

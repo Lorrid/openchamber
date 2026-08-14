@@ -1525,6 +1525,8 @@ export const dict: Record<I18nKey, string> = {
   "rightSidebar.contextNotesTodo.notes.placeholder": "Зберігайте контекст, нагадування або посилання",
   "rightSidebar.contextNotesTodo.notes.addAria": "Додати нотатку",
   "rightSidebar.contextNotesTodo.notes.empty": "Нотаток ще немає. Занотуйте контекст, нагадування або посилання.",
+  "rightSidebar.contextNotesTodo.notes.actions.expand": "Розгорнути нотатку",
+  "rightSidebar.contextNotesTodo.notes.actions.collapse": "Згорнути нотатку",
   "rightSidebar.contextNotesTodo.notes.actions.delete": "Видалити нотатку",
   "rightSidebar.contextNotesTodo.notes.actions.pin": "Закріпити в контексті агента",
   "rightSidebar.contextNotesTodo.notes.actions.unpin": "Відкріпити з контексту агента",

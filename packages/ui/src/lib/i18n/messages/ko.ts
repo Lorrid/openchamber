@@ -1549,6 +1549,8 @@ export const dict: Record<I18nKey, string> = {
   'rightSidebar.contextNotesTodo.notes.placeholder': '컨텍스트, 리마인더, 링크를 기록하세요',
   'rightSidebar.contextNotesTodo.notes.addAria': '노트 추가',
   'rightSidebar.contextNotesTodo.notes.empty': '아직 노트가 없습니다. 맥락이나 메모, 링크를 남겨 보세요.',
+  'rightSidebar.contextNotesTodo.notes.actions.expand': '노트 펼치기',
+  'rightSidebar.contextNotesTodo.notes.actions.collapse': '노트 접기',
   'rightSidebar.contextNotesTodo.notes.actions.delete': '노트 삭제',
   'rightSidebar.contextNotesTodo.notes.actions.pin': '에이전트 컨텍스트에 고정',
   'rightSidebar.contextNotesTodo.notes.actions.unpin': '에이전트 컨텍스트에서 고정 해제',

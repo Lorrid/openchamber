@@ -1543,6 +1543,8 @@ export const dict: Record<I18nKey, string> = {
   'rightSidebar.contextNotesTodo.notes.placeholder': 'コンテキスト、リマインダー、リンクを記録',
   'rightSidebar.contextNotesTodo.notes.addAria': 'ノートを追加',
   'rightSidebar.contextNotesTodo.notes.empty': 'ノートはまだありません。文脈やメモ、リンクを残せます。',
+  'rightSidebar.contextNotesTodo.notes.actions.expand': 'ノートを展開',
+  'rightSidebar.contextNotesTodo.notes.actions.collapse': 'ノートを折りたたむ',
   'rightSidebar.contextNotesTodo.notes.actions.delete': 'ノートを削除',
   'rightSidebar.contextNotesTodo.notes.actions.pin': 'エージェントのコンテキストにピン留め',
   'rightSidebar.contextNotesTodo.notes.actions.unpin': 'エージェントのコンテキストからピン留めを解除',

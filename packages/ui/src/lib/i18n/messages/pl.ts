@@ -2628,6 +2628,8 @@ export const dict: Record<I18nKey, string> = {
   'rightSidebar.contextNotesTodo.todo.sendMenu.newWorktreeSession': 'Wyślij do nowej sesji drzewa pracy',
   'rightSidebar.contextNotesTodo.notes.addAria': 'Dodaj notatkę',
   'rightSidebar.contextNotesTodo.notes.empty': 'Brak notatek. Zapisz kontekst, przypomnienia lub linki.',
+  'rightSidebar.contextNotesTodo.notes.actions.expand': 'Rozwiń notatkę',
+  'rightSidebar.contextNotesTodo.notes.actions.collapse': 'Zwiń notatkę',
   'rightSidebar.contextNotesTodo.notes.actions.delete': 'Usuń notatkę',
   'rightSidebar.contextNotesTodo.notes.actions.pin': 'Przypnij do kontekstu agenta',
   'rightSidebar.contextNotesTodo.notes.actions.unpin': 'Odepnij od kontekstu agenta',

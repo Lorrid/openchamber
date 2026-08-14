@@ -1525,6 +1525,8 @@ export const dict: Record<I18nKey, string> = {
   "rightSidebar.contextNotesTodo.notes.placeholder": "Capture contexto, lembretes ou links",
   "rightSidebar.contextNotesTodo.notes.addAria": "Adicionar nota",
   "rightSidebar.contextNotesTodo.notes.empty": "Ainda não há notas. Registre contexto, lembretes ou links.",
+  "rightSidebar.contextNotesTodo.notes.actions.expand": "Expandir nota",
+  "rightSidebar.contextNotesTodo.notes.actions.collapse": "Recolher nota",
   "rightSidebar.contextNotesTodo.notes.actions.delete": "Excluir nota",
   "rightSidebar.contextNotesTodo.notes.actions.pin": "Fixar no contexto do agente",
   "rightSidebar.contextNotesTodo.notes.actions.unpin": "Desafixar do contexto do agente",

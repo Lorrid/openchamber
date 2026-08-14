@@ -1312,6 +1312,8 @@ export const dict = {
   'rightSidebar.contextNotesTodo.notes.placeholder': 'Capturez le contexte, les rappels ou les liens',
   'rightSidebar.contextNotesTodo.notes.addAria': 'Ajouter une note',
   'rightSidebar.contextNotesTodo.notes.empty': 'Aucune note pour le moment. Notez du contexte, des rappels ou des liens.',
+  'rightSidebar.contextNotesTodo.notes.actions.expand': 'Développer la note',
+  'rightSidebar.contextNotesTodo.notes.actions.collapse': 'Réduire la note',
   'rightSidebar.contextNotesTodo.notes.actions.delete': 'Supprimer la note',
   'rightSidebar.contextNotesTodo.notes.actions.pin': 'Épingler au contexte de l\'agent',
   'rightSidebar.contextNotesTodo.notes.actions.unpin': 'Détacher du contexte de l\'agent',

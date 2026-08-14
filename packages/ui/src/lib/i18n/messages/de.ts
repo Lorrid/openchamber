@@ -1390,6 +1390,8 @@ export const dict = {
   'rightSidebar.contextNotesTodo.notes.placeholder': 'Kontext, Erinnerungen oder Links festhalten',
   'rightSidebar.contextNotesTodo.notes.addAria': 'Notiz hinzufügen',
   'rightSidebar.contextNotesTodo.notes.empty': 'Noch keine Notizen. Halte Kontext, Erinnerungen oder Links fest.',
+  'rightSidebar.contextNotesTodo.notes.actions.expand': 'Notiz aufklappen',
+  'rightSidebar.contextNotesTodo.notes.actions.collapse': 'Notiz zuklappen',
   'rightSidebar.contextNotesTodo.notes.actions.delete': 'Notiz löschen',
   'rightSidebar.contextNotesTodo.notes.actions.pin': 'An Agent-Kontext anheften',
   'rightSidebar.contextNotesTodo.notes.actions.unpin': 'Vom Agent-Kontext lösen',

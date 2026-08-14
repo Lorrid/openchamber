@@ -1547,6 +1547,8 @@ export const dict = {
   'rightSidebar.contextNotesTodo.notes.placeholder': 'Capture context, reminders, or links',
   'rightSidebar.contextNotesTodo.notes.addAria': 'Add note',
   'rightSidebar.contextNotesTodo.notes.empty': 'No notes yet. Capture context, reminders, or links.',
+  'rightSidebar.contextNotesTodo.notes.actions.expand': 'Expand note',
+  'rightSidebar.contextNotesTodo.notes.actions.collapse': 'Collapse note',
   'rightSidebar.contextNotesTodo.notes.actions.delete': 'Delete note',
   'rightSidebar.contextNotesTodo.notes.actions.pin': 'Pin to agent context',
   'rightSidebar.contextNotesTodo.notes.actions.unpin': 'Unpin from agent context',

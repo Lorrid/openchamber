@@ -22,10 +22,12 @@ const NOTE_SAVE_DEBOUNCE_MS = 400;
  */
 const NoteRow: React.FC<{
   note: ProjectNote;
+  expanded: boolean;
+  onToggleExpanded: () => void;
   onSaveBody: (body: string) => void;
   onTogglePinned: () => void;
   onDelete: () => void;
-}> = ({ note, onSaveBody, onTogglePinned, onDelete }) => {
+}> = ({ note, expanded, onToggleExpanded, onSaveBody, onTogglePinned, onDelete }) => {
   const { t } = useI18n();
   const [draft, setDraft] = React.useState(note.body);
   const lastSavedRef = React.useRef(note.body);
@@ -92,15 +94,39 @@ const NoteRow: React.FC<{
   return (
     <li className="space-y-1 px-2.5 py-2">
       <div className="flex items-start gap-1.5">
-        <Textarea
-          simple
-          rows={Math.min(8, Math.max(1, draft.split('\n').length))}
-          value={draft}
-          onChange={(event) => setDraft(event.target.value.slice(0, PROJECT_NOTE_BODY_MAX_LENGTH))}
-          onBlur={handleBlur}
-          className="min-h-0 w-full flex-1 resize-none bg-transparent p-0 typography-ui-label leading-normal text-foreground focus-visible:outline-none focus-visible:ring-0"
-        />
+        {expanded ? (
+          <Textarea
+            simple
+            autoFocus
+            rows={Math.min(20, Math.max(3, draft.split('\n').length + 1))}
+            value={draft}
+            onChange={(event) => setDraft(event.target.value.slice(0, PROJECT_NOTE_BODY_MAX_LENGTH))}
+            onBlur={handleBlur}
+            className="min-h-0 w-full flex-1 resize-none bg-transparent p-0 typography-ui-label leading-normal text-foreground focus-visible:outline-none focus-visible:ring-0"
+          />
+        ) : (
+          <button
+            type="button"
+            onClick={onToggleExpanded}
+            className="min-w-0 flex-1 bg-transparent p-0 text-left typography-ui-label leading-normal text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50"
+            aria-label={t('rightSidebar.contextNotesTodo.notes.actions.expand')}
+            title={draft}
+          >
+            <span className="line-clamp-3 whitespace-pre-wrap break-words">{draft}</span>
+          </button>
+        )}
         <div className="flex flex-shrink-0 items-center gap-0.5">
+          {expanded ? (
+            <button
+              type="button"
+              onClick={onToggleExpanded}
+              className="inline-flex h-6 w-6 items-center justify-center rounded-md text-muted-foreground hover:text-foreground hover:bg-interactive-hover/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50"
+              aria-label={t('rightSidebar.contextNotesTodo.notes.actions.collapse')}
+              title={t('rightSidebar.contextNotesTodo.notes.actions.collapse')}
+            >
+              <Icon name="arrow-up-s" className="h-3.5 w-3.5" />
+            </button>
+          ) : null}
           <button
             type="button"
             onClick={onTogglePinned}
@@ -150,6 +176,9 @@ export const NotesSection: React.FC<{
 }> = ({ projectRef, notes, disabled, query }) => {
   const { t } = useI18n();
   const [composerText, setComposerText] = React.useState('');
+  // One at a time on purpose: notes can run to 3000 characters each, and
+  // letting several stand open turns the tab into one unbroken wall of text.
+  const [expandedNoteId, setExpandedNoteId] = React.useState<string | null>(null);
   const notesPanelHeight = useUIStore((state) => state.notesPanelHeight);
   const setNotesPanelHeight = useUIStore((state) => state.setNotesPanelHeight);
   const createNote = useProjectContextStore((state) => state.createNote);
@@ -261,6 +290,8 @@ export const NotesSection: React.FC<{
               <NoteRow
                 key={note.id}
                 note={note}
+                expanded={expandedNoteId === note.id}
+                onToggleExpanded={() => setExpandedNoteId((current) => (current === note.id ? null : note.id))}
                 onSaveBody={(body) => handleSaveBody(note.id, body)}
                 onTogglePinned={() => void handleTogglePinned(note.id, !note.pinned)}
                 onDelete={() => void handleDelete(note.id)}

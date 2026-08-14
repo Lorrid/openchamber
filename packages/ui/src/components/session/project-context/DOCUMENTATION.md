@@ -84,6 +84,10 @@ matched the old project would silently hide everything in the new one.
 - **An external note change is adopted only while that row is untouched** since
   its last save. "Add to notes" from a chat selection must reach an open panel,
   but must never overwrite what the user is typing.
+- **Only one note is expanded at a time, and collapsed notes are clamped.**
+  Notes run to 3000 characters each; with the panel owning the only scroller,
+  unbounded rows turn the tab into one unbroken wall of text. A collapsed note
+  shows a three-line preview and expands into its editor on click.
 - **A blanked note body is never persisted.** The server rejects it, so the row
   restores its last saved text on blur rather than showing a phantom failure.
   Deleting is an explicit action.

@@ -1523,6 +1523,8 @@ export const dict: Record<I18nKey, string> = {
   'rightSidebar.contextNotesTodo.notes.placeholder': '記錄上下文、提醒或連結',
   'rightSidebar.contextNotesTodo.notes.addAria': '新增筆記',
   'rightSidebar.contextNotesTodo.notes.empty': '尚無筆記。可以記錄脈絡、提醒或連結。',
+  'rightSidebar.contextNotesTodo.notes.actions.expand': '展開筆記',
+  'rightSidebar.contextNotesTodo.notes.actions.collapse': '收合筆記',
   'rightSidebar.contextNotesTodo.notes.actions.delete': '刪除筆記',
   'rightSidebar.contextNotesTodo.notes.actions.pin': '釘選到代理上下文',
   'rightSidebar.contextNotesTodo.notes.actions.unpin': '從代理上下文取消釘選',
