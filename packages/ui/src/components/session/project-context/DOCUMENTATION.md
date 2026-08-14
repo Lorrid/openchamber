@@ -7,7 +7,7 @@ surface in the desktop context rail and by the mobile workspace drawer.
 
 | File | Owns |
 |---|---|
-| `ProjectNotesTodoPanel.tsx` | container: store subscription, load, failure toast, search query, the todo write |
+| `ProjectNotesTodoPanel.tsx` | container: store subscription, load, failure toast, tabs, search query, the todo write |
 | `NotesSection.tsx` | note composer, note list, per-note edit/pin/delete |
 | `TodosSection.tsx` | todo list, add/toggle/delete/clear, drag reorder, list resize |
 | `PlansSection.tsx` | plan list, import, pin, delete, open |
@@ -42,13 +42,39 @@ the container to own the notes draft, because otherwise a todo toggle would
 persist whatever notes were last committed and discard unsaved typing. Splitting
 the routes removed the coupling rather than managing it.
 
+## Layout
+
+The three lists are tabs, not one stacked column. Stacking gave each list its
+own scroller inside the panel's scroller, and it only got worse as lists grew —
+the todo list had to carry a manual resize handle just to stay usable. With
+tabs there is exactly one scroller: the panel's. The resize handle and its
+persisted `todoPanelHeight` are gone with it, and each section renders its list
+at natural height.
+
+The host (`RightSidebarTabs`) therefore sets `overflow-hidden`; putting a
+scroller there again would nest one inside the other.
+
+Section headers no longer repeat their own name or count — the tab carries both.
+
+The active tab persists in `useUIStore` so switching surfaces or remounting the
+panel returns to where the user was.
+
 ## Search
 
-One query in the container filters all three sections. Filtering is
-display-only: every mutation still acts on the full list, so reordering or
-clearing completed todos while a filter is active cannot drop hidden items. The
-query resets when the project changes, since a query that matched the old
-project would silently hide everything in the new one.
+One query in the container filters all three tabs, and the tab bar doubles as
+the result summary: each tab shows its match count. Tabs divide, and search is
+the one thing division would hurt — you do not always remember whether
+something was written as a note or lives in a plan — so search deliberately
+stays above the tabs rather than becoming per-tab.
+
+If the active tab has no matches and another does, the panel follows the search
+there. Without that, typing a query whose hits live elsewhere shows an empty
+list and the user has to guess which tab to try.
+
+Filtering is display-only: every mutation still acts on the full list, so
+reordering or clearing completed todos while a filter is active cannot drop
+hidden items. The query resets when the project changes, since a query that
+matched the old project would silently hide everything in the new one.
 
 ## Invariants
 

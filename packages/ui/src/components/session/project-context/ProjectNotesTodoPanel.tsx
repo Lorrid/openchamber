@@ -3,10 +3,12 @@ import React from 'react';
 import { toast } from '@/components/ui';
 import { Icon } from '@/components/icon/Icon';
 import { Input } from '@/components/ui/input';
+import { SortableTabsStrip, type SortableTabsStripItem } from '@/components/ui/sortable-tabs-strip';
 import { useI18n } from '@/lib/i18n';
 import { resolveProjectContextId, type ProjectRef, type ProjectTodoItem } from '@/lib/projectContextApi';
 import { cn } from '@/lib/utils';
 import { EMPTY_PROJECT_CONTEXT_ENTRY, useProjectContextStore } from '@/stores/useProjectContextStore';
+import { useUIStore } from '@/stores/useUIStore';
 import { TodoSendDialog } from '../TodoSendDialog';
 import { NotesSection } from './NotesSection';
 import { PlansSection } from './PlansSection';
@@ -24,17 +26,33 @@ interface ProjectNotesTodoPanelProps {
   className?: string;
 }
 
+type ProjectContextTab = 'notes' | 'todos' | 'plans';
+
+const TAB_ORDER: ProjectContextTab[] = ['notes', 'todos', 'plans'];
+
 const sortTodosWithCompletedLast = (items: ProjectTodoItem[]): ProjectTodoItem[] => [
   ...items.filter((todo) => !todo.completed),
   ...items.filter((todo) => todo.completed),
 ];
 
+const matches = (haystack: string, needle: string): boolean => (
+  haystack.toLowerCase().includes(needle)
+);
+
 /**
  * Notes, todos, and plans for the active project.
  *
- * Storage is server-owned and reached through `useProjectContextStore`. This
- * container owns only what the sections genuinely share: the loaded snapshot,
- * the search query, and the todo write.
+ * The three lists are tabs rather than one stacked column: stacking gave each
+ * list its own scroller inside the panel's scroller, which only got worse as
+ * lists grew and forced the todo list to carry a manual resize handle just to
+ * stay usable.
+ *
+ * Search sits above the tabs and stays panel-wide. Tabs divide, and search is
+ * the one thing that division would hurt — you do not always remember whether
+ * something was written as a note or lives in a plan — so the tab bar doubles
+ * as the result summary by showing per-tab match counts.
+ *
+ * Storage is server-owned and reached through `useProjectContextStore`.
  */
 export const ProjectNotesTodoPanel: React.FC<ProjectNotesTodoPanelProps> = ({
   projectRef,
@@ -52,7 +70,15 @@ export const ProjectNotesTodoPanel: React.FC<ProjectNotesTodoPanelProps> = ({
   );
   const loadProjectContext = useProjectContextStore((state) => state.load);
   const saveTodos = useProjectContextStore((state) => state.saveTodos);
+
+  const storedTab = useUIStore((state) => state.projectContextTab);
+  const setStoredTab = useUIStore((state) => state.setProjectContextTab);
+  const activeTab: ProjectContextTab = TAB_ORDER.includes(storedTab as ProjectContextTab)
+    ? storedTab as ProjectContextTab
+    : 'notes';
+
   const [query, setQuery] = React.useState('');
+  const trimmedQuery = query.trim().toLowerCase();
 
   // Completed items sink to the bottom in the list; storage order is untouched.
   const todos = React.useMemo(
@@ -60,6 +86,21 @@ export const ProjectNotesTodoPanel: React.FC<ProjectNotesTodoPanelProps> = ({
     [contextEntry.todos],
   );
   const isLoading = contextEntry.loading && !contextEntry.loaded;
+
+  const counts = React.useMemo(() => {
+    if (!trimmedQuery) {
+      return {
+        notes: contextEntry.notes.length,
+        todos: todos.length,
+        plans: contextEntry.plans.length,
+      };
+    }
+    return {
+      notes: contextEntry.notes.filter((note) => matches(note.body, trimmedQuery)).length,
+      todos: todos.filter((todo) => matches(todo.text, trimmedQuery)).length,
+      plans: contextEntry.plans.filter((plan) => matches(plan.title, trimmedQuery)).length,
+    };
+  }, [contextEntry.notes, contextEntry.plans, todos, trimmedQuery]);
 
   const send = useProjectTodoSend({ projectRef, canCreateWorktree, onActionComplete });
 
@@ -93,6 +134,19 @@ export const ProjectNotesTodoPanel: React.FC<ProjectNotesTodoPanelProps> = ({
     setQuery('');
   }, [projectContextId]);
 
+  // Follow the search to where the matches are. Without this, typing a query
+  // whose hits are all in another tab shows an empty list and the user has to
+  // guess which tab to try. Only moves off a tab that has nothing.
+  React.useEffect(() => {
+    if (!trimmedQuery || counts[activeTab] > 0) {
+      return;
+    }
+    const withMatches = TAB_ORDER.find((tab) => counts[tab] > 0);
+    if (withMatches) {
+      setStoredTab(withMatches);
+    }
+  }, [activeTab, counts, setStoredTab, trimmedQuery]);
+
   const handlePersistTodos = React.useCallback(
     (nextTodos: ProjectTodoItem[]) => {
       if (!projectRef) {
@@ -109,6 +163,24 @@ export const ProjectNotesTodoPanel: React.FC<ProjectNotesTodoPanelProps> = ({
     [projectRef, saveTodos, t]
   );
 
+  const tabItems: SortableTabsStripItem[] = React.useMemo(() => ([
+    {
+      id: 'notes',
+      label: `${t('rightSidebar.contextNotesTodo.tabs.notes')} ${counts.notes}`,
+      icon: <Icon name="sticky-note" className="h-3.5 w-3.5" />,
+    },
+    {
+      id: 'todos',
+      label: `${t('rightSidebar.contextNotesTodo.tabs.todos')} ${counts.todos}`,
+      icon: <Icon name="checkbox-circle" className="h-3.5 w-3.5" />,
+    },
+    {
+      id: 'plans',
+      label: `${t('rightSidebar.contextNotesTodo.tabs.plans')} ${counts.plans}`,
+      icon: <Icon name="file-text" className="h-3.5 w-3.5" />,
+    },
+  ]), [counts, t]);
+
   if (!projectRef) {
     return (
       <div className={cn('w-full min-w-0 p-3', className)}>
@@ -119,58 +191,87 @@ export const ProjectNotesTodoPanel: React.FC<ProjectNotesTodoPanelProps> = ({
     );
   }
 
+  const projectTitle = projectLabel?.trim()
+    || projectRef.path.split('/').filter(Boolean).pop()
+    || projectRef.path;
+
   return (
-    <div className={cn('w-full min-w-0 space-y-3 p-3', className)}>
-      <div className="relative">
-        <Icon
-          name="search"
-          className="pointer-events-none absolute left-2 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground"
+    <div className={cn('flex h-full min-h-0 w-full min-w-0 flex-col', className)}>
+      <div className="flex flex-shrink-0 flex-col gap-2 p-3 pb-2">
+        <h3
+          className="min-w-0 truncate typography-ui-label font-semibold text-foreground"
+          title={projectRef.path}
+        >
+          {projectTitle}
+        </h3>
+
+        <div className="relative">
+          <Icon
+            name="search"
+            className="pointer-events-none absolute left-2 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground"
+          />
+          <Input
+            value={query}
+            onChange={(event) => setQuery(event.target.value)}
+            placeholder={t('rightSidebar.contextNotesTodo.search.placeholder')}
+            className="h-8 pl-7 pr-7"
+          />
+          {query ? (
+            <button
+              type="button"
+              onClick={() => setQuery('')}
+              className="absolute right-1.5 top-1/2 inline-flex h-5 w-5 -translate-y-1/2 items-center justify-center rounded-md text-muted-foreground hover:text-foreground hover:bg-interactive-hover/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50"
+              aria-label={t('rightSidebar.contextNotesTodo.search.clear')}
+              title={t('rightSidebar.contextNotesTodo.search.clear')}
+            >
+              <Icon name="close" className="h-3.5 w-3.5" />
+            </button>
+          ) : null}
+        </div>
+
+        <SortableTabsStrip
+          items={tabItems}
+          activeId={activeTab}
+          onSelect={setStoredTab}
+          layoutMode="fit"
+          variant="active-pill"
+          className="h-8"
         />
-        <Input
-          value={query}
-          onChange={(event) => setQuery(event.target.value)}
-          placeholder={t('rightSidebar.contextNotesTodo.search.placeholder')}
-          className="h-8 pl-7 pr-7"
-        />
-        {query ? (
-          <button
-            type="button"
-            onClick={() => setQuery('')}
-            className="absolute right-1.5 top-1/2 inline-flex h-5 w-5 -translate-y-1/2 items-center justify-center rounded-md text-muted-foreground hover:text-foreground hover:bg-interactive-hover/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50"
-            aria-label={t('rightSidebar.contextNotesTodo.search.clear')}
-            title={t('rightSidebar.contextNotesTodo.search.clear')}
-          >
-            <Icon name="close" className="h-3.5 w-3.5" />
-          </button>
-        ) : null}
       </div>
 
-      <NotesSection
-        projectRef={projectRef}
-        projectLabel={projectLabel}
-        notes={contextEntry.notes}
-        disabled={isLoading}
-        query={query}
-      />
+      <div className="min-h-0 flex-1 overflow-y-auto px-3 pb-3">
+        {activeTab === 'notes' ? (
+          <NotesSection
+            projectRef={projectRef}
+            notes={contextEntry.notes}
+            disabled={isLoading}
+            query={query}
+          />
+        ) : null}
 
-      <TodosSection
-        todos={todos}
-        query={query}
-        disabled={isLoading}
-        canCreateWorktree={canCreateWorktree}
-        sendingTodoId={send.sendingTodoId}
-        onPersistTodos={handlePersistTodos}
-        onSendToCurrentSession={send.sendToCurrentSession}
-        onSendToNewSession={send.sendToNewSession}
-        onSendToNewWorktreeSession={send.sendToNewWorktreeSession}
-      />
+        {activeTab === 'todos' ? (
+          <TodosSection
+            todos={todos}
+            query={query}
+            disabled={isLoading}
+            canCreateWorktree={canCreateWorktree}
+            sendingTodoId={send.sendingTodoId}
+            onPersistTodos={handlePersistTodos}
+            onSendToCurrentSession={send.sendToCurrentSession}
+            onSendToNewSession={send.sendToNewSession}
+            onSendToNewWorktreeSession={send.sendToNewWorktreeSession}
+          />
+        ) : null}
 
-      <PlansSection
-        projectRef={projectRef}
-        plans={contextEntry.plans}
-        query={query}
-        onOpenPlan={onOpenPlan}
-      />
+        {activeTab === 'plans' ? (
+          <PlansSection
+            projectRef={projectRef}
+            plans={contextEntry.plans}
+            query={query}
+            onOpenPlan={onOpenPlan}
+          />
+        ) : null}
+      </div>
 
       <TodoSendDialog
         open={send.pendingSendTarget !== null}

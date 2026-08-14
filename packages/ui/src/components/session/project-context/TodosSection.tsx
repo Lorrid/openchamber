@@ -22,28 +22,6 @@ import { Icon } from '@/components/icon/Icon';
 import { useI18n } from '@/lib/i18n';
 import { PROJECT_TODO_TEXT_MAX_LENGTH, type ProjectTodoItem } from '@/lib/projectContextApi';
 import { cn } from '@/lib/utils';
-import { useUIStore } from '@/stores/useUIStore';
-
-/** Item count past which the list gets a fixed, user-resizable height. */
-const TODO_PANEL_SCROLL_THRESHOLD = 7;
-const TODO_PANEL_MIN_ITEMS = 5;
-const TODO_PANEL_MAX_ITEMS = 15;
-
-const getEffectiveItemHeight = (padding: number) => {
-  const scale = Math.sqrt(padding / 100);
-  const paddingPx = 12 * scale;
-  const contentPx = 24 * scale; // h-6 uses --spacing-6 which also scales with --padding-scale
-  const borderPx = 1;
-  return Math.ceil(paddingPx + contentPx + borderPx);
-};
-
-const getPanelHeightForItems = (itemCount: number, padding: number) => {
-  const itemHeight = getEffectiveItemHeight(padding);
-  return Math.max(
-    itemHeight * TODO_PANEL_MIN_ITEMS,
-    Math.min(itemHeight * TODO_PANEL_MAX_ITEMS, itemHeight * itemCount)
-  );
-};
 
 const createTodoId = (): string => {
   if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
@@ -126,62 +104,6 @@ export const TodosSection: React.FC<{
   const { t } = useI18n();
   const [newTodoText, setNewTodoText] = React.useState('');
   const [expandedTodoIds, setExpandedTodoIds] = React.useState<Set<string>>(() => new Set());
-  const [isResizing, setIsResizing] = React.useState(false);
-  const todoPanelHeight = useUIStore((state) => state.todoPanelHeight);
-  const setTodoPanelHeight = useUIStore((state) => state.setTodoPanelHeight);
-  const padding = useUIStore((state) => state.padding);
-  const resizeStartYRef = React.useRef(0);
-  const resizeStartHeightRef = React.useRef(todoPanelHeight);
-
-  React.useEffect(() => {
-    if (todos.length < TODO_PANEL_SCROLL_THRESHOLD) {
-      return;
-    }
-    const targetHeight = getPanelHeightForItems(todos.length, padding);
-    const minHeight = getEffectiveItemHeight(padding) * TODO_PANEL_MIN_ITEMS;
-    if (
-      todoPanelHeight !== targetHeight
-      && (todoPanelHeight < minHeight || todoPanelHeight > targetHeight)
-    ) {
-      setTodoPanelHeight(targetHeight);
-    }
-  }, [todos.length, padding, todoPanelHeight, setTodoPanelHeight]);
-
-  React.useEffect(() => {
-    if (!isResizing) {
-      return;
-    }
-
-    const handlePointerMove = (event: PointerEvent) => {
-      const delta = event.clientY - resizeStartYRef.current;
-      const nextHeight = Math.min(
-        getEffectiveItemHeight(padding) * TODO_PANEL_MAX_ITEMS,
-        Math.max(getEffectiveItemHeight(padding) * TODO_PANEL_MIN_ITEMS, resizeStartHeightRef.current + delta)
-      );
-      setTodoPanelHeight(nextHeight);
-    };
-
-    const handlePointerEnd = () => {
-      setIsResizing(false);
-    };
-
-    window.addEventListener('pointermove', handlePointerMove);
-    window.addEventListener('pointerup', handlePointerEnd, { once: true });
-    window.addEventListener('pointercancel', handlePointerEnd, { once: true });
-
-    return () => {
-      window.removeEventListener('pointermove', handlePointerMove);
-      window.removeEventListener('pointerup', handlePointerEnd);
-      window.removeEventListener('pointercancel', handlePointerEnd);
-    };
-  }, [isResizing, padding, setTodoPanelHeight]);
-
-  const handleResizeStart = React.useCallback((event: React.PointerEvent) => {
-    setIsResizing(true);
-    resizeStartYRef.current = event.clientY;
-    resizeStartHeightRef.current = todoPanelHeight;
-    event.preventDefault();
-  }, [todoPanelHeight]);
 
   const handleAddTodo = React.useCallback(() => {
     const trimmed = newTodoText.trim();
@@ -259,8 +181,6 @@ export const TodosSection: React.FC<{
 
   const todoInputValue = newTodoText.slice(0, PROJECT_TODO_TEXT_MAX_LENGTH);
   const completedTodoCount = todos.reduce((count, todo) => count + (todo.completed ? 1 : 0), 0);
-  const isScrollable = todos.length >= TODO_PANEL_SCROLL_THRESHOLD;
-
   // Filtering is display-only: every handler above still edits the full list,
   // so reordering or clearing while a filter is active cannot drop hidden items.
   const visibleTodos = React.useMemo(() => {
@@ -273,14 +193,6 @@ export const TodosSection: React.FC<{
     <div className="space-y-2">
       <div className="flex items-center justify-between gap-2">
         <div className="flex items-center gap-2">
-          <h3 className="typography-ui-label font-semibold text-foreground">
-            {t('rightSidebar.contextNotesTodo.todo.title')}
-          </h3>
-          <span className="typography-meta text-muted-foreground">
-            {todos.length === 1
-              ? t('rightSidebar.contextNotesTodo.todo.itemsSingle', { count: todos.length })
-              : t('rightSidebar.contextNotesTodo.todo.itemsPlural', { count: todos.length })}
-          </span>
           <button
             type="button"
             onClick={handleClearCompletedTodos}
@@ -319,17 +231,7 @@ export const TodosSection: React.FC<{
         </button>
       </div>
 
-      <div
-        className={cn(
-          'overflow-y-auto rounded-lg border border-border/60 bg-background/40',
-          isResizing && 'transition-none'
-        )}
-        style={
-          isScrollable
-            ? { height: `${todoPanelHeight}px`, maxHeight: `${todoPanelHeight}px` }
-            : undefined
-        }
-      >
+      <div className="rounded-lg border border-border/60 bg-background/40">
         {visibleTodos.length === 0 ? (
           <p className="px-3 py-3 typography-meta text-muted-foreground">
             {query.trim()
@@ -441,18 +343,6 @@ export const TodosSection: React.FC<{
           </DndContext>
         )}
       </div>
-      {isScrollable && (
-        <div
-          className={cn(
-            'h-[3px] w-full cursor-row-resize hover:bg-[var(--interactive-border)]/80 transition-colors',
-            isResizing && 'bg-[var(--interactive-border)]'
-          )}
-          onPointerDown={handleResizeStart}
-          role="separator"
-          aria-orientation="horizontal"
-          aria-label={t('rightSidebar.contextNotesTodo.todo.resizeAria')}
-        />
-      )}
     </div>
   );
 };

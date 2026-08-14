@@ -144,11 +144,10 @@ const NoteRow: React.FC<{
  */
 export const NotesSection: React.FC<{
   projectRef: ProjectRef;
-  projectLabel?: string | null;
   notes: ProjectNote[];
   disabled: boolean;
   query: string;
-}> = ({ projectRef, projectLabel, notes, disabled, query }) => {
+}> = ({ projectRef, notes, disabled, query }) => {
   const { t } = useI18n();
   const [composerText, setComposerText] = React.useState('');
   const notesPanelHeight = useUIStore((state) => state.notesPanelHeight);
@@ -157,10 +156,6 @@ export const NotesSection: React.FC<{
   const saveNoteBody = useProjectContextStore((state) => state.saveNoteBody);
   const setNotePinned = useProjectContextStore((state) => state.setNotePinned);
   const deleteNote = useProjectContextStore((state) => state.deleteNote);
-
-  const title = projectLabel?.trim()
-    || projectRef.path.split('/').filter(Boolean).pop()
-    || projectRef.path;
 
   const visibleNotes = React.useMemo(() => {
     const needle = query.trim().toLowerCase();
@@ -222,16 +217,9 @@ export const NotesSection: React.FC<{
   return (
     <div className="space-y-2">
       <div className="flex items-center justify-between gap-2">
-        <div className="flex min-w-0 items-center gap-2">
-          <h3 className="min-w-0 truncate typography-ui-label font-semibold text-foreground" title={projectRef.path}>
-            {t('rightSidebar.contextNotesTodo.notes.title', { project: title })}
-          </h3>
-          <span className="flex-shrink-0 typography-meta text-muted-foreground">
-            {notes.length === 1
-              ? t('rightSidebar.contextNotesTodo.notes.notesSingle', { count: notes.length })
-              : t('rightSidebar.contextNotesTodo.notes.notesPlural', { count: notes.length })}
-          </span>
-        </div>
+        <span className="typography-meta text-muted-foreground">
+          {t('rightSidebar.contextNotesTodo.notes.composerHint')}
+        </span>
         <span className="typography-meta text-muted-foreground">
           {composerText.length}/{PROJECT_NOTE_BODY_MAX_LENGTH}
         </span>
@@ -260,7 +248,7 @@ export const NotesSection: React.FC<{
         </button>
       </div>
 
-      <div className="max-h-96 overflow-y-auto rounded-lg border border-border/60 bg-background/40">
+      <div className="rounded-lg border border-border/60 bg-background/40">
         {visibleNotes.length === 0 ? (
           <p className="px-3 py-3 typography-meta text-muted-foreground">
             {query.trim()

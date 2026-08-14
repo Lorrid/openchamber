@@ -173,17 +173,7 @@ export const PlansSection: React.FC<{
 
   return (
     <div className="space-y-2">
-      <div className="flex items-center justify-between gap-2">
-        <div className="flex items-center gap-2">
-          <h3 className="typography-ui-label font-semibold text-foreground">
-            {t('rightSidebar.contextNotesTodo.plans.title')}
-          </h3>
-          <span className="typography-meta text-muted-foreground">
-            {plans.length === 1
-              ? t('rightSidebar.contextNotesTodo.plans.filesSingle', { count: plans.length })
-              : t('rightSidebar.contextNotesTodo.plans.filesPlural', { count: plans.length })}
-          </span>
-        </div>
+      <div className="flex items-center justify-end gap-2">
         <input
           ref={fileInputRef}
           type="file"
@@ -207,7 +197,7 @@ export const PlansSection: React.FC<{
         </button>
       </div>
 
-      <div className="max-h-56 overflow-y-auto rounded-lg border border-border/60 bg-background/40">
+      <div className="rounded-lg border border-border/60 bg-background/40">
         {visiblePlans.length === 0 ? (
           <p className="px-3 py-3 typography-meta text-muted-foreground">
             {query.trim()
