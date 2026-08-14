@@ -1,0 +1,305 @@
+import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
+import fsPromises from 'node:fs/promises';
+import os from 'node:os';
+import path from 'node:path';
+
+import { createAgentMemoryRuntime, formatMemoryIndex } from './runtime.js';
+
+const PROJECT_ID = 'path_dGVzdA';
+const GLOBAL = { scope: 'global' };
+const PROJECT = { scope: 'project', projectId: PROJECT_ID };
+
+let rootDir;
+let runtime;
+let idCounter;
+
+const globalPath = () => path.join(rootDir, 'config', 'memory.json');
+const projectPath = () => path.join(rootDir, 'config', 'projects', PROJECT_ID, 'memory.json');
+
+const writeJson = async (filePath, value) => {
+  await fsPromises.mkdir(path.dirname(filePath), { recursive: true });
+  await fsPromises.writeFile(filePath, JSON.stringify(value, null, 2), 'utf8');
+};
+
+beforeEach(async () => {
+  rootDir = await fsPromises.mkdtemp(path.join(os.tmpdir(), 'oc-agent-memory-'));
+  idCounter = 0;
+  runtime = createAgentMemoryRuntime({
+    fsPromises,
+    path,
+    userConfigRoot: path.join(rootDir, 'config'),
+    projectsDirPath: path.join(rootDir, 'config', 'projects'),
+    createId: () => `mem-${++idCounter}`,
+  });
+});
+
+afterEach(async () => {
+  await fsPromises.rm(rootDir, { recursive: true, force: true });
+});
+
+describe('scope resolution', () => {
+  test('the two scopes are separate files', async () => {
+    await runtime.create(GLOBAL, { title: 'Speaks Ukrainian', body: 'Replies should be in Ukrainian.' });
+    await runtime.create(PROJECT, { title: 'Uses bun', body: 'Tests run with bun test.' });
+
+    expect((await runtime.read(GLOBAL)).entries.map((e) => e.title)).toEqual(['Speaks Ukrainian']);
+    expect((await runtime.read(PROJECT)).entries.map((e) => e.title)).toEqual(['Uses bun']);
+    await fsPromises.access(globalPath());
+    await fsPromises.access(projectPath());
+  });
+
+  test('rejects an unknown scope', async () => {
+    await expect(runtime.read({ scope: 'nope' })).rejects.toThrow('scope is required');
+  });
+
+  test('rejects a traversal projectId', async () => {
+    await expect(runtime.read({ scope: 'project', projectId: '../escape' }))
+      .rejects.toThrow('unsupported characters');
+  });
+
+  test('project scope requires an id', async () => {
+    await expect(runtime.read({ scope: 'project' })).rejects.toThrow('projectId is required');
+  });
+});
+
+describe('read', () => {
+  test('missing file is authoritative empty', async () => {
+    expect(await runtime.read(GLOBAL)).toEqual({ version: 1, entries: [] });
+  });
+
+  test('malformed storage fails instead of reading as empty', async () => {
+    await fsPromises.mkdir(path.dirname(globalPath()), { recursive: true });
+    await fsPromises.writeFile(globalPath(), '{ not json', 'utf8');
+
+    await expect(runtime.read(GLOBAL)).rejects.toThrow('malformed');
+  });
+
+  test('drops malformed entries without failing the read', async () => {
+    await writeJson(globalPath(), {
+      version: 1,
+      entries: [
+        { id: 'a', title: 'Kept', body: 'body', createdAt: 1, updatedAt: 1 },
+        { id: '', title: 'No id', body: 'body' },
+        { id: 'c', title: '', body: 'no title' },
+        { id: 'd', title: 'No body', body: '   ' },
+      ],
+    });
+
+    expect((await runtime.read(GLOBAL)).entries.map((e) => e.id)).toEqual(['a']);
+  });
+
+  test('most recently updated is listed first', async () => {
+    await writeJson(globalPath(), {
+      version: 1,
+      entries: [
+        { id: 'old', title: 'Old', body: 'x', createdAt: 1, updatedAt: 1 },
+        { id: 'new', title: 'New', body: 'x', createdAt: 1, updatedAt: 9 },
+      ],
+    });
+
+    expect((await runtime.read(GLOBAL)).entries.map((e) => e.id)).toEqual(['new', 'old']);
+  });
+
+  test('an unknown type falls back to fact', async () => {
+    await writeJson(globalPath(), {
+      version: 1,
+      entries: [{ id: 'a', title: 'T', body: 'b', type: 'nonsense', createdAt: 1, updatedAt: 1 }],
+    });
+
+    expect((await runtime.read(GLOBAL)).entries[0].type).toBe('fact');
+  });
+});
+
+describe('create', () => {
+  test('stores title, body, type and provenance', async () => {
+    const { entry } = await runtime.create(PROJECT, {
+      title: 'Bun test',
+      body: 'Run tests per file.',
+      type: 'reference',
+      sessionId: 'ses_1',
+    });
+
+    expect(entry.type).toBe('reference');
+    expect(entry.sessionId).toBe('ses_1');
+    expect(entry.createdAt).toBe(entry.updatedAt);
+  });
+
+  test('rejects an empty title or body', async () => {
+    await expect(runtime.create(GLOBAL, { title: '  ', body: 'x' })).rejects.toThrow('title is required');
+    await expect(runtime.create(GLOBAL, { title: 'x', body: '  ' })).rejects.toThrow('body is required');
+  });
+
+  test('clamps oversized fields', async () => {
+    const { entry } = await runtime.create(GLOBAL, { title: 'x'.repeat(300), body: 'y'.repeat(5000) });
+
+    expect(entry.title).toHaveLength(120);
+    expect(entry.body).toHaveLength(2000);
+  });
+
+  test('the same title updates in place instead of duplicating', async () => {
+    const first = await runtime.create(PROJECT, { title: 'Uses bun', body: 'old body' });
+    const second = await runtime.create(PROJECT, { title: 'uses BUN', body: 'new body' });
+
+    expect(second.replaced).toBe(true);
+    expect(second.entry.id).toBe(first.entry.id);
+    expect(second.entry.createdAt).toBe(first.entry.createdAt);
+    expect((await runtime.read(PROJECT)).entries).toHaveLength(1);
+    expect((await runtime.read(PROJECT)).entries[0].body).toBe('new body');
+  });
+
+  test('the same title in a different scope is a separate entry', async () => {
+    await runtime.create(GLOBAL, { title: 'Shared title', body: 'global' });
+    await runtime.create(PROJECT, { title: 'Shared title', body: 'project' });
+
+    expect((await runtime.read(GLOBAL)).entries[0].body).toBe('global');
+    expect((await runtime.read(PROJECT)).entries[0].body).toBe('project');
+  });
+
+  test('global memory is capped tighter than project memory', async () => {
+    const entries = Array.from({ length: 60 }, (_unused, index) => ({
+      id: `g${index}`, title: `Global ${index}`, body: 'x', createdAt: index, updatedAt: index,
+    }));
+    await writeJson(globalPath(), { version: 1, entries });
+
+    await expect(runtime.create(GLOBAL, { title: 'One more', body: 'x' }))
+      .rejects.toThrow('global memory holds at most 60 entries');
+  });
+
+  test('project memory refuses to grow past its own limit', async () => {
+    const entries = Array.from({ length: 200 }, (_unused, index) => ({
+      id: `p${index}`, title: `Project ${index}`, body: 'x', createdAt: index, updatedAt: index,
+    }));
+    await writeJson(projectPath(), { version: 1, entries });
+
+    await expect(runtime.create(PROJECT, { title: 'One more', body: 'x' }))
+      .rejects.toThrow('project memory holds at most 200 entries');
+  });
+
+  test('concurrent creates all survive', async () => {
+    await Promise.all([
+      runtime.create(PROJECT, { title: 'A', body: 'a' }),
+      runtime.create(PROJECT, { title: 'B', body: 'b' }),
+      runtime.create(PROJECT, { title: 'C', body: 'c' }),
+    ]);
+
+    expect((await runtime.read(PROJECT)).entries.map((e) => e.title).sort()).toEqual(['A', 'B', 'C']);
+  });
+});
+
+describe('update', () => {
+  test('patches only the named fields and bumps updatedAt', async () => {
+    const { entry } = await runtime.create(PROJECT, { title: 'T', body: 'before', type: 'fact' });
+    await new Promise((resolve) => setTimeout(resolve, 2));
+
+    const result = await runtime.update(PROJECT, entry.id, { body: 'after' });
+    expect(result.entry.body).toBe('after');
+    expect(result.entry.title).toBe('T');
+    expect(result.entry.type).toBe('fact');
+    expect(result.entry.updatedAt).toBeGreaterThan(entry.updatedAt);
+    expect(result.entry.createdAt).toBe(entry.createdAt);
+  });
+
+  test('rejects an empty patch', async () => {
+    const { entry } = await runtime.create(PROJECT, { title: 'T', body: 'b' });
+    await expect(runtime.update(PROJECT, entry.id, {})).rejects.toThrow('title, body or type is required');
+  });
+
+  test('rejects blanking a field', async () => {
+    const { entry } = await runtime.create(PROJECT, { title: 'T', body: 'b' });
+    await expect(runtime.update(PROJECT, entry.id, { body: '  ' })).rejects.toThrow('body is required');
+  });
+
+  test('returns null for an unknown entry', async () => {
+    expect(await runtime.update(PROJECT, 'missing', { body: 'x' })).toBeNull();
+  });
+});
+
+describe('remove', () => {
+  test('deletes only the requested entry', async () => {
+    const keep = await runtime.create(PROJECT, { title: 'Keep', body: 'x' });
+    const drop = await runtime.create(PROJECT, { title: 'Drop', body: 'x' });
+
+    const result = await runtime.remove(PROJECT, drop.entry.id);
+    expect(result.deleted).toBe(true);
+    expect(result.entries.map((e) => e.id)).toEqual([keep.entry.id]);
+  });
+
+  test('reports no deletion for an unknown entry', async () => {
+    expect((await runtime.remove(PROJECT, 'missing')).deleted).toBe(false);
+  });
+});
+
+describe('readAll', () => {
+  test('returns both scopes', async () => {
+    await runtime.create(GLOBAL, { title: 'G', body: 'x' });
+    await runtime.create(PROJECT, { title: 'P', body: 'x' });
+
+    const all = await runtime.readAll(PROJECT_ID);
+    expect(all.global.map((e) => e.title)).toEqual(['G']);
+    expect(all.project.map((e) => e.title)).toEqual(['P']);
+    expect(all.globalFailed).toBe(false);
+    expect(all.projectFailed).toBe(false);
+  });
+
+  test('a broken project scope does not hide the global scope', async () => {
+    await runtime.create(GLOBAL, { title: 'G', body: 'x' });
+    await fsPromises.mkdir(path.dirname(projectPath()), { recursive: true });
+    await fsPromises.writeFile(projectPath(), '{ broken', 'utf8');
+
+    const all = await runtime.readAll(PROJECT_ID);
+    expect(all.global.map((e) => e.title)).toEqual(['G']);
+    expect(all.project).toEqual([]);
+    expect(all.projectFailed).toBe(true);
+  });
+
+  test('works with no project at all', async () => {
+    await runtime.create(GLOBAL, { title: 'G', body: 'x' });
+
+    const all = await runtime.readAll(null);
+    expect(all.global).toHaveLength(1);
+    expect(all.project).toEqual([]);
+  });
+});
+
+describe('formatMemoryIndex', () => {
+  const entry = (overrides) => ({ id: 'a', title: 'T', body: 'body', type: 'fact', createdAt: 1, updatedAt: 1, ...overrides });
+
+  test('is empty when there is nothing stored', () => {
+    expect(formatMemoryIndex({ globalEntries: [], projectEntries: [] })).toBe('');
+  });
+
+  test('lists titles and never bodies', () => {
+    const text = formatMemoryIndex({
+      globalEntries: [entry({ title: 'Replies in Ukrainian', type: 'preference', body: 'SECRET BODY' })],
+      projectEntries: [entry({ id: 'b', title: 'Uses bun', body: 'ALSO SECRET' })],
+    });
+
+    expect(text).toContain('Replies in Ukrainian');
+    expect(text).toContain('Uses bun');
+    expect(text).not.toContain('SECRET BODY');
+    expect(text).not.toContain('ALSO SECRET');
+  });
+
+  test('separates the two scopes', () => {
+    const text = formatMemoryIndex({
+      globalEntries: [entry({ title: 'About user' })],
+      projectEntries: [entry({ id: 'b', title: 'About project' })],
+    });
+
+    expect(text).toContain('### About the user');
+    expect(text).toContain('### About this project');
+    expect(text.indexOf('About user')).toBeLessThan(text.indexOf('About project'));
+  });
+
+  test('omits a scope that has nothing', () => {
+    const text = formatMemoryIndex({ globalEntries: [], projectEntries: [entry()] });
+
+    expect(text).not.toContain('### About the user');
+    expect(text).toContain('### About this project');
+  });
+
+  test('warns that memory can be stale', () => {
+    const text = formatMemoryIndex({ globalEntries: [entry()], projectEntries: [] });
+    expect(text).toContain('Verify anything it says');
+  });
+});
