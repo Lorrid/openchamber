@@ -115,7 +115,9 @@ const NoteRow: React.FC<{
             <span className="line-clamp-3 whitespace-pre-wrap break-words">{draft}</span>
           </button>
         )}
-        <div className="flex flex-shrink-0 items-center gap-0.5">
+        {/* Stacked, so the actions cost one icon of width instead of three and
+            the note text keeps the full row. */}
+        <div className="flex flex-shrink-0 flex-col items-center gap-0.5">
           {expanded ? (
             <button
               type="button"
