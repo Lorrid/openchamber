@@ -16,6 +16,7 @@ import {
 } from '@/sync/attachment-files';
 import type { AttachedFile } from '@/stores/types/sessionTypes';
 import * as sessionActions from '@/sync/session-actions';
+import { buildLinkedIssue } from '@/lib/linkedIssues';
 import { useUserMessageHistory } from "@/sync/sync-context";
 import { getInlineCommentDraftKey, useInlineCommentDraftStore, type InlineCommentDraft, type InlineCommentDraftTarget } from '@/stores/useInlineCommentDraftStore';
 import { useSnippetsStore } from '@/stores/useSnippetsStore';
@@ -223,6 +224,7 @@ const MemoStatusRow = React.memo(StatusRow);
 interface ChatInputProps {
     onOpenSettings?: () => void;
     scrollToBottom?: () => void;
+    active?: boolean;
 }
 
 const resolveChatDraftIdentity = (sessionId: string | null): ChatDraftIdentity | null => {
@@ -236,7 +238,7 @@ const resolveChatDraftIdentity = (sessionId: string | null): ChatDraftIdentity |
     return createChatDraftIdentity(getRuntimeKey(), directory, sessionId);
 };
 
-const ChatInputComponent: React.FC<ChatInputProps> = ({ onOpenSettings, scrollToBottom }) => {
+const ChatInputComponent: React.FC<ChatInputProps> = ({ onOpenSettings, scrollToBottom, active = true }) => {
     const { t } = useI18n();
     // Track if we restored a draft on mount (for text selection)
     const initialDraftRef = React.useRef<string | null>(null);
@@ -285,6 +287,7 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({ onOpenSettings, scrollTo
     const suppressNextFileDropTextInsertTimeoutRef = React.useRef<ReturnType<typeof setTimeout> | null>(null);
     const suppressNextFileMentionPasteRef = React.useRef(false);
     const suppressNextFileMentionPasteTimeoutRef = React.useRef<ReturnType<typeof setTimeout> | null>(null);
+    const shellTriggerNormalizationRef = React.useRef(false);
     const pendingDroppedAbsolutePathsRef = React.useRef<string[]>([]);
     const canAcceptDropRef = React.useRef(false);
     const mentionRef = React.useRef<FileMentionHandle>(null);
@@ -985,6 +988,9 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({ onOpenSettings, scrollTo
         const queuedMessageId = options?.queuedMessageId;
         const delivery = options?.delivery === 'steer' && sessionPhase !== 'idle' ? 'steer' : undefined;
         const capturedTarget = messageQueueTarget;
+        // Snapshot the draft and current-session identity before the first
+        // async gap so a later sidebar selection cannot reroute the send.
+        const capturedDraftSnapshot = newSessionDraftOpen ? { ...newSessionDraft } : null;
         const inputSnapshot = options?.presetText != null
             ? {
                 message: options.presetText,
@@ -1060,9 +1066,16 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({ onOpenSettings, scrollTo
         const requestWorkspaceReauth = async (input: { operation: 'workspace.session.start'; project: string; payload: Record<string, unknown> }) =>
             workspaceReauth.requestProof(input.operation, input.project, input.payload);
         const secureWorkspaceDraft = newSessionDraft?.workspaceMode === 'secure';
-        const sendMessageOptions = capturedTarget || delivery || secureWorkspaceDraft
+        const sendMessageOptions: {
+            target?: NonNullable<typeof capturedTarget>;
+            draftSnapshot?: NonNullable<typeof capturedDraftSnapshot>;
+            delivery?: 'steer';
+            workspaceReauthenticate?: typeof requestWorkspaceReauth;
+            workspaceProgress?: typeof setWorkspaceProgress;
+        } | undefined = (capturedTarget || capturedDraftSnapshot || delivery || secureWorkspaceDraft)
             ? {
                 ...(capturedTarget ? { target: capturedTarget } : {}),
+                ...(capturedDraftSnapshot ? { draftSnapshot: capturedDraftSnapshot } : {}),
                 ...(delivery ? { delivery } : {}),
                 workspaceReauthenticate: requestWorkspaceReauth,
                 workspaceProgress: setWorkspaceProgress,
@@ -1274,6 +1287,45 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({ onOpenSettings, scrollTo
         }
 
         void sendPromise.then(() => {
+            // Record what this session was pointed at, so the work-status panel
+            // can show it as a context source long after the message scrolled
+            // away. A snapshot only — never re-fetched, never authoritative.
+            // Failures are swallowed: the message went out, and a missing
+            // bookkeeping entry must not surface as a send error.
+            const attachedThread = linkedIssue
+                ? { attachment: linkedIssue, kind: 'issue' as const }
+                : linkedPr
+                    ? { attachment: linkedPr, kind: 'pull' as const }
+                    : null;
+            // On a draft there is no session yet in this closure: the send path
+            // creates one and makes it current before resolving, so the id is
+            // read from the store. The fallback is used only when the closure
+            // had no session at all, so a mid-send session switch cannot
+            // redirect the write to an unrelated session.
+            const sessionState = useSessionUIStore.getState();
+            const linkTargetSessionId = currentSessionId ?? sessionState.currentSessionId;
+            const linkTargetDirectory = currentSessionId
+                ? currentSessionDirectoryForSync ?? currentDirectory
+                : sessionState.currentSessionDirectory
+                    ?? (linkTargetSessionId ? sessionState.getDirectoryForSession(linkTargetSessionId) : null)
+                    ?? currentDirectory;
+
+            if (attachedThread && linkTargetSessionId) {
+                void sessionActions.setLinkedIssue(
+                    linkTargetSessionId,
+                    linkTargetDirectory,
+                    buildLinkedIssue({
+                        url: attachedThread.attachment.url,
+                        number: attachedThread.attachment.number,
+                        title: attachedThread.attachment.title,
+                        kind: attachedThread.kind,
+                        author: attachedThread.attachment.author,
+                        linkedAt: Date.now(),
+                    }),
+                    true,
+                ).catch(() => undefined);
+            }
+
             // Clear linked issue after successful message send
             if (linkedIssue) {
                 setLinkedIssue(null);
@@ -1428,6 +1480,19 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({ onOpenSettings, scrollTo
         // Early return during IME composition to prevent interference with autocomplete.
         // Uses keyCode === 229 fallback for WebKit where compositionend fires before keydown.
         if (isIMECompositionEvent(e)) return;
+
+        // Enter shell mode before CodeMirror inserts the trigger. Keeping the
+        // document unchanged also keeps the caret at the start for the first
+        // command character.
+        if (inputMode === 'normal' && e.key === '!') {
+            const selection = composerRef.current?.getSelection();
+            if (selection?.start === 0 && selection.end === 0) {
+                e.preventDefault();
+                setInputMode('shell');
+                closeAutocomplete();
+                return;
+            }
+        }
 
         if (inputMode === 'shell' && e.key === 'Escape') {
             e.preventDefault();
@@ -1732,6 +1797,12 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({ onOpenSettings, scrollTo
     }, []);
 
     const handleComposerChange = ({ value, selection, fromPaste, insertedText }: ComposerChange) => {
+        if (shellTriggerNormalizationRef.current) {
+            shellTriggerNormalizationRef.current = false;
+            setMessage(value);
+            return;
+        }
+
         // VS Code drops the dragged path as text as well as firing the drop
         // handler; swallow that duplicate insertion.
         if (isVSCodeRuntime() && suppressNextFileDropTextInsertRef.current) {
@@ -1750,13 +1821,21 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({ onOpenSettings, scrollTo
         const inputSource: FileMentionAutocompleteInputSource = isPasteInput ? 'paste' : 'manual';
 
         // A leading `!` switches the composer into shell mode and is consumed.
+        // Mobile keyboards and paste may update the document without a usable
+        // keydown, so consume the trigger in the same editor transaction rather
+        // than moving the caret in a later frame against stale text.
         if (inputMode === 'normal' && value.startsWith('!')) {
             const shellCommand = value.slice(1);
             const nextCursor = Math.max(0, selection.start - 1);
             setInputMode('shell');
-            setMessage(shellCommand);
             closeAutocomplete();
-            requestAnimationFrame(() => composerRef.current?.setSelection(nextCursor));
+            const editor = composerRef.current;
+            if (editor) {
+                shellTriggerNormalizationRef.current = true;
+                editor.replaceRange(0, 1, '', nextCursor);
+            } else {
+                setMessage(shellCommand);
+            }
             return;
         }
 
@@ -2027,10 +2106,10 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({ onOpenSettings, scrollTo
 
     React.useEffect(() => {
 
-        if (currentSessionId && composerRef.current && !isMobile) {
+        if (active && currentSessionId && composerRef.current && !isMobile) {
             composerRef.current.focus();
         }
-    }, [currentSessionId, isMobile]);
+    }, [active, currentSessionId, isMobile]);
 
     React.useEffect(() => {
         if (!isMobile) {
@@ -2288,6 +2367,10 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({ onOpenSettings, scrollTo
 
     const footerGapClass = 'gap-x-1.5 gap-y-0';
     const isVSCode = isVSCodeRuntime();
+    // The work-status panel carries the agent's todos and the changed-file
+    // count, but only on the desktop/web layout — VS Code and mobile have no
+    // panel, so these keep their place above the composer there.
+    const composerStatusExtrasEnabled = isVSCode || isMobile;
     const showDraftTargetSelectors = newSessionDraftOpen && !isVSCode;
 
     // Which project and directory a new session will target.
@@ -2626,8 +2709,10 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({ onOpenSettings, scrollTo
                 <MemoStatusRow
                     showAbortStatus={showAbortStatus}
                     showAssistantStatus={false}
-                    showTodos
-                    leftAccessory={newSessionDraftOpen || !hasPendingChanges ? null : <PendingChangesBar />}
+                    showTodos={composerStatusExtrasEnabled}
+                    leftAccessory={!composerStatusExtrasEnabled || newSessionDraftOpen || !hasPendingChanges
+                        ? null
+                        : <PendingChangesBar />}
                 />
                 {!isMobile && showDraftTargetSelectors && selectedDraftProject ? (
                     <DraftTargetSelectors

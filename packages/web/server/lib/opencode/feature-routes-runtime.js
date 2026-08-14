@@ -5,6 +5,7 @@ import { registerWalkthroughRoutes } from '../walkthrough/routes.js';
 import { registerSessionGoalRoutes } from '../session-goal/routes.js';
 import { registerGitHubRoutes } from '../github/routes.js';
 import { registerGitRoutes } from '../git/routes.js';
+import { registerDevServerRoutes } from '../dev-servers/routes.js';
 import { registerMagicPromptRoutes } from '../magic-prompts/routes.js';
 import { registerSessionFoldersRoutes } from '../session-folders/routes.js';
 import { registerPermissionAutoAcceptRoutes } from '../permission-auto-accept/runtime.js';
@@ -15,6 +16,7 @@ import { registerScheduledTaskRoutes } from '../scheduled-tasks/routes.js';
 import { registerWorkspaceRoutes, resolveWorkspacePluginSpec } from '../workspaces/routes.js';
 import { registerOpenChamberSessionRoutes } from '../openchamber-sessions/routes.js';
 import { registerOpenChamberControlRoutes } from '../openchamber-control/routes.js';
+import { registerMarkdownImageGrantRoutes } from '../markdown-image-grants/routes.js';
 import { registerSkillRoutes } from './skill-routes.js';
 import { registerPluginRoutes } from './plugin-routes.js';
 import { getNpmInfo, clearCache as clearNpmCache } from './npm-registry.js';
@@ -113,6 +115,8 @@ export const createFeatureRoutesRuntime = (dependencies) => {
       buildOpenCodeUrl,
       getOpenCodeAuthHeaders,
       getOpenCodePort,
+      getOwnPorts,
+      devServerScanner,
       buildAugmentedPath,
       projectConfigRuntime,
       scheduledTasksRuntime,
@@ -215,6 +219,16 @@ export const createFeatureRoutesRuntime = (dependencies) => {
 
     registerOpenChamberControlRoutes(app, { controlService: openChamberControlService });
 
+    registerMarkdownImageGrantRoutes(app, {
+      fsPromises,
+      path,
+      os,
+      crypto,
+      validateDirectoryPath,
+      buildOpenCodeUrl,
+      getOpenCodeAuthHeaders,
+    });
+
     registerConfigEntityRoutes(app, {
       resolveProjectDirectory,
       resolveOptionalProjectDirectory,
@@ -313,6 +327,7 @@ export const createFeatureRoutesRuntime = (dependencies) => {
     registerSessionGoalRoutes(app);
     registerGitHubRoutes(app);
     registerGitRoutes(app);
+    registerDevServerRoutes(app, { scanner: devServerScanner, getOwnPorts });
     registerMagicPromptRoutes(app, {
       fsPromises,
       path,

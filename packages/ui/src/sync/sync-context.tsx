@@ -42,6 +42,7 @@ import { applySessionEventToGlobalSessions } from "./session-event-router"
 import { sessionEvents } from "@/lib/sessionEvents"
 import { syncDebug } from "./debug"
 import { getReconnectCandidateSessionIds, mergeBootstrapSessions } from "./reconnect-recovery"
+import { messagesBefore } from "./message-ordering"
 import { opencodeClient } from "@/lib/opencode/client"
 import { usePermissionStore } from "@/stores/permissionStore"
 import {
@@ -1180,23 +1181,24 @@ const updateRoutingIndexFromEvent = (
  * recovery paths only; normal session switches rely on primary SSE reducer
  * state for `question.asked` / `permission.asked` events. When
  * `candidateSessionIds` is omitted, every session known to the directory store
- * is treated as a candidate.
+ * is treated as a candidate; when provided, recovery is limited to those IDs.
  */
 export async function resyncBlockingRequestsForDirectory(
   directory: string,
   store: StoreApi<DirectoryStore>,
   candidateSessionIds?: string[],
+  options?: { includePermissions?: boolean },
 ) {
   const before = store.getState()
-  const knownSessionIds = new Set<string>([
+  const candidateIds = new Set<string>(candidateSessionIds ?? [
     ...before.session.map((session) => session.id),
     ...Object.keys(before.message ?? {}),
     ...Object.keys(before.session_status ?? {}),
     ...Object.keys(before.question ?? {}),
     ...Object.keys(before.permission ?? {}),
   ])
-  const candidates = candidateSessionIds ?? Array.from(knownSessionIds)
-  if (candidates.length === 0) return
+  if (candidateIds.size === 0) return
+  const candidates = Array.from(candidateIds)
 
   // Re-fetch pending questions that may have been asked during an SSE gap,
   // reconnect window, or directory materialization gap.
@@ -1206,12 +1208,12 @@ export async function resyncBlockingRequestsForDirectory(
     )
     const pendingQuestions = await opencodeClient.listPendingQuestions({ directories: [directory] })
     const grouped: Record<string, QuestionRequest[]> = {}
-    for (const q of pendingQuestions) {
-      if (!q?.id || !q.sessionID) continue
-      if (!knownSessionIds.has(q.sessionID)) continue
-      const list = grouped[q.sessionID]
-      if (list) list.push(q)
-      else grouped[q.sessionID] = [q]
+    for (const question of pendingQuestions) {
+      if (!question?.id || !question.sessionID) continue
+      if (!candidateIds.has(question.sessionID)) continue
+      const list = grouped[question.sessionID]
+      if (list) list.push(question)
+      else grouped[question.sessionID] = [question]
     }
     for (const sessionId of Object.keys(grouped)) {
       grouped[sessionId].sort((a, b) => (a.id < b.id ? -1 : a.id > b.id ? 1 : 0))
@@ -1258,6 +1260,8 @@ export async function resyncBlockingRequestsForDirectory(
     // Non-fatal: question resync best-effort
   }
 
+  if (options?.includePermissions === false) return
+
   // Re-fetch pending permissions — same rationale as questions.
   try {
     const beforeSignatures = new Map(
@@ -1267,7 +1271,7 @@ export async function resyncBlockingRequestsForDirectory(
     const grouped: Record<string, PermissionRequest[]> = {}
     for (const permission of pendingPermissions) {
       if (!permission?.id || !permission.sessionID) continue
-      if (!knownSessionIds.has(permission.sessionID)) continue
+      if (!candidateIds.has(permission.sessionID)) continue
       const list = grouped[permission.sessionID]
       if (list) list.push(permission)
       else grouped[permission.sessionID] = [permission]
@@ -1330,6 +1334,15 @@ export async function resyncBlockingRequestsForDirectory(
   } catch {
     // Non-fatal: permission resync best-effort
   }
+}
+
+export async function resyncBlockingRequestsForActiveDirectory(
+  directory: string,
+  childStores: ChildStoreManager,
+) {
+  const store = childStores.getChild(directory)
+  if (!store) return
+  await resyncBlockingRequestsForDirectory(directory, store)
 }
 
 async function resyncDirectoryAfterReconnect(
@@ -1940,6 +1953,7 @@ export function SyncProvider(props: {
   const lastFullResyncAtByDirectoryRef = useRef(new Map<string, number>())
   const lastChildDiscoveryAtByDirectoryRef = useRef(new Map<string, number>())
   const resyncingDirectoriesRef = useRef(new Set<string>())
+  const blockingRequestResyncingDirectoriesRef = useRef(new Set<string>())
   const statusPollingDirectoriesRef = useRef(new Set<string>())
   const pipelineReconnectRef = useRef<((reason?: string) => void) | null>(null)
   const pipelineHasConnectedRef = useRef(false)
@@ -1972,6 +1986,24 @@ export function SyncProvider(props: {
         resyncing.delete(directory)
       })
   }, [childStores, routingIndex])
+
+  useEffect(() => {
+    if (typeof window === "undefined") return
+
+    const onSystemResume = () => {
+      const directory = currentDirectoryRef.current
+      if (!directory || !childStores.getChild(directory)) return
+
+      const resyncing = blockingRequestResyncingDirectoriesRef.current
+      if (resyncing.has(directory)) return
+      resyncing.add(directory)
+      void resyncBlockingRequestsForActiveDirectory(directory, childStores)
+        .finally(() => resyncing.delete(directory))
+    }
+
+    window.addEventListener("openchamber:system-resume", onSystemResume)
+    return () => window.removeEventListener("openchamber:system-resume", onSystemResume)
+  }, [childStores])
 
   // Configure child store manager
   useEffect(() => {
@@ -2770,26 +2802,6 @@ export function useChildStoreManager() {
   return useSyncSystem().childStores
 }
 
-export type SessionTextMessage = {
-  id: string
-  role: string | null
-  text: string
-}
-
-const getPartText = (part: Part): string => {
-  if (part?.type !== "text") return ""
-  const text = (part as { text?: unknown }).text
-  return typeof text === "string" ? text : ""
-}
-
-const getConcatenatedTextFromParts = (parts: Part[]): string => {
-  let text = ""
-  for (const part of parts) {
-    text += getPartText(part)
-  }
-  return text
-}
-
 type SessionMessageRecord = { info: Message; parts: Part[] }
 const EMPTY_SESSION_MESSAGE_RECORDS: SessionMessageRecord[] = []
 
@@ -3016,7 +3028,7 @@ function getVisibleMessagesForSession(state: State, sessionID: string, previous?
 
   return {
     sourceMessages,
-    visibleMessages: revertMessageID ? sourceMessages.filter((message) => message.id < revertMessageID) : sourceMessages,
+    visibleMessages: messagesBefore(sourceMessages, revertMessageID),
     revertMessageID,
   }
 }
@@ -3113,19 +3125,6 @@ export function useSessionRenderable(sessionID: string, directory?: string): boo
     [sessionID, store],
   )
   return React.useSyncExternalStore(subscribe, getSnapshot, getSnapshot)
-}
-
-export function useSessionTextMessages(sessionID: string, directory?: string): SessionTextMessage[] {
-  const records = useSessionMessageRecords(sessionID, directory)
-
-  return useMemo(
-    () => records.map((record) => ({
-      id: record.info.id,
-      role: typeof record.info.role === "string" ? record.info.role : null,
-      text: getConcatenatedTextFromParts(record.parts),
-    })),
-    [records],
-  )
 }
 
 export function useUserMessageHistory(sessionID: string, directory?: string): string[] {
@@ -3287,14 +3286,20 @@ export function useSessionMessageRecords(
 // (e.g. multiple ToolParts) request the same session's messages.
 const _ensureMessagesLoading = new Set<string>()
 
-export function useEnsureSessionMessages(sessionID: string, directory?: string) {
+/**
+ * @param enabled Gate for callers that only need a session materialised under
+ * a specific condition — a panel resolving pinned message text, say. Loading a
+ * whole session is not free, so "something is missing" is not on its own a
+ * reason to fetch it.
+ */
+export function useEnsureSessionMessages(sessionID: string, directory?: string, enabled = true) {
   const syncDirectory = useSyncDirectory()
   const resolvedDirectory = directory ?? syncDirectory
   const store = useDirectoryStore(resolvedDirectory)
   const requestGenerationRef = React.useRef(0)
 
   React.useEffect(() => {
-    if (!sessionID) return
+    if (!sessionID || !enabled) return
 
     const state = store.getState()
     // Already loaded into a renderable message/part snapshot — nothing to do.
@@ -3320,7 +3325,7 @@ export function useEnsureSessionMessages(sessionID: string, directory?: string) 
         _ensureMessagesLoading.delete(loadingKey)
       }
     })()
-  }, [sessionID, store, resolvedDirectory])
+  }, [enabled, sessionID, store, resolvedDirectory])
 }
 const EMPTY_MESSAGES: Message[] = []
 const EMPTY_PARTS: Part[] = []

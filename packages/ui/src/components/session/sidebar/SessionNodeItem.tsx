@@ -1145,7 +1145,6 @@ function SessionNodeItemComponent(props: Props): React.ReactNode {
           data-slot="dropdown-menu-content"
           finalFocus={() => (renamingFolderId || editingIdRef.current) ? false : true}
           style={{
-            backgroundColor: 'var(--surface-elevated)',
             color: 'var(--surface-elevated-foreground)',
           }}
           className={cn(dropdownMenuPopupClass, 'min-w-[180px]')}

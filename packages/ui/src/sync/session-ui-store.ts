@@ -242,6 +242,8 @@ type SendMessageOptions = {
   target?: CapturedSendTarget
   sessionId?: string
   directory?: string
+  /** Immutable copy of the new-session draft at submit time; used instead of the live draft. */
+  draftSnapshot?: NewSessionDraftState
   delivery?: 'steer'
   workspaceReauthenticate?: (input: { operation: 'workspace.session.start'; project: string; payload: Record<string, unknown> }) => Promise<WorkspaceReauthProofResult | null>
   workspaceProgress?: (phase: 'preparing' | 'connecting' | 'creating' | 'opening' | null) => void
@@ -265,9 +267,6 @@ function notifyMessageSent(sessionId: string): void {
 // ---------------------------------------------------------------------------
 // Types
 // ---------------------------------------------------------------------------
-
-export type { SyntheticContextPart } from "./input-store"
-export type { SessionMemoryState } from "./viewport-store"
 
 export type NewSessionDraftState = {
   open: boolean
@@ -627,9 +626,9 @@ export async function materializeOpenDraftSession(selection: {
   variant?: string
   workspaceReauthenticate?: SendMessageOptions['workspaceReauthenticate']
   workspaceProgress?: SendMessageOptions['workspaceProgress']
-}): Promise<MaterializedDraftSession | null> {
+}, draftOverride?: NewSessionDraftState): Promise<MaterializedDraftSession | null> {
   const store = useSessionUIStore.getState()
-  const draft = store.newSessionDraft
+  const draft = draftOverride ?? store.newSessionDraft
   if (!draft?.open) return null
   const draftPermissionAutoAcceptEnabled = draft.permissionAutoAcceptEnabled === true
 
@@ -1286,7 +1285,7 @@ export const useSessionUIStore = create<SessionUIState>()((set, get) => ({
       set({ pendingChangesBarDismissed: map });
     }
 
-    const draft = get().newSessionDraft
+    const draft = options?.draftSnapshot ?? get().newSessionDraft
     const trimmedAgent = typeof agent === "string" && agent.trim().length > 0 ? agent.trim() : undefined
 
     const goalArm = inputMode !== "shell" && content.trim().length > 0
@@ -1346,7 +1345,7 @@ export const useSessionUIStore = create<SessionUIState>()((set, get) => ({
         variant,
         workspaceReauthenticate: options?.workspaceReauthenticate,
         workspaceProgress: options?.workspaceProgress,
-      })
+      }, options?.draftSnapshot)
       if (!createdDraftSession) throw new Error("Failed to create session")
 
       const mergedAdditionalParts = createdDraftSession.syntheticParts?.length
@@ -1555,7 +1554,8 @@ export const useSessionUIStore = create<SessionUIState>()((set, get) => ({
     const revertToId = currentSession?.revert?.messageID
     let targetMessage: typeof messages[number] | undefined
     if (revertToId) {
-      targetMessage = [...userMessages].reverse().find((m) => m.id < revertToId)
+      const revertIndex = userMessages.findIndex((message) => message.id === revertToId)
+      targetMessage = revertIndex > 0 ? userMessages[revertIndex - 1] : undefined
     } else {
       targetMessage = userMessages[userMessages.length - 1]
     }
@@ -1602,7 +1602,8 @@ export const useSessionUIStore = create<SessionUIState>()((set, get) => ({
     await refetchSessionMessages(sessionId)
     const messages = getSyncMessages(sessionId)
     const userMessages = messages.filter((m) => m.role === "user")
-    const targetMessage = userMessages.find((m) => m.id > revertToId)
+    const revertIndex = userMessages.findIndex((message) => message.id === revertToId)
+    const targetMessage = revertIndex >= 0 ? userMessages[revertIndex + 1] : undefined
 
     if (targetMessage) {
       await get().revertToMessage(sessionId, targetMessage.id, { skipRedoPush: true })

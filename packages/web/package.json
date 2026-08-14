@@ -1,6 +1,6 @@
 {
   "name": "@openchamber/web",
-  "version": "1.18.1",
+  "version": "1.18.3",
   "private": false,
   "type": "module",
   "main": "./server/index.js",
@@ -26,7 +26,7 @@
     "@clack/prompts": "^1.1.0",
     "@octokit/rest": "^22.0.1",
     "@openchamber/opencode-container-workspace": "github:openchamber/opencode-container-workspace#69c125d024583696ff096f6e5b84416cdefbabab",
-    "@opencode-ai/sdk": "1.18.12",
+    "@opencode-ai/sdk": "1.18.18",
     "@simplewebauthn/server": "13.3.1",
     "adm-zip": "^0.6.0",
     "bun-pty": "^0.4.5",
