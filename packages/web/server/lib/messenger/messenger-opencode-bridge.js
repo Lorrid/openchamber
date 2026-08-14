@@ -1403,9 +1403,12 @@ export function createMessengerOpencodeBridge({
     if (modelOverride && /^[^/]+\/[^/]+$/.test(modelOverride)) {
       const [providerID, ...rest] = modelOverride.split('/');
       body.model = { providerID, modelID: rest.join('/') };
-      // Thinking-effort: OpenCode reads the reasoning variant off `model.variant`
-      // (same field the web chat sends). Only attach it when a model is set.
+      // Thinking-effort: OpenCode reads the reasoning variant off the
+      // TOP-LEVEL `variant` field (same shape the web chat and the
+      // session-goal runtime send). Keep `model.variant` as well for older
+      // servers that read it there; unknown keys are ignored either way.
       if (variantOverride && typeof variantOverride === 'string') {
+        body.variant = variantOverride;
         body.model.variant = variantOverride;
       }
     }

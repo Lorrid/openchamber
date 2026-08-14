@@ -48,9 +48,8 @@ use to configure everything.
 - `messenger-worktree-sync.js` / `messenger-worktrees.js`: project channel and
   worktree thread lifecycle mirroring.
 - `discord-agent-api.js`: agent-facing router under `/api/messenger/agent`
-  (`post`, `schedule`, `read-session`, `resolve-reference`,
-  `session-reference/:id`, `create-project`) used by system skills and the
-  `openchamber messenger send` CLI.
+  (`post`, `schedule`, `read-session`, `resolve-reference`, `create-project`)
+  used by system skills and the `openchamber messenger send` CLI.
 - `session-reference.js`: `@session:<id>` reference parsing/resolution and
   transcript export.
 - `websocket.js`: messenger events WebSocket at `/api/messenger/ws`

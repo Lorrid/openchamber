@@ -82,7 +82,6 @@ type Props = {
   handleShareSession: (session: Session) => void;
   copiedSessionId: string | null;
   handleCopyShareUrl: (url: string, sessionId: string) => void;
-  handleCopySessionReference: (session: Session) => void;
   handleCopySessionId: (sessionId: string) => void;
   handleUnshareSession: (sessionId: string) => void;
   openSidebarMenuKey: string | null;
@@ -279,7 +278,6 @@ function SessionNodeItemComponent(props: Props): React.ReactNode {
     handleShareSession,
     copiedSessionId,
     handleCopyShareUrl,
-    handleCopySessionReference,
     handleCopySessionId,
     handleUnshareSession,
     openSidebarMenuKey,
@@ -936,11 +934,6 @@ function SessionNodeItemComponent(props: Props): React.ReactNode {
       <Item onClick={() => sessionDirectory && togglePinnedSession({ directory: sessionDirectory, sessionId: session.id })} className="[&>svg]:mr-1">
         {isPinnedSession ? <Icon name="unpin" className="mr-1 h-4 w-4" /> : <Icon name="pushpin" className="mr-1 h-4 w-4" />}
         {isPinnedSession ? t('sessions.sidebar.session.menu.unpin') : t('sessions.sidebar.session.menu.pin')}
-      </Item>
-      <Item onClick={() => { void handleCopySessionReference(resolvedSession); }} className="[&>svg]:mr-1">
-        {copiedSessionId === session.id
-          ? <><Icon name="check" className="mr-1 h-4 w-4" style={{ color: 'var(--status-success)' }} />{t('sessions.sidebar.session.menu.copied')}</>
-          : <><Icon name="file-copy" className="mr-1 h-4 w-4" />{t('sessions.sidebar.session.menu.copyReference')}</>}
       </Item>
       {!resolvedSession.share ? (
         <Item onClick={() => handleShareSession(resolvedSession)} className="[&>svg]:mr-1">
@@ -1654,7 +1647,6 @@ const areSessionNodeItemPropsEqual = (prev: Props, next: Props): boolean => {
     && prev.togglePinnedSession === next.togglePinnedSession
     && prev.handleShareSession === next.handleShareSession
     && prev.handleCopyShareUrl === next.handleCopyShareUrl
-    && prev.handleCopySessionReference === next.handleCopySessionReference
     && prev.handleCopySessionId === next.handleCopySessionId
     && prev.handleUnshareSession === next.handleUnshareSession
     && prev.setOpenSidebarMenuKey === next.setOpenSidebarMenuKey

@@ -1091,6 +1091,58 @@ describe('discord inbound mirroring', () => {
     await fs.rm(tmpDir, { recursive: true, force: true });
   });
 
+  it('sends the surface model override with top-level variant (Telegram /model wizard)', async () => {
+    const calls = [];
+    globalThis.fetch = vi.fn(async (url, init = {}) => {
+      calls.push([String(url), init]);
+      const u = String(url);
+      if (u === 'http://opencode/session') {
+        return { ok: true, status: 200, json: async () => ({ id: 'tg-ses-1' }), text: async () => '' };
+      }
+      if (u.includes('/session/tg-ses-1/prompt_async')) {
+        return { ok: true, status: 200, json: async () => ({}), text: async () => '' };
+      }
+      return { ok: true, status: 200, json: async () => ({ id: 'msg-1' }), text: async () => '' };
+    });
+
+    const stored = {
+      sessionId: 'tg-ses-1',
+      projectPath: null,
+      projectLabel: null,
+      modelOverride: 'openai/gpt-5',
+      variantOverride: 'high',
+      agentOverride: null,
+      verbosityOverride: null,
+    };
+    const bridge = makeBridge({
+      store: {
+        ...makeFakeStore(),
+        lookup: () => stored,
+        bind: () => {},
+      },
+      lookupMessengerTarget: () => null,
+      getDefaultMessengerTarget: async () => null,
+    });
+
+    const routed = await bridge.routeInbound({
+      type: 'telegram',
+      token: 'bot-token',
+      channelId: '12345',
+      threadId: null,
+      text: 'hello',
+      from: { id: 'user-1', username: 'alice' },
+    });
+    expect(routed.ok).toBe(true);
+
+    const promptCall = calls.find(([url]) => url.includes('/session/tg-ses-1/prompt_async'));
+    expect(promptCall).toBeTruthy();
+    const body = JSON.parse(promptCall[1].body);
+    expect(body.model).toMatchObject({ providerID: 'openai', modelID: 'gpt-5' });
+    // OpenCode's PromptInput reads `variant` as a TOP-LEVEL field — a variant
+    // nested inside `model` is silently dropped and the effort never applies.
+    expect(body.variant).toBe('high');
+  });
+
   it('omits the critique diff instructions when external sharing is not enabled (default)', async () => {
     const fs = await import('node:fs/promises');
     const os = await import('node:os');

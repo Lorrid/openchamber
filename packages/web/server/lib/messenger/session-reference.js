@@ -304,7 +304,8 @@ export async function readSessionTranscript({
 }
 
 /**
- * Build the copyable reference for a known session id (UI helper).
+ * Build the copyable reference for a known session id (messenger `/session-id`
+ * command).
  */
 export async function buildSessionReferenceForId({
   sessionId,

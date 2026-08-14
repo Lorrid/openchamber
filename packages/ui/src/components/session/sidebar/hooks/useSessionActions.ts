@@ -3,7 +3,6 @@ import type { Session } from '@opencode-ai/sdk/v2';
 import { toast } from '@/components/ui';
 import { copyTextToClipboard } from '@/lib/clipboard';
 import { useI18n } from '@/lib/i18n';
-import { fetchSessionReference } from '@/lib/sessionReference';
 import type { MainTab } from '@/stores/useUIStore';
 import { useUIStore } from '@/stores/useUIStore';
 import { streamPerfMark } from '@/stores/utils/streamDebug';
@@ -176,18 +175,6 @@ export const useSessionActions = (args: Args) => {
     }
   }, [args, t]);
 
-  // Copies the messenger session reference (`@session:<id>` style handle) so it
-  // can be pasted into Discord/Telegram; falls back to the raw session id.
-  const handleCopySessionReference = React.useCallback(async (session: Session) => {
-    const payload = await fetchSessionReference(session.id).catch(() => null);
-    const copied = await copyShareUrl(payload?.reference ?? session.id, session.id);
-    if (!copied) {
-      toast.error(t('sessions.sidebar.session.reference.copyError'));
-      return;
-    }
-    toast.success(t('sessions.sidebar.session.reference.success'));
-  }, [copyShareUrl, t]);
-
   const collectDescendants = React.useCallback((sessionId: string): Session[] => {
     const collected: Session[] = [];
     const visit = (id: string) => {
@@ -320,7 +307,6 @@ export const useSessionActions = (args: Args) => {
     handleCancelEdit,
     handleShareSession,
     handleCopyShareUrl,
-    handleCopySessionReference,
     handleCopySessionId,
     handleUnshareSession,
     handleDeleteSession,
