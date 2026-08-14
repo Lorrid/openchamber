@@ -70,6 +70,14 @@ the two ever disagree.
 | PUT | `/api/project-context/:projectId/plans/:planId` | takes the whole `{raw}` document; `404` when the link or its markdown is gone |
 | DELETE | `/api/project-context/:projectId/plans/:planId` | `404` when unknown |
 
+**Body parsing is attached per route.** This server has no global JSON parser:
+`core-routes` parses only an allowlist of `/api` path prefixes so the generic
+OpenCode proxy keeps an unread request stream, and every other `/api` request
+passes through untouched. A write route that forgets `express.json()` therefore
+sees `req.body` as `undefined` and rejects every request as a malformed body —
+which is exactly how this shipped once. `routes.http.test.js` mounts the routes
+on a bare express app so that failure mode fails the suite instead of the user.
+
 `projectId` is validated against `/^[a-zA-Z0-9._:-]+$/`, which rejects
 separators and traversal. Validation failures are `400`; malformed stored data
 and I/O failures are `500`.

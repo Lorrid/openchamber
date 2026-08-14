@@ -5,7 +5,17 @@
  * `~/.config/openchamber/projects/*`. The client no longer resolves the home
  * directory or composes storage paths, and plan markdown is addressed by id
  * rather than by an absolute path supplied by the caller.
+ *
+ * Body parsing is attached per route. There is no global JSON parser: the
+ * generic OpenCode proxy needs an unread request stream, so `core-routes`
+ * parses only an explicit allowlist of path prefixes and leaves every other
+ * `/api` request untouched. A route that forgets this sees `req.body` as
+ * undefined and rejects every write as a malformed body.
  */
+
+import express from 'express';
+
+const parseJsonBody = express.json({ limit: '1mb' });
 
 const isObjectRecord = (value) => Boolean(value) && typeof value === 'object' && !Array.isArray(value);
 
@@ -46,7 +56,7 @@ export const registerProjectContextRoutes = (app, dependencies) => {
     }
   });
 
-  app.put('/api/project-context/:projectId/todos', async (req, res) => {
+  app.put('/api/project-context/:projectId/todos', parseJsonBody, async (req, res) => {
     const body = req.body;
     if (!isObjectRecord(body)) {
       return res.status(400).json({ error: 'Body must be an object' });
@@ -62,7 +72,7 @@ export const registerProjectContextRoutes = (app, dependencies) => {
     }
   });
 
-  app.post('/api/project-context/:projectId/notes', async (req, res) => {
+  app.post('/api/project-context/:projectId/notes', parseJsonBody, async (req, res) => {
     const body = req.body;
     if (!isObjectRecord(body)) {
       return res.status(400).json({ error: 'Body must be an object' });
@@ -89,7 +99,7 @@ export const registerProjectContextRoutes = (app, dependencies) => {
     }
   });
 
-  app.patch('/api/project-context/:projectId/notes/:noteId', async (req, res) => {
+  app.patch('/api/project-context/:projectId/notes/:noteId', parseJsonBody, async (req, res) => {
     const body = req.body;
     if (!isObjectRecord(body)) {
       return res.status(400).json({ error: 'Body must be an object' });
@@ -130,7 +140,7 @@ export const registerProjectContextRoutes = (app, dependencies) => {
     }
   });
 
-  app.patch('/api/project-context/:projectId/plans/:planId', async (req, res) => {
+  app.patch('/api/project-context/:projectId/plans/:planId', parseJsonBody, async (req, res) => {
     const body = req.body;
     if (!isObjectRecord(body) || typeof body.pinned !== 'boolean') {
       return res.status(400).json({ error: 'pinned must be a boolean' });
@@ -163,7 +173,7 @@ export const registerProjectContextRoutes = (app, dependencies) => {
     }
   });
 
-  app.put('/api/project-context/:projectId/plans/:planId', async (req, res) => {
+  app.put('/api/project-context/:projectId/plans/:planId', parseJsonBody, async (req, res) => {
     const body = req.body;
     if (!isObjectRecord(body)) {
       return res.status(400).json({ error: 'Body must be an object' });
@@ -187,7 +197,7 @@ export const registerProjectContextRoutes = (app, dependencies) => {
     }
   });
 
-  app.post('/api/project-context/:projectId/plans', async (req, res) => {
+  app.post('/api/project-context/:projectId/plans', parseJsonBody, async (req, res) => {
     const body = req.body;
     if (!isObjectRecord(body)) {
       return res.status(400).json({ error: 'Body must be an object' });

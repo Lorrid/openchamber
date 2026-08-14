@@ -134,6 +134,17 @@ export const PlansSection: React.FC<{
     [importPlanFromText, t]
   );
 
+  const handleTogglePinned = React.useCallback(
+    async (planId: string, pinned: boolean) => {
+      const ok = await setPlanPinned(projectRef, planId, pinned);
+      if (!ok) {
+        const detail = useProjectContextStore.getState().getEntry(projectRef).error;
+        toast.error(t('rightSidebar.contextNotesTodo.toast.updatePlanFailed'), detail ? { description: detail } : undefined);
+      }
+    },
+    [projectRef, setPlanPinned, t]
+  );
+
   const visiblePlans = React.useMemo(() => {
     const needle = query.trim().toLowerCase();
     if (!needle) return plans;
@@ -219,7 +230,7 @@ export const PlansSection: React.FC<{
                 </button>
                 <button
                   type="button"
-                  onClick={() => void setPlanPinned(projectRef, plan.id, !plan.pinned)}
+                  onClick={() => void handleTogglePinned(plan.id, !plan.pinned)}
                   className={cn(
                     'inline-flex h-6 w-6 flex-shrink-0 items-center justify-center rounded-md hover:bg-interactive-hover/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50',
                     plan.pinned ? 'text-primary' : 'text-muted-foreground hover:text-foreground'

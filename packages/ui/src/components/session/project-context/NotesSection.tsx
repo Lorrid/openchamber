@@ -168,6 +168,13 @@ export const NotesSection: React.FC<{
     return notes.filter((note) => note.body.toLowerCase().includes(needle));
   }, [notes, query]);
 
+  // The store keeps the failure reason; without passing it through, every
+  // failure looks identical to the user and tells them nothing about the cause.
+  const reportFailure = React.useCallback((message: string) => {
+    const detail = useProjectContextStore.getState().getEntry(projectRef).error;
+    toast.error(message, detail ? { description: detail } : undefined);
+  }, [projectRef]);
+
   const handleAdd = React.useCallback(async () => {
     const body = composerText.trim();
     if (!body) {
@@ -175,31 +182,41 @@ export const NotesSection: React.FC<{
     }
     const created = await createNote(projectRef, { body });
     if (!created) {
-      toast.error(t('rightSidebar.contextNotesTodo.toast.createNoteFailed'));
+      reportFailure(t('rightSidebar.contextNotesTodo.toast.createNoteFailed'));
       return;
     }
     setComposerText('');
-  }, [composerText, createNote, projectRef, t]);
+  }, [composerText, createNote, projectRef, reportFailure, t]);
 
   const handleDelete = React.useCallback(
     async (noteId: string) => {
       const ok = await deleteNote(projectRef, noteId);
       if (!ok) {
-        toast.error(t('rightSidebar.contextNotesTodo.toast.deleteNoteFailed'));
+        reportFailure(t('rightSidebar.contextNotesTodo.toast.deleteNoteFailed'));
       }
     },
-    [deleteNote, projectRef, t]
+    [deleteNote, projectRef, reportFailure, t]
+  );
+
+  const handleTogglePinned = React.useCallback(
+    async (noteId: string, pinned: boolean) => {
+      const ok = await setNotePinned(projectRef, noteId, pinned);
+      if (!ok) {
+        reportFailure(t('rightSidebar.contextNotesTodo.toast.saveNotesFailed'));
+      }
+    },
+    [projectRef, reportFailure, setNotePinned, t]
   );
 
   const handleSaveBody = React.useCallback(
     (noteId: string, body: string) => {
       void saveNoteBody(projectRef, noteId, body).then((ok: boolean) => {
         if (!ok) {
-          toast.error(t('rightSidebar.contextNotesTodo.toast.saveNotesFailed'));
+          reportFailure(t('rightSidebar.contextNotesTodo.toast.saveNotesFailed'));
         }
       });
     },
-    [projectRef, saveNoteBody, t]
+    [projectRef, reportFailure, saveNoteBody, t]
   );
 
   return (
@@ -257,7 +274,7 @@ export const NotesSection: React.FC<{
                 key={note.id}
                 note={note}
                 onSaveBody={(body) => handleSaveBody(note.id, body)}
-                onTogglePinned={() => void setNotePinned(projectRef, note.id, !note.pinned)}
+                onTogglePinned={() => void handleTogglePinned(note.id, !note.pinned)}
                 onDelete={() => void handleDelete(note.id)}
               />
             ))}
