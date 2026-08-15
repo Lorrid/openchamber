@@ -206,7 +206,12 @@ Run daily.
     }
   });
 
-  const createArchiveFixture = async ({ goalEnabled = false, archiveUpdate, archiveQuietMs = 0 } = {}) => {
+  const createArchiveFixture = async ({
+    goalEnabled = false,
+    archiveUpdate,
+    archiveQuietMs = 0,
+    archiveMaxWaitMs,
+  } = {}) => {
     const project = await createTempProject();
     const projectConfigRuntime = await createProjectConfig(project.tempRoot);
     const created = await projectConfigRuntime.upsertScheduledTask('proj', {
@@ -248,6 +253,7 @@ Run daily.
       createGoal: vi.fn(async () => ({})),
       archiveQuietMs,
       archiveRetryBaseMs: 5,
+      ...(Number.isFinite(archiveMaxWaitMs) ? { archiveMaxWaitMs } : {}),
       logger: { info: vi.fn(), warn: vi.fn() },
     });
     await runtime.syncProject('proj');
@@ -710,6 +716,53 @@ Run daily.
       await vi.waitFor(() => expect(fixture.update).toHaveBeenCalledOnce());
     } finally {
       restarted?.stop();
+      await fixture.cleanup();
+    }
+  });
+
+  it('cleans up a deleted run session instead of retrying archival', async () => {
+    const fixture = await createArchiveFixture();
+    try {
+      const result = await fixture.runtime.runNow('proj', fixture.task.id);
+      expect(result.ok).toBe(true);
+      fixture.client.session.status.mockResolvedValue({
+        error: { status: 404, message: 'session not found' },
+      });
+
+      fixture.runtime.processPayload({
+        type: 'session.status',
+        properties: { sessionID: 'ses_scheduled', status: { type: 'idle' } },
+      });
+
+      await vi.waitFor(async () => {
+        const [task] = await fixture.projectConfigRuntime.listScheduledTasks('proj');
+        expect(task.state.pendingArchives).toBeUndefined();
+        expect(task.state.lastStatus).toBe('success');
+        expect(task.state.lastArchiveError).toBeUndefined();
+      });
+      expect(fixture.update).not.toHaveBeenCalled();
+    } finally {
+      await fixture.cleanup();
+    }
+  });
+
+  it('stops polling a session that never becomes quiescent', async () => {
+    const fixture = await createArchiveFixture({ archiveQuietMs: 5, archiveMaxWaitMs: 20 });
+    try {
+      fixture.client.session.messages.mockResolvedValue({
+        data: [{ info: { role: 'user' }, parts: [] }],
+      });
+      const result = await fixture.runtime.runNow('proj', fixture.task.id);
+      expect(result.ok).toBe(true);
+
+      await vi.waitFor(async () => {
+        const [task] = await fixture.projectConfigRuntime.listScheduledTasks('proj');
+        expect(task.state.pendingArchives).toBeUndefined();
+        expect(task.state.lastStatus).toBe('success');
+        expect(task.state.lastArchiveError).toContain('did not become idle');
+      });
+      expect(fixture.update).not.toHaveBeenCalled();
+    } finally {
       await fixture.cleanup();
     }
   });

@@ -43,9 +43,72 @@ const normalizePendingArchives = (value) => {
       continue;
     }
     seen.add(sessionId);
-    result.push({ sessionId, directory, goalEnabled: entry?.goalEnabled === true });
+    const createdAt = typeof entry?.createdAt === 'number' && Number.isFinite(entry.createdAt)
+      ? Math.max(0, Math.round(entry.createdAt))
+      : undefined;
+    result.push({
+      sessionId,
+      directory,
+      goalEnabled: entry?.goalEnabled === true,
+      ...(typeof createdAt === 'number' ? { createdAt } : {}),
+    });
   }
   return result.slice(-MAX_PENDING_ARCHIVES);
+};
+
+const mergePendingArchiveRecords = (current, incoming) => {
+  const byId = new Map();
+  for (const entry of normalizePendingArchives(current)) {
+    byId.set(entry.sessionId, entry);
+  }
+  for (const entry of normalizePendingArchives(incoming)) {
+    const existing = byId.get(entry.sessionId);
+    const createdAt = [existing?.createdAt, entry.createdAt]
+      .filter((value) => typeof value === 'number' && Number.isFinite(value))
+      .reduce((earliest, value) => (earliest === undefined ? value : Math.min(earliest, value)), undefined);
+    byId.set(entry.sessionId, {
+      ...existing,
+      ...entry,
+      ...(typeof createdAt === 'number' ? { createdAt } : {}),
+    });
+  }
+  return Array.from(byId.values()).slice(-MAX_PENDING_ARCHIVES);
+};
+
+const applyScheduledTaskStatePatch = (currentState, statePatch) => {
+  const patchObject = statePatch && typeof statePatch === 'object' ? { ...statePatch } : {};
+  const removeSessionId = asNonEmptyString(patchObject.removePendingArchiveSessionId);
+  delete patchObject.removePendingArchiveSessionId;
+
+  let pendingArchives = currentState?.pendingArchives;
+  if (removeSessionId) {
+    pendingArchives = (pendingArchives ?? []).filter((entry) => entry.sessionId !== removeSessionId);
+  }
+  if (Object.prototype.hasOwnProperty.call(patchObject, 'pendingArchives')) {
+    const incoming = patchObject.pendingArchives;
+    if (!Array.isArray(incoming) || incoming.length === 0) {
+      pendingArchives = [];
+    } else {
+      pendingArchives = mergePendingArchiveRecords(pendingArchives, incoming);
+    }
+    delete patchObject.pendingArchives;
+  }
+
+  const nextSource = {
+    ...currentState,
+    ...patchObject,
+    pendingArchives,
+    updatedAt: Date.now(),
+  };
+  if (
+    removeSessionId
+    && (!pendingArchives || pendingArchives.length === 0)
+    && !Object.prototype.hasOwnProperty.call(statePatch || {}, 'lastArchiveError')
+  ) {
+    nextSource.lastArchiveError = undefined;
+  }
+
+  return normalizeState(nextSource, currentState);
 };
 
 const normalizeTimeValue = (value) => {
@@ -683,17 +746,9 @@ export const createProjectConfigRuntime = (deps) => {
       }
 
       const currentTask = current.scheduledTasks[taskIndex];
-      const patchObject = statePatch && typeof statePatch === 'object' ? statePatch : {};
       const nextTask = {
         ...currentTask,
-        state: normalizeState(
-          {
-            ...currentTask.state,
-            ...patchObject,
-            updatedAt: Date.now(),
-          },
-          currentTask.state,
-        ),
+        state: applyScheduledTaskStatePatch(currentTask.state, statePatch),
       };
 
       const nextTasks = current.scheduledTasks.slice();
@@ -744,17 +799,9 @@ export const createProjectConfigRuntime = (deps) => {
         };
       }
 
-      const patchObject = statePatch && typeof statePatch === 'object' ? statePatch : {};
       const nextTask = {
         ...currentTask,
-        state: normalizeState(
-          {
-            ...currentTask.state,
-            ...patchObject,
-            updatedAt: Date.now(),
-          },
-          currentTask.state,
-        ),
+        state: applyScheduledTaskStatePatch(currentTask.state, statePatch),
       };
 
       const nextTasks = current.scheduledTasks.slice();

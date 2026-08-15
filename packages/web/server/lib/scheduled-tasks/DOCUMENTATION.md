@@ -114,8 +114,13 @@ Field mapping (model: `packages/ui/src/lib/scheduledTasksApi.ts`):
 part of the portable format (UI/JSON-only today); `daily`/`weekly`/`once`
 schedules remain UI/JSON-only. Runtime state (`lastRunAt`, `nextRunAt`,
 `lastStatus`, `lastError`, `lastSessionId`, `lastDurationMs`, `lastArchiveError`,
-and `pendingArchives`) is never written to the markdown file — it continues to
-live in the project config state store.
+and `pendingArchives`, including optional `createdAt` on each pending record)
+is never written to the markdown file — it continues to live in the project
+config state store. Completion writes merge pending archive records by
+`sessionId` under the project lock so two server instances cannot drop each
+other's in-flight records. A pending record is removed by session id; a
+deleted OpenCode session or a record that stays non-quiescent past 30 minutes
+is cleaned up instead of polling forever.
 
 ## Loop reconciliation rules
 

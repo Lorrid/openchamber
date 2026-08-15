@@ -129,6 +129,44 @@ describe('project-config runtime', () => {
     }
   });
 
+  it('merges pending archive records from concurrent completion writes', async () => {
+    const { runtime, cleanup } = await createRuntime();
+    try {
+      const created = await runtime.upsertScheduledTask('project-test', {
+        name: 'Nightly digest',
+        enabled: true,
+        schedule: { kind: 'daily', time: '09:30', timezone: 'UTC' },
+        execution: {
+          prompt: 'Summarize repository changes',
+          providerID: 'openai',
+          modelID: 'gpt-4.1',
+        },
+      });
+
+      await runtime.updateScheduledTaskState('project-test', created.task.id, {
+        pendingArchives: [{ sessionId: 'ses_1', directory: '/repo-a', goalEnabled: false, createdAt: 10 }],
+      });
+      await runtime.updateScheduledTaskState('project-test', created.task.id, {
+        pendingArchives: [{ sessionId: 'ses_2', directory: '/repo-b', goalEnabled: true, createdAt: 20 }],
+      });
+      let [task] = await runtime.listScheduledTasks('project-test');
+      expect(task.state.pendingArchives).toEqual([
+        { sessionId: 'ses_1', directory: '/repo-a', goalEnabled: false, createdAt: 10 },
+        { sessionId: 'ses_2', directory: '/repo-b', goalEnabled: true, createdAt: 20 },
+      ]);
+
+      await runtime.updateScheduledTaskState('project-test', created.task.id, {
+        removePendingArchiveSessionId: 'ses_1',
+      });
+      [task] = await runtime.listScheduledTasks('project-test');
+      expect(task.state.pendingArchives).toEqual([
+        { sessionId: 'ses_2', directory: '/repo-b', goalEnabled: true, createdAt: 20 },
+      ]);
+    } finally {
+      await cleanup();
+    }
+  });
+
   it('rejects invalid cron expressions', async () => {
     const { runtime, cleanup } = await createRuntime();
     try {

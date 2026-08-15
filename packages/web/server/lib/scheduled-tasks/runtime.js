@@ -12,6 +12,7 @@ const JITTER_MAX_MS = 2_000;
 const TASK_TITLE_MAX_LENGTH = 120;
 const TASK_DUE_SLACK_MS = 5_000;
 const MAX_TIMER_DELAY_MS = 2_147_483_647;
+const DEFAULT_ARCHIVE_MAX_WAIT_MS = 30 * 60 * 1000;
 
 const buildTaskKey = (projectID, taskID) => `${projectID}:${taskID}`;
 
@@ -104,6 +105,47 @@ const readSessionFailure = (payload) => {
   }
   const errorName = typeof info.error.name === 'string' ? info.error.name : 'AssistantError';
   return { sessionID: info.sessionID, message: `Scheduled run session failed: ${errorName}` };
+};
+
+const readErrorStatus = (error) => {
+  const candidates = [error?.status, error?.statusCode, error?.response?.status, error?.data?.status];
+  for (const value of candidates) {
+    const status = Number(value);
+    if (Number.isFinite(status) && status > 0) {
+      return status;
+    }
+  }
+  return null;
+};
+
+const isSessionMissing = (error) => {
+  if (!error) {
+    return false;
+  }
+  if (error.sessionMissing === true) {
+    return true;
+  }
+  if (readErrorStatus(error) === 404) {
+    return true;
+  }
+  const name = typeof error.name === 'string' ? error.name : '';
+  if (/notfound/i.test(name)) {
+    return true;
+  }
+  const message = safeErrorMessage(error);
+  return /\b404\b|not found|does not exist|unknown session/i.test(message);
+};
+
+const wrapSdkFailure = (error, fallback) => {
+  const wrapped = new Error(safeErrorMessage(error ?? fallback));
+  const status = readErrorStatus(error);
+  if (status) {
+    wrapped.statusCode = status;
+  }
+  if (isSessionMissing(error)) {
+    wrapped.sessionMissing = true;
+  }
+  return wrapped;
 };
 
 export const parseScheduledCommandPrompt = (prompt) => {
@@ -296,6 +338,7 @@ export const createScheduledTasksRuntime = (deps) => {
     maxRunDurationMs = DEFAULT_MAX_RUN_MS,
     archiveQuietMs = 2_000,
     archiveRetryBaseMs = 5_000,
+    archiveMaxWaitMs = DEFAULT_ARCHIVE_MAX_WAIT_MS,
   } = deps;
 
   let started = false;
@@ -349,22 +392,57 @@ export const createScheduledTasksRuntime = (deps) => {
     }
   };
 
-  const removePersistedPendingArchive = async (pending) => {
-    const currentTask = tasksByProject.get(pending.projectID)?.get(pending.taskID);
-    if (!currentTask) {
-      return;
-    }
-    const nextPendingArchives = (currentTask.state?.pendingArchives ?? [])
-      .filter((entry) => entry.sessionId !== pending.sessionID);
+  const removePersistedPendingArchive = async (pending, extraPatch = {}) => {
     const result = await projectConfigRuntime.updateScheduledTaskState(pending.projectID, pending.taskID, {
-      pendingArchives: nextPendingArchives,
-      ...(nextPendingArchives.length === 0
-        ? { lastArchiveError: undefined }
-        : {}),
+      removePendingArchiveSessionId: pending.sessionID,
+      ...extraPatch,
     });
     if (result.task) {
       updateInMemoryTask(pending.projectID, result.task);
     }
+  };
+
+  const clearPendingArchiveTimer = (sessionID) => {
+    const timer = archiveQuietTimers.get(sessionID);
+    if (timer) {
+      clearTimeout(timer);
+      archiveQuietTimers.delete(sessionID);
+    }
+  };
+
+  const isArchiveWaitExpired = (pending) => {
+    const createdAt = Number.isFinite(pending?.createdAt) ? pending.createdAt : 0;
+    return Date.now() - createdAt >= archiveMaxWaitMs;
+  };
+
+  const abandonPendingArchive = async (pending, error, prefix = 'Stopped waiting to archive run session') => {
+    const sessionID = pending.sessionID;
+    clearPendingArchiveTimer(sessionID);
+    pendingArchives.delete(sessionID);
+    const message = `${prefix}: ${safeErrorMessage(error)}`;
+    logger.warn?.('[ScheduledTasks] abandoned run session archive', {
+      projectID: pending.projectID,
+      taskID: pending.taskID,
+      sessionID,
+      error: message,
+    });
+    await removePersistedPendingArchive(pending, { lastArchiveError: message });
+    try {
+      emitTaskRunEvent?.({
+        projectID: pending.projectID,
+        taskID: pending.taskID,
+        ranAt: Date.now(),
+        status: 'success',
+        sessionID,
+      });
+    } catch {
+    }
+  };
+
+  const cleanupMissingSession = async (pending) => {
+    clearPendingArchiveTimer(pending.sessionID);
+    pendingArchives.delete(pending.sessionID);
+    await removePersistedPendingArchive(pending);
   };
 
   const markPendingRunFailed = async (sessionID) => {
@@ -373,25 +451,11 @@ export const createScheduledTasksRuntime = (deps) => {
       return;
     }
     pendingArchives.delete(sessionID);
-    const timer = archiveQuietTimers.get(sessionID);
-    if (timer) {
-      clearTimeout(timer);
-      archiveQuietTimers.delete(sessionID);
-    }
+    clearPendingArchiveTimer(sessionID);
     const currentTask = tasksByProject.get(pending.projectID)?.get(pending.taskID);
-    if (!currentTask) {
-      return;
-    }
-    const result = await projectConfigRuntime.updateScheduledTaskState(pending.projectID, pending.taskID, {
-      pendingArchives: (currentTask.state?.pendingArchives ?? [])
-        .filter((entry) => entry.sessionId !== sessionID),
-      ...(currentTask.state?.lastSessionId === sessionID
-        ? { lastStatus: 'error', lastError: pending.failure }
-        : {}),
-    });
-    if (result.task) {
-      updateInMemoryTask(pending.projectID, result.task);
-    }
+    await removePersistedPendingArchive(pending, currentTask?.state?.lastSessionId === sessionID
+      ? { lastStatus: 'error', lastError: pending.failure }
+      : {});
     try {
       emitTaskRunEvent?.({
         projectID: pending.projectID,
@@ -427,13 +491,21 @@ export const createScheduledTasksRuntime = (deps) => {
         time: { archived: Date.now() },
       });
       if (!response?.data?.time?.archived) {
-        throw new Error('OpenCode did not confirm session archival');
+        throw wrapSdkFailure(response?.error, 'OpenCode did not confirm session archival');
       }
       await removePersistedPendingArchive(pending);
       pendingArchives.delete(sessionID);
     } catch (error) {
+      if (isSessionMissing(error)) {
+        await cleanupMissingSession(pending);
+        return;
+      }
       pending.archiving = false;
       pending.archiveAttempts += 1;
+      if (isArchiveWaitExpired(pending)) {
+        await abandonPendingArchive(pending, error);
+        return;
+      }
       try {
         await updateArchiveError(pending, error);
       } catch (stateError) {
@@ -454,9 +526,10 @@ export const createScheduledTasksRuntime = (deps) => {
       directory: pending.directory,
     });
     if (sessionResponse?.error || !sessionResponse?.data) {
-      throw new Error(safeErrorMessage(
-        sessionResponse?.error ?? 'OpenCode did not return the pending goal session',
-      ));
+      throw wrapSdkFailure(
+        sessionResponse?.error,
+        'OpenCode did not return the pending goal session',
+      );
     }
     const status = sessionResponse.data.metadata?.openchamber?.goal?.status;
     return typeof status === 'string' ? status : '';
@@ -469,6 +542,10 @@ export const createScheduledTasksRuntime = (deps) => {
       if (pending?.failure) {
         await markPendingRunFailed(sessionID);
       }
+      return;
+    }
+    if (isArchiveWaitExpired(pending)) {
+      await abandonPendingArchive(pending, new Error('run session did not become idle in time'));
       return;
     }
     const client = createClient({
@@ -491,7 +568,7 @@ export const createScheduledTasksRuntime = (deps) => {
 
       const statusResponse = await client.session.status({ directory: pending.directory });
       if (statusResponse?.error || !statusResponse?.data || typeof statusResponse.data !== 'object') {
-        throw new Error(safeErrorMessage(statusResponse?.error ?? 'OpenCode did not return session status'));
+        throw wrapSdkFailure(statusResponse?.error, 'OpenCode did not return session status');
       }
       const statuses = statusResponse.data;
       const parentStatus = statuses[sessionID]?.type ?? 'idle';
@@ -506,7 +583,7 @@ export const createScheduledTasksRuntime = (deps) => {
         directory: pending.directory,
       });
       if (childrenResponse?.error || !Array.isArray(childrenResponse?.data)) {
-        throw new Error(safeErrorMessage(childrenResponse?.error ?? 'OpenCode did not return session children'));
+        throw wrapSdkFailure(childrenResponse?.error, 'OpenCode did not return session children');
       }
       const hasWorkingChild = childrenResponse.data.some((child) => {
         const childStatus = typeof child?.id === 'string' ? statuses[child.id]?.type : null;
@@ -524,7 +601,7 @@ export const createScheduledTasksRuntime = (deps) => {
         limit: 20,
       });
       if (messagesResponse?.error || !Array.isArray(messagesResponse?.data)) {
-        throw new Error(safeErrorMessage(messagesResponse?.error ?? 'OpenCode did not return session messages'));
+        throw wrapSdkFailure(messagesResponse?.error, 'OpenCode did not return session messages');
       }
       const lastMessage = messagesResponse.data.at(-1);
       if (lastMessage?.info?.role !== 'assistant' || !lastMessage.info?.time?.completed) {
@@ -542,9 +619,10 @@ export const createScheduledTasksRuntime = (deps) => {
       if (finalStatusResponse?.error
         || !finalStatusResponse?.data
         || typeof finalStatusResponse.data !== 'object') {
-        throw new Error(safeErrorMessage(
-          finalStatusResponse?.error ?? 'OpenCode did not return final session status',
-        ));
+        throw wrapSdkFailure(
+          finalStatusResponse?.error,
+          'OpenCode did not return final session status',
+        );
       }
       const finalStatuses = finalStatusResponse.data;
       const finalParentStatus = finalStatuses[sessionID]?.type ?? 'idle';
@@ -581,6 +659,14 @@ export const createScheduledTasksRuntime = (deps) => {
 
       await archivePendingSession(sessionID);
     } catch (error) {
+      if (isSessionMissing(error)) {
+        await cleanupMissingSession(pending);
+        return;
+      }
+      if (isArchiveWaitExpired(pending)) {
+        await abandonPendingArchive(pending, error);
+        return;
+      }
       pending.quietCheckAttempts += 1;
       logger.warn?.('[ScheduledTasks] failed to verify run session completion', {
         projectID: pending.projectID,
@@ -634,6 +720,7 @@ export const createScheduledTasksRuntime = (deps) => {
     goalEnabled,
     armed = false,
     statePersisted = false,
+    createdAt = Date.now(),
   }) => {
     pendingArchives.set(sessionID, {
       projectID,
@@ -643,8 +730,7 @@ export const createScheduledTasksRuntime = (deps) => {
       goalEnabled,
       armed,
       statePersisted,
-      observedBusy: false,
-      lastStatus: '',
+      createdAt: Number.isFinite(createdAt) ? createdAt : Date.now(),
       goalStatus: '',
       failure: '',
       quietCheckAttempts: 0,
@@ -678,16 +764,18 @@ export const createScheduledTasksRuntime = (deps) => {
           goalEnabled: record.goalEnabled === true,
           armed: true,
           statePersisted: true,
+          createdAt: record.createdAt,
         });
         pending = pendingArchives.get(sessionID);
       }
+      if (pending && isArchiveWaitExpired(pending)) {
+        await abandonPendingArchive(pending, new Error('run session did not become idle in time'));
+        continue;
+      }
       try {
         const sessionResponse = await client.session.get({ sessionID, directory: record.directory });
-        if (sessionResponse?.error) {
-          throw new Error(safeErrorMessage(sessionResponse.error));
-        }
-        if (!sessionResponse?.data) {
-          throw new Error('OpenCode did not return the pending session');
+        if (sessionResponse?.error || !sessionResponse?.data) {
+          throw wrapSdkFailure(sessionResponse?.error, 'OpenCode did not return the pending session');
         }
         if (sessionResponse.data.time?.archived) {
           pendingArchives.delete(sessionID);
@@ -713,13 +801,14 @@ export const createScheduledTasksRuntime = (deps) => {
 
         const statusResponse = await client.session.status({ directory: record.directory });
         if (statusResponse?.error || !statusResponse?.data || typeof statusResponse.data !== 'object') {
-          throw new Error(safeErrorMessage(statusResponse?.error ?? 'OpenCode did not return session status'));
+          throw wrapSdkFailure(statusResponse?.error, 'OpenCode did not return session status');
         }
-        const status = statusResponse.data[sessionID]?.type ?? 'idle';
-        pending.observedBusy = true;
-        pending.lastStatus = status;
         maybeArchivePendingSession(sessionID);
       } catch (error) {
+        if (isSessionMissing(error)) {
+          await cleanupMissingSession(pending);
+          continue;
+        }
         logger.warn?.('[ScheduledTasks] failed to resume pending session archive', {
           projectID,
           taskID: task.id,
@@ -1380,29 +1469,27 @@ export const createScheduledTasksRuntime = (deps) => {
       }
 
       const nextRunAt = computeNextRunAt(latestTask, finishedAt);
-      const existingPendingArchives = latestTask?.state?.pendingArchives ?? [];
       const runDirectory = projectPathByID.get(projectID);
-      const nextPendingArchives = status === 'success'
+      const pendingArchive = sessionID ? pendingArchives.get(sessionID) : null;
+      const addedPendingArchive = status === 'success'
         && sessionID
         && task.execution.archiveOnSuccess
         && typeof runDirectory === 'string'
         && runDirectory.length > 0
-        ? [
-            ...existingPendingArchives.filter((entry) => entry.sessionId !== sessionID),
-            {
-              sessionId: sessionID,
-              directory: runDirectory,
-              goalEnabled: task.execution.goalEnabled === true,
-            },
-          ]
-        : existingPendingArchives;
+        ? {
+            sessionId: sessionID,
+            directory: runDirectory,
+            goalEnabled: task.execution.goalEnabled === true,
+            createdAt: pendingArchive?.createdAt ?? Date.now(),
+          }
+        : null;
 
       const statePatch = {
         lastStatus: status,
         lastDurationMs: durationMs,
         lastError: status === 'error' ? errorMessage : undefined,
         lastSessionId: status === 'success' ? sessionID : undefined,
-        pendingArchives: nextPendingArchives,
+        ...(addedPendingArchive ? { pendingArchives: [addedPendingArchive] } : {}),
         nextRunAt: Number.isFinite(nextRunAt) ? nextRunAt : undefined,
         updatedAt: finishedAt,
       };
@@ -1440,7 +1527,16 @@ export const createScheduledTasksRuntime = (deps) => {
             lastDurationMs: durationMs,
             lastError: status === 'error' ? errorMessage : undefined,
             lastSessionId: status === 'success' ? sessionID : undefined,
-            pendingArchives: nextPendingArchives,
+            ...(addedPendingArchive
+              ? {
+                  pendingArchives: [
+                    ...(latestTask?.state?.pendingArchives ?? []).filter(
+                      (entry) => entry.sessionId !== addedPendingArchive.sessionId,
+                    ),
+                    addedPendingArchive,
+                  ],
+                }
+              : {}),
             nextRunAt: Number.isFinite(nextRunAt) ? nextRunAt : undefined,
             updatedAt: finishedAt,
           },
@@ -1470,7 +1566,6 @@ export const createScheduledTasksRuntime = (deps) => {
 
         // The session already ran — surface persist failure without treating a
         // successful dispatch as a hard run failure (manual runNow would 500).
-        const pendingArchive = sessionID ? pendingArchives.get(sessionID) : null;
         if (pendingArchive && stateResult.task) {
           pendingArchive.statePersisted = true;
           maybeArchivePendingSession(sessionID);
@@ -1486,7 +1581,6 @@ export const createScheduledTasksRuntime = (deps) => {
         };
       }
 
-      const pendingArchive = sessionID ? pendingArchives.get(sessionID) : null;
       if (pendingArchive) {
         if (stateResult.task) {
           pendingArchive.statePersisted = true;
@@ -1607,9 +1701,7 @@ export const createScheduledTasksRuntime = (deps) => {
     if (!pending || pending.goalEnabled) {
       return;
     }
-    pending.lastStatus = status.type;
     if (status.type === 'busy' || status.type === 'retry') {
-      pending.observedBusy = true;
       pending.quietPasses = 0;
     }
     maybeArchivePendingSession(status.sessionID);
