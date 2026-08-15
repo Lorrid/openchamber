@@ -42,6 +42,7 @@ export type ScheduledTask = {
       sessionId: string;
       directory: string;
       goalEnabled: boolean;
+      createdAt?: number;
     }>;
     nextRunAt?: number;
   };
