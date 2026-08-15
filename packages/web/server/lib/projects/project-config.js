@@ -6,6 +6,7 @@ export const MAX_TASK_NAME_LENGTH = 80;
 const MAX_TASK_PROMPT_LENGTH = 20_000;
 const MAX_CRON_LENGTH = 200;
 const MAX_LAST_ERROR_LENGTH = 2_000;
+const MAX_PENDING_ARCHIVES = 20;
 
 const asNonEmptyString = (value) => {
   if (typeof value !== 'string') {
@@ -27,6 +28,24 @@ const normalizeStatus = (value) => {
     return value;
   }
   return 'idle';
+};
+
+const normalizePendingArchives = (value) => {
+  if (!Array.isArray(value)) {
+    return [];
+  }
+  const result = [];
+  const seen = new Set();
+  for (const entry of value) {
+    const sessionId = asNonEmptyString(entry?.sessionId);
+    const directory = asNonEmptyString(entry?.directory);
+    if (!sessionId || !directory || seen.has(sessionId)) {
+      continue;
+    }
+    seen.add(sessionId);
+    result.push({ sessionId, directory, goalEnabled: entry?.goalEnabled === true });
+  }
+  return result.slice(-MAX_PENDING_ARCHIVES);
 };
 
 const normalizeTimeValue = (value) => {
@@ -215,6 +234,7 @@ const normalizeExecution = (value) => {
   const agent = asNonEmptyString(value.agent);
   const goalEnabled = value.goalEnabled === true;
   const permissionAutoAccept = value.permissionAutoAccept === true;
+  const archiveOnSuccess = value.archiveOnSuccess === true;
   const goalTokenBudget = typeof value.goalTokenBudget === 'number'
     && Number.isFinite(value.goalTokenBudget)
     && value.goalTokenBudget > 0
@@ -240,6 +260,7 @@ const normalizeExecution = (value) => {
     ...(goalEnabled ? { goalEnabled: true } : {}),
     ...(goalEnabled && goalTokenBudget ? { goalTokenBudget } : {}),
     ...(permissionAutoAccept ? { permissionAutoAccept: true } : {}),
+    ...(archiveOnSuccess ? { archiveOnSuccess: true } : {}),
   };
 };
 
@@ -263,6 +284,11 @@ const normalizeState = (value, fallback) => {
   const lastSessionId = asNonEmptyString(source.lastSessionId);
   const lastErrorRaw = asNonEmptyString(source.lastError);
   const lastError = lastErrorRaw ? clampLength(lastErrorRaw, MAX_LAST_ERROR_LENGTH) : undefined;
+  const lastArchiveErrorRaw = asNonEmptyString(source.lastArchiveError);
+  const lastArchiveError = lastArchiveErrorRaw
+    ? clampLength(lastArchiveErrorRaw, MAX_LAST_ERROR_LENGTH)
+    : undefined;
+  const pendingArchives = normalizePendingArchives(source.pendingArchives);
 
   return {
     createdAt: typeof source.createdAt === 'number' && Number.isFinite(source.createdAt)
@@ -278,6 +304,8 @@ const normalizeState = (value, fallback) => {
     ...(typeof lastScheduledFor === 'number' ? { lastScheduledFor } : {}),
     ...(lastSessionId ? { lastSessionId } : {}),
     ...(lastError ? { lastError } : {}),
+    ...(lastArchiveError ? { lastArchiveError } : {}),
+    ...(pendingArchives.length > 0 ? { pendingArchives } : {}),
   };
 };
 
@@ -326,7 +354,9 @@ const normalizeTaskForStorage = (value, options) => {
   const loopFile = asNonEmptyString(value.loopFile) ?? asNonEmptyString(existingTask?.loopFile);
 
   const nowMs = Math.max(0, Math.round(now));
-  const baseState = normalizeState(value.state, existingTask?.state);
+  // Runtime state is server-owned. A stale editor snapshot must not erase
+  // in-flight archive records or last-run metadata.
+  const baseState = normalizeState(existingTask?.state ?? value.state, existingTask?.state);
   const state = {
     ...baseState,
     createdAt: existingTask?.state?.createdAt ?? baseState.createdAt ?? nowMs,
@@ -756,7 +786,7 @@ export const createProjectConfigRuntime = (deps) => {
    *   over: its schedule/execution/enabled are overwritten from the file while
    *   its id and runtime state are preserved (markdown wins on conflict).
    *   Execution fields the file format does not define (goalEnabled,
-   *   goalTokenBudget, permissionAutoAccept, variant) are preserved.
+   *   goalTokenBudget, permissionAutoAccept, archiveOnSuccess, variant) are preserved.
    * - A task whose loopFile no longer matches any discovered loop file is
    *   unscheduled (removed). JSON-configured tasks (no loopFile) are never
    *   removed.
