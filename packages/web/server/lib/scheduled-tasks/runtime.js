@@ -411,8 +411,20 @@ export const createScheduledTasksRuntime = (deps) => {
   };
 
   const isArchiveWaitExpired = (pending) => {
-    const createdAt = Number.isFinite(pending?.createdAt) ? pending.createdAt : 0;
-    return Date.now() - createdAt >= archiveMaxWaitMs;
+    const stallStartedAt = Number.isFinite(pending?.stallStartedAt) ? pending.stallStartedAt : 0;
+    return stallStartedAt > 0 && Date.now() - stallStartedAt >= archiveMaxWaitMs;
+  };
+
+  const markPendingStillWorking = (pending) => {
+    pending.stallStartedAt = 0;
+    pending.quietPasses = 0;
+  };
+
+  const markPendingStalled = (pending) => {
+    if (!Number.isFinite(pending.stallStartedAt) || pending.stallStartedAt <= 0) {
+      pending.stallStartedAt = Date.now();
+    }
+    pending.quietPasses = 0;
   };
 
   const abandonPendingArchive = async (pending, error, prefix = 'Stopped waiting to archive run session') => {
@@ -502,6 +514,7 @@ export const createScheduledTasksRuntime = (deps) => {
       }
       pending.archiving = false;
       pending.archiveAttempts += 1;
+      markPendingStalled(pending);
       if (isArchiveWaitExpired(pending)) {
         await abandonPendingArchive(pending, error);
         return;
@@ -561,6 +574,7 @@ export const createScheduledTasksRuntime = (deps) => {
           return;
         }
         if (pending.goalStatus !== 'complete') {
+          markPendingStillWorking(pending);
           scheduleQuiescenceCheck(sessionID);
           return;
         }
@@ -573,7 +587,7 @@ export const createScheduledTasksRuntime = (deps) => {
       const statuses = statusResponse.data;
       const parentStatus = statuses[sessionID]?.type ?? 'idle';
       if (parentStatus === 'busy' || parentStatus === 'retry') {
-        pending.quietPasses = 0;
+        markPendingStillWorking(pending);
         scheduleQuiescenceCheck(sessionID);
         return;
       }
@@ -590,7 +604,7 @@ export const createScheduledTasksRuntime = (deps) => {
         return childStatus === 'busy' || childStatus === 'retry';
       });
       if (hasWorkingChild) {
-        pending.quietPasses = 0;
+        markPendingStillWorking(pending);
         scheduleQuiescenceCheck(sessionID);
         return;
       }
@@ -605,7 +619,11 @@ export const createScheduledTasksRuntime = (deps) => {
       }
       const lastMessage = messagesResponse.data.at(-1);
       if (lastMessage?.info?.role !== 'assistant' || !lastMessage.info?.time?.completed) {
-        pending.quietPasses = 0;
+        markPendingStalled(pending);
+        if (isArchiveWaitExpired(pending)) {
+          await abandonPendingArchive(pending, new Error('run session did not become idle in time'));
+          return;
+        }
         scheduleQuiescenceCheck(sessionID);
         return;
       }
@@ -631,7 +649,7 @@ export const createScheduledTasksRuntime = (deps) => {
         return childStatus === 'busy' || childStatus === 'retry';
       });
       if (finalParentStatus === 'busy' || finalParentStatus === 'retry' || hasWorkingChildAfterMessages) {
-        pending.quietPasses = 0;
+        markPendingStillWorking(pending);
         scheduleQuiescenceCheck(sessionID);
         return;
       }
@@ -644,7 +662,7 @@ export const createScheduledTasksRuntime = (deps) => {
           return;
         }
         if (pending.goalStatus !== 'complete') {
-          pending.quietPasses = 0;
+          markPendingStillWorking(pending);
           scheduleQuiescenceCheck(sessionID);
           return;
         }
@@ -731,6 +749,7 @@ export const createScheduledTasksRuntime = (deps) => {
       armed,
       statePersisted,
       createdAt: Number.isFinite(createdAt) ? createdAt : Date.now(),
+      stallStartedAt: 0,
       goalStatus: '',
       failure: '',
       quietCheckAttempts: 0,
@@ -767,10 +786,6 @@ export const createScheduledTasksRuntime = (deps) => {
           createdAt: record.createdAt,
         });
         pending = pendingArchives.get(sessionID);
-      }
-      if (pending && isArchiveWaitExpired(pending)) {
-        await abandonPendingArchive(pending, new Error('run session did not become idle in time'));
-        continue;
       }
       try {
         const sessionResponse = await client.session.get({ sessionID, directory: record.directory });

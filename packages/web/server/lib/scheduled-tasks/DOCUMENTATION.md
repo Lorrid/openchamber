@@ -119,8 +119,10 @@ is never written to the markdown file — it continues to live in the project
 config state store. Completion writes merge pending archive records by
 `sessionId` under the project lock so two server instances cannot drop each
 other's in-flight records. A pending record is removed by session id; a
-deleted OpenCode session or a record that stays non-quiescent past 30 minutes
-is cleaned up instead of polling forever.
+deleted OpenCode session is dropped without a warning. The 30-minute wait cap
+starts only after a run is idle-eligible (parent and children idle, and the
+goal is complete when one is enabled) but still not quiescent, so time spent
+legitimately working does not consume the cap.
 
 ## Loop reconciliation rules
 

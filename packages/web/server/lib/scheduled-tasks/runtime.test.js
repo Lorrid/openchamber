@@ -746,6 +746,35 @@ Run daily.
     }
   });
 
+  it('keeps waiting while a goal stays active past the archive wait cap', async () => {
+    const fixture = await createArchiveFixture({
+      goalEnabled: true,
+      archiveQuietMs: 5,
+      archiveMaxWaitMs: 20,
+    });
+    try {
+      fixture.client.session.get.mockResolvedValue({
+        data: { metadata: { openchamber: { goal: { status: 'active' } } } },
+      });
+      const result = await fixture.runtime.runNow('proj', fixture.task.id);
+      expect(result.ok).toBe(true);
+
+      await new Promise((resolve) => setTimeout(resolve, 60));
+      const [waiting] = await fixture.projectConfigRuntime.listScheduledTasks('proj');
+      expect(waiting.state.pendingArchives?.some((record) => record.sessionId === 'ses_scheduled')).toBe(true);
+      expect(waiting.state.lastArchiveError).toBeUndefined();
+      expect(fixture.update).not.toHaveBeenCalled();
+
+      fixture.client.session.get.mockResolvedValue({
+        data: { metadata: { openchamber: { goal: { status: 'complete' } } } },
+      });
+      fixture.runtime.processGoalSettled({ sessionId: 'ses_scheduled', status: 'complete' });
+      await vi.waitFor(() => expect(fixture.update).toHaveBeenCalledOnce());
+    } finally {
+      await fixture.cleanup();
+    }
+  });
+
   it('stops polling a session that never becomes quiescent', async () => {
     const fixture = await createArchiveFixture({ archiveQuietMs: 5, archiveMaxWaitMs: 20 });
     try {
