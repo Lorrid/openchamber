@@ -438,3 +438,31 @@ const useViewportStore = create(() => ({ scrollAnchor: 0 }))
 const useSelectionStore = create(() => ({ selectedModel: null }))
 const useInputStore = create(() => ({ pendingInput: "" }))
 ```
+
+## External session discovery
+
+Sessions created by external OpenCode processes (CLI, other server instances) share the same on-disk database (`~/.local/share/opencode/opencode.db`) but do not broadcast SSE events to OpenChamber's connected server. These sessions are discovered through the global polling mechanism.
+
+### How external sessions are discovered
+
+The `useTraySync` hook polls `refreshGlobalSessions()` every 45 seconds, which calls `loadSessions()` in `useGlobalSessionsStore`. This fetches all sessions via `experimental.session.list()` (paginated, no directory filter). The OpenCode server's global `experimental.session.list()` endpoint reads from the shared database, so it returns sessions regardless of which server process created them.
+
+Per-directory queries (`session.list({ directory })` and `experimental.session.list({ directory })`) do NOT return external sessions, only sessions the connected server knows about from its own event stream.
+
+### Sidebar filter
+
+`isKnownActiveSessionDirectory` in `SessionSidebar.tsx` filters sessions to those whose directory is in `knownSessionDirectories` (registered projects + worktrees). Without extension, sessions from directories not in this set would be filtered out and never appear in the sidebar or Recent view.
+
+The `effectiveKnownDirectories` set extends `knownSessionDirectories` with directories derived from `globalActiveSessions` themselves. Any session that exists in the global store has its directory added to the effective known set, so it passes the filter regardless of whether its directory is a registered project. This makes external sessions visible in the Recent view (desktop/web) and in project sections when the directory can be resolved to a parent project.
+
+### VS Code behavior
+
+The Recent view is disabled in VS Code (`recentSessions` returns `[]` when `isVSCode` is true). External sessions from unknown directories may appear in project sections if their directory resolves to a registered project via parent directory traversal, but they do not appear in a Recent section.
+
+### No silent data loss
+
+External sessions are new sessions with unique IDs, so they do not overwrite existing session data. The `upsertSession` function in `useGlobalSessionsStore` preserves existing session metadata (directory, project.worktree) when the incoming session omits it. The mutation revision system prevents stale polling results from overwriting newer SSE-driven updates.
+
+### Polling interval
+
+The 45-second polling interval provides a worst-case discovery latency of approximately 50 seconds (45s interval + API latency), which is within the 60-second target. The interval is defined as `GLOBAL_REFRESH_MS = 45000` in `useTraySync.ts` and is not configurable.
