@@ -505,15 +505,6 @@ const SessionSidebarComponent: React.FC<SessionSidebarProps> = ({
     [availableWorktreesByProject, isVSCode, projects],
   );
 
-  const effectiveKnownDirectories = React.useMemo(() => {
-    const merged = new Set(knownSessionDirectories);
-    for (const session of globalActiveSessions) {
-      const dir = normalizePath(resolveGlobalSessionDirectory(session))?.toLowerCase();
-      if (dir) merged.add(dir);
-    }
-    return merged;
-  }, [globalActiveSessions, knownSessionDirectories]);
-
   const sessions = React.useMemo(() => {
     const merged = [...globalActiveSessions];
     const seenIds = new Set(merged.map((session) => session.id));
@@ -525,11 +516,11 @@ const SessionSidebarComponent: React.FC<SessionSidebarProps> = ({
       merged.push(session);
     });
 
-    return merged.filter((session) => isKnownActiveSessionDirectory(session, effectiveKnownDirectories, {
+    return merged.filter((session) => isKnownActiveSessionDirectory(session, knownSessionDirectories, {
       allowUnknownDirectory: !isVSCode,
       allowEmptyDirectorySet: !isVSCode,
     }));
-  }, [effectiveKnownDirectories, globalActiveSessions, isVSCode, liveFallbackSessions]);
+  }, [globalActiveSessions, isVSCode, knownSessionDirectories, liveFallbackSessions]);
 
   const persistenceSessions = React.useMemo(
     () => [...globalActiveSessions, ...archivedSessions],
