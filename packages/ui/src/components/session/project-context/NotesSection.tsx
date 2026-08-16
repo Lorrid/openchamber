@@ -264,9 +264,11 @@ export const NotesSection: React.FC<{
         )}
       />
 
-      <div className="rounded-lg border border-border/60 bg-background/40">
+      {/* No frame around the list: each note is a bordered card, and an outer
+          border sitting flush against them read as lines joining the cards. */}
+      <div>
         {visibleNotes.length === 0 ? (
-          <p className="px-3 py-3 typography-meta text-muted-foreground">
+          <p className="typography-meta text-muted-foreground">
             {query.trim()
               ? t('rightSidebar.contextNotesTodo.search.noResults', { query: query.trim() })
               : t('rightSidebar.contextNotesTodo.notes.empty')}
