@@ -171,39 +171,6 @@ const sanitizeEntries = (value, now, scope) => {
 
 const createEmptyMemory = () => ({ version: MEMORY_VERSION, entries: [] });
 
-/**
- * The index the agent sees at the start of a session: titles only, never
- * bodies. Bodies are fetched on demand, because an index that carries them
- * grows without bound until it crowds out the conversation itself.
- */
-export const formatMemoryIndex = ({ globalEntries, projectEntries }) => {
-  const sections = [];
-
-  const render = (entries) => entries
-    .slice()
-    .sort((a, b) => a.createdAt - b.createdAt)
-    .map((entry) => `- [${entry.type}] ${entry.title}`)
-    .join('\n');
-
-  if (globalEntries.length > 0) {
-    sections.push(`### About the user\n\n${render(globalEntries)}`);
-  }
-  if (projectEntries.length > 0) {
-    sections.push(`### About this project\n\n${render(projectEntries)}`);
-  }
-  if (sections.length === 0) {
-    return '';
-  }
-
-  return [
-    'You have stored memory from earlier sessions. Only the titles are listed;'
-      + ' read an entry with the openchamber_memory tool when it is relevant.',
-    'Memory records what was true when it was written. Verify anything it says'
-      + ' about files, flags or commands before relying on it.',
-    ...sections,
-  ].join('\n\n');
-};
-
 export const createAgentMemoryRuntime = (deps) => {
   const { fsPromises, path, projectsDirPath, userConfigRoot, createId } = deps;
 

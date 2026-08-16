@@ -21,6 +21,8 @@ import { runtimeFetch } from "@/lib/runtime-fetch"
 import { useConfigStore } from "@/stores/useConfigStore"
 import { useProjectsStore } from "@/stores/useProjectsStore"
 import { forgetPinnedContextForSession, markPinnedContextSent, resolvePinnedContextPart } from "@/lib/projectContextPinning"
+import { forgetMemoryIndexForSession, markMemoryIndexSent, resolveMemoryIndexPart } from "@/lib/agentMemoryIndex"
+import { useAgentMemoryStore } from "@/stores/useAgentMemoryStore"
 import { useGlobalSessionsStore, resolveGlobalSessionDirectory } from "@/stores/useGlobalSessionsStore"
 import { useDirectoryStore } from "@/stores/useDirectoryStore"
 import { useSessionFoldersStore } from "@/stores/useSessionFoldersStore"
@@ -1393,8 +1395,21 @@ export const useSessionUIStore = create<SessionUIState>()((set, get) => ({
         projects: useProjectsStore.getState().projects,
         worktreesByProject: get().availableWorktreesByProject,
       })
-      const mergedAdditionalParts = draftPinned
-        ? [{ text: draftPinned.text, synthetic: true }, ...(draftParts || [])]
+      // The stored memory index, listed before the pinned context so the
+      // session reads oldest background first. Resolved from the cached
+      // snapshot only: a send must never wait on a memory request.
+      const draftMemoryIndex = resolveMemoryIndexPart({
+        sessionId: createdDraftSession.sessionId,
+        snapshot: useAgentMemoryStore.getState().snapshot(),
+      })
+      const draftPrefixParts: Array<{ text: string; attachments?: AttachedFile[]; synthetic?: boolean }> = [
+        ...(draftMemoryIndex ? [{ text: draftMemoryIndex.text, synthetic: true }] : []),
+        ...(draftPinned ? [{ text: draftPinned.text, synthetic: true }] : []),
+      ]
+      // Left undefined when nothing was added, as before: an empty array is not
+      // the same as no additional parts to everything downstream.
+      const mergedAdditionalParts = draftPrefixParts.length > 0
+        ? [...draftPrefixParts, ...(draftParts || [])]
         : draftParts
 
       notifyMessageSent(createdDraftSession.sessionId)
@@ -1436,6 +1451,9 @@ export const useSessionUIStore = create<SessionUIState>()((set, get) => ({
       // pinned context again rather than assume the agent already saw it.
       if (draftPinned) {
         markPinnedContextSent(draftPinned.sessionId, draftPinned.signature)
+      }
+      if (draftMemoryIndex) {
+        markMemoryIndexSent(draftMemoryIndex.sessionId, draftMemoryIndex.signature)
       }
       return
     }
@@ -1506,8 +1524,16 @@ export const useSessionUIStore = create<SessionUIState>()((set, get) => ({
       projects: useProjectsStore.getState().projects,
       worktreesByProject: get().availableWorktreesByProject,
     })
-    const partsWithPinnedContext = pinnedContext
-      ? [{ text: pinnedContext.text, synthetic: true }, ...(additionalParts || [])]
+    const memoryIndex = resolveMemoryIndexPart({
+      sessionId: targetSessionId || "",
+      snapshot: useAgentMemoryStore.getState().snapshot(),
+    })
+    const prefixParts: Array<{ text: string; attachments?: AttachedFile[]; synthetic?: boolean }> = [
+      ...(memoryIndex ? [{ text: memoryIndex.text, synthetic: true }] : []),
+      ...(pinnedContext ? [{ text: pinnedContext.text, synthetic: true }] : []),
+    ]
+    const partsWithPinnedContext = prefixParts.length > 0
+      ? [...prefixParts, ...(additionalParts || [])]
       : additionalParts
 
     await routeMessage({
@@ -1536,6 +1562,9 @@ export const useSessionUIStore = create<SessionUIState>()((set, get) => ({
     })
     if (pinnedContext) {
       markPinnedContextSent(pinnedContext.sessionId, pinnedContext.signature)
+    }
+    if (memoryIndex) {
+      markMemoryIndexSent(memoryIndex.sessionId, memoryIndex.signature)
     }
   },
 
@@ -1576,8 +1605,9 @@ export const useSessionUIStore = create<SessionUIState>()((set, get) => ({
     const deleted = await deleteSessionAction(id, options)
     if (deleted) {
       // A recycled session id must not inherit the old session's belief that it
-      // already received the pinned context.
+      // already received the pinned context or the memory index.
       forgetPinnedContextForSession(id)
+      forgetMemoryIndexForSession(id)
     }
     return deleted
   },
@@ -1586,6 +1616,7 @@ export const useSessionUIStore = create<SessionUIState>()((set, get) => ({
     const result = await deleteSessionsAction(ids, options)
     for (const id of result.deletedIds) {
       forgetPinnedContextForSession(id)
+      forgetMemoryIndexForSession(id)
     }
     return result
   },

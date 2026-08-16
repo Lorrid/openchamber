@@ -72,7 +72,10 @@ export const registerAgentMemoryRoutes = (app, dependencies) => {
       // Awaited: the setting is read from disk, and testing the returned
       // promise for truthiness would leave the gate permanently open.
       if (!(await isAgentMemoryEnabled())) {
-        return res.status(404).json({ error: 'Agent memory is disabled' });
+        // Flagged, not merely 404: a missing entry answers 404 too, and a
+        // client that could not tell them apart would report a deleted memory
+        // as the whole feature being switched off.
+        return res.status(404).json({ error: 'Agent memory is disabled', disabled: true });
       }
     } catch {
       // An unreadable settings file must not silently expose a surface the

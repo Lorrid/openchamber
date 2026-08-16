@@ -255,6 +255,23 @@ describe('outcomes', () => {
 });
 
 describe('the settings toggle disables the surface, not just its UI', () => {
+  it('flags the disabled answer so a deleted entry cannot be mistaken for it', async () => {
+    // Both answer 404. Without the flag a client would report one memory the
+    // user just deleted as the whole feature being switched off.
+    const off = createApp({ isAgentMemoryEnabled: () => false });
+    const missing = createApp({ runtime: { update: async () => null } });
+
+    const disabled = await request(off.app).get('/api/agent-memory?scope=global');
+    const notFound = await request(missing.app)
+      .patch('/api/agent-memory/nope?scope=global')
+      .send({ reviewed: true });
+
+    expect(disabled.status).toBe(404);
+    expect(disabled.body.disabled).toBe(true);
+    expect(notFound.status).toBe(404);
+    expect(notFound.body.disabled).toBeUndefined();
+  });
+
   it('refuses reads while memory is off', async () => {
     const { app, received } = createApp({ isAgentMemoryEnabled: () => false });
 
