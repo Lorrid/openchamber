@@ -44,6 +44,8 @@ type MergeMethod = 'merge' | 'squash' | 'rebase';
 type PrSegment = 'overview' | 'checks' | 'comments';
 
 const PR_CHECKS_AUTO_REFRESH_MS = 35_000;
+const EMPTY_GIT_REMOTES: GitRemote[] = [];
+const EMPTY_REMOTE_BRANCHES: string[] = [];
 
 const formatElapsedDuration = (startISO?: string, endISO?: string, now?: number): string | null => {
   if (!startISO) return null;
@@ -237,9 +239,11 @@ const rankRemotesForAutoSelect = (
   pushUnique(byName.get('upstream'));
   pushUnique(byName.get('origin'));
 
-  remotes
-    .filter((remote) => !isEphemeralPrRemote(remote.name))
-    .forEach((remote) => pushUnique(remote));
+  for (const remote of remotes) {
+    if (!isEphemeralPrRemote(remote.name)) {
+      pushUnique(remote);
+    }
+  }
   remotes.forEach((remote) => pushUnique(remote));
 
   return ordered;
@@ -319,7 +323,7 @@ export const PullRequestSection: React.FC<{
   remotes?: GitRemote[];
   remoteBranches?: string[];
   onGeneratedDescription?: () => void;
-}> = ({ directory, branch, baseBranch, trackingBranch, remotes = [], remoteBranches = [], onGeneratedDescription }) => {
+}> = ({ directory, branch, baseBranch, trackingBranch, remotes = EMPTY_GIT_REMOTES, remoteBranches = EMPTY_REMOTE_BRANCHES, onGeneratedDescription }) => {
   const { t } = useI18n();
   const timeFormatPreference = useUIStore((state) => state.timeFormatPreference);
   const { github } = useRuntimeAPIs();
@@ -715,9 +719,7 @@ export const PullRequestSection: React.FC<{
     return typeof login === 'string' ? login.trim() : '';
   }, [githubAuthStatus]);
 
-  const selfMentionHighlightClass = React.useMemo(() => {
-    return "[&_a[href*='oc-self-mention=1']]:!text-[var(--primary-base)] [&_a[href*='oc-self-mention=1']]:font-semibold [&_a[href*='oc-self-mention=1']]:!no-underline [&_a[href*='oc-self-mention=1']:hover]:!text-[var(--primary-hover)]";
-  }, []);
+  const selfMentionHighlightClass = "[&_a[href*='oc-self-mention=1']]:!text-[var(--primary-base)] [&_a[href*='oc-self-mention=1']]:font-semibold [&_a[href*='oc-self-mention=1']]:!no-underline [&_a[href*='oc-self-mention=1']:hover]:!text-[var(--primary-hover)]";
 
   const linkifyMentionsMarkdown = React.useCallback((content: string) => {
     const selfLoginLower = connectedGitHubLogin.toLowerCase();
@@ -1218,9 +1220,8 @@ export const PullRequestSection: React.FC<{
   }, [snapshotKey, title, body, draft, additionalContext, targetBaseBranch, selectedRemote?.name, directory, branch, activeSegment]);
 
   React.useEffect(() => {
-    const pendingActionRefreshTimers = pendingActionRefreshTimersRef.current;
     return () => {
-      pendingActionRefreshTimers.forEach((timerId) => {
+      pendingActionRefreshTimersRef.current.forEach((timerId) => {
         window.clearTimeout(timerId);
       });
       pendingActionRefreshTimersRef.current = [];
@@ -2056,19 +2057,7 @@ export const PullRequestSection: React.FC<{
                   />
                 </label>
 
-                <div
-                  className="flex items-center gap-2 cursor-pointer"
-                  role="button"
-                  tabIndex={0}
-                  aria-pressed={draft}
-                  onClick={() => setDraft((v) => !v)}
-                  onKeyDown={(e) => {
-                    if (e.key === ' ' || e.key === 'Enter') {
-                      e.preventDefault();
-                      setDraft((v) => !v);
-                    }
-                  }}
-                >
+                <label className="flex w-fit items-center gap-2 cursor-pointer">
                   <Checkbox
                     size="sm"
                     checked={draft}
@@ -2076,7 +2065,7 @@ export const PullRequestSection: React.FC<{
                     ariaLabel={t('gitView.pr.actions.toggleDraftAria')}
                   />
                   <span className="typography-ui-label text-foreground select-none">{t('gitView.pr.field.draft')}</span>
-                </div>
+                </label>
 
                 {/* Additional Context Section */}
                 {isMobile ? (
