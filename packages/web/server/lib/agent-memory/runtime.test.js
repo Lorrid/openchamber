@@ -186,34 +186,6 @@ describe('create', () => {
   });
 });
 
-describe('update', () => {
-  test('patches only the named fields and bumps updatedAt', async () => {
-    const { entry } = await runtime.create(PROJECT, { title: 'T', body: 'before', type: 'fact' });
-    await new Promise((resolve) => setTimeout(resolve, 2));
-
-    const result = await runtime.update(PROJECT, entry.id, { body: 'after' });
-    expect(result.entry.body).toBe('after');
-    expect(result.entry.title).toBe('T');
-    expect(result.entry.type).toBe('fact');
-    expect(result.entry.updatedAt).toBeGreaterThan(entry.updatedAt);
-    expect(result.entry.createdAt).toBe(entry.createdAt);
-  });
-
-  test('rejects an empty patch', async () => {
-    const { entry } = await runtime.create(PROJECT, { title: 'T', body: 'b' });
-    await expect(runtime.update(PROJECT, entry.id, {})).rejects.toThrow('title, body, type or reviewed is required');
-  });
-
-  test('rejects blanking a field', async () => {
-    const { entry } = await runtime.create(PROJECT, { title: 'T', body: 'b' });
-    await expect(runtime.update(PROJECT, entry.id, { body: '  ' })).rejects.toThrow('body is required');
-  });
-
-  test('returns null for an unknown entry', async () => {
-    expect(await runtime.update(PROJECT, 'missing', { body: 'x' })).toBeNull();
-  });
-});
-
 describe('remove', () => {
   test('deletes only the requested entry', async () => {
     const keep = await runtime.create(PROJECT, { title: 'Keep', body: 'x' });
@@ -258,5 +230,76 @@ describe('readAll', () => {
     const all = await runtime.readAll(null);
     expect(all.global).toHaveLength(1);
     expect(all.project).toEqual([]);
+  });
+});
+
+describe('restated duplicates', () => {
+  test('a reworded restatement replaces the entry instead of adding a second', async () => {
+    await runtime.create(PROJECT, {
+      title: 'Run UI tests per file',
+      body: 'UI tests must run one file at a time because module mocks leak between files.',
+    });
+
+    const result = await runtime.create(PROJECT, {
+      title: 'UI tests run one file at a time',
+      body: 'Because module mocks leak between files, UI tests must run per file.',
+    });
+
+    expect(result.replaced).toBe(true);
+    expect(result.entries).toHaveLength(1);
+    expect(result.entry.title).toBe('UI tests run one file at a time');
+  });
+
+  test('keeps entries that merely share vocabulary', async () => {
+    await runtime.create(PROJECT, {
+      title: 'Package manager',
+      body: 'This project installs dependencies with bun install.',
+    });
+
+    const result = await runtime.create(PROJECT, {
+      title: 'Test runner',
+      body: 'This project executes its unit suites through vitest.',
+    });
+
+    expect(result.replaced).toBe(false);
+    expect(result.entries).toHaveLength(2);
+  });
+
+  test('short entries fall back to exact-title matching', async () => {
+    await runtime.create(PROJECT, { title: 'Runtime', body: 'Use bun.' });
+    const result = await runtime.create(PROJECT, { title: 'Bundler', body: 'Use vite.' });
+
+    expect(result.replaced).toBe(false);
+    expect(result.entries).toHaveLength(2);
+  });
+
+  test('a replacement bumps updatedAt so the panel can show it as changed', async () => {
+    const first = await runtime.create(PROJECT, {
+      title: 'Run UI tests per file',
+      body: 'UI tests must run one file at a time because module mocks leak between files.',
+    });
+    await new Promise((resolve) => setTimeout(resolve, 2));
+
+    const second = await runtime.create(PROJECT, {
+      title: 'UI tests run one file at a time',
+      body: 'Because module mocks leak between files, UI tests must run per file.',
+    });
+
+    expect(second.entry.createdAt).toBe(first.entry.createdAt);
+    expect(second.entry.updatedAt).toBeGreaterThan(first.entry.updatedAt);
+  });
+
+  test('a full store can still correct an entry it already holds', async () => {
+    for (let index = 0; index < 60; index += 1) {
+      await runtime.create(GLOBAL, { title: `Entry ${index}`, body: `Body number ${index}.` });
+    }
+    await expect(runtime.create(GLOBAL, { title: 'One more', body: 'Overflows the store.' }))
+      .rejects.toThrow('at most 60 entries');
+
+    const result = await runtime.create(GLOBAL, { title: 'Entry 7', body: 'Corrected body.' });
+
+    expect(result.replaced).toBe(true);
+    expect(result.entries).toHaveLength(60);
+    expect(result.entry.body).toBe('Corrected body.');
   });
 });

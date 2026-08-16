@@ -7,20 +7,13 @@
  * scope wrong must fail loudly, never silently write the user's global memory
  * from a project-scoped call.
  *
- * Body parsing is attached per route. There is no global JSON parser: the
- * generic OpenCode proxy needs an unread request stream, so `core-routes`
- * parses only an explicit allowlist of path prefixes and leaves every other
- * `/api` request untouched. A route that forgets this sees `req.body` as
- * undefined and rejects every write as a malformed body.
+ * These routes read and delete only. Memory is written by the agent through the
+ * `openchamber_memory` tool, not from the panel, so there is no create route to
+ * keep in step — and none of these carry a request body, which is why no JSON
+ * parser is attached. Adding a body-carrying route here means attaching
+ * `express.json()` to it: there is no global parser, because the generic
+ * OpenCode proxy needs an unread request stream.
  */
-
-import express from 'express';
-
-const parseJsonBody = express.json({ limit: '1mb' });
-
-const MEMORY_TYPES = new Set(['fact', 'preference', 'reference']);
-
-const isObjectRecord = (value) => Boolean(value) && typeof value === 'object' && !Array.isArray(value);
 
 const isValidationError = (error) => {
   const message = error instanceof Error ? error.message : '';
@@ -110,83 +103,6 @@ export const registerAgentMemoryRoutes = (app, dependencies) => {
       return res.json(await agentMemoryRuntime.readAll(projectId));
     } catch (caught) {
       return respondWithError(res, caught, 'Failed to read agent memory');
-    }
-  });
-
-  app.post('/api/agent-memory', requireEnabled, parseJsonBody, async (req, res) => {
-    const { target, error } = resolveScope(req.query);
-    if (error) {
-      return res.status(400).json({ error });
-    }
-
-    const body = req.body;
-    if (!isObjectRecord(body)) {
-      return res.status(400).json({ error: 'Body must be an object' });
-    }
-    if (typeof body.title !== 'string') {
-      return res.status(400).json({ error: 'title must be a string' });
-    }
-    if (typeof body.body !== 'string') {
-      return res.status(400).json({ error: 'body must be a string' });
-    }
-    if (body.type !== undefined && !MEMORY_TYPES.has(body.type)) {
-      return res.status(400).json({ error: 'type must be fact, preference, or reference' });
-    }
-    if (body.sessionId !== undefined && typeof body.sessionId !== 'string') {
-      return res.status(400).json({ error: 'sessionId must be a string' });
-    }
-
-    try {
-      const result = await agentMemoryRuntime.create(target, {
-        title: body.title,
-        body: body.body,
-        type: body.type,
-        sessionId: body.sessionId,
-      });
-      // A replacement is not a creation: the client uses the status to tell
-      // "the agent learned something" from "the agent corrected itself".
-      return res.status(result.replaced ? 200 : 201).json(result);
-    } catch (caught) {
-      return respondWithError(res, caught, 'Failed to create memory');
-    }
-  });
-
-  app.patch('/api/agent-memory/:memoryId', requireEnabled, parseJsonBody, async (req, res) => {
-    const { target, error } = resolveScope(req.query);
-    if (error) {
-      return res.status(400).json({ error });
-    }
-
-    const body = req.body;
-    if (!isObjectRecord(body)) {
-      return res.status(400).json({ error: 'Body must be an object' });
-    }
-    if (body.title !== undefined && typeof body.title !== 'string') {
-      return res.status(400).json({ error: 'title must be a string' });
-    }
-    if (body.body !== undefined && typeof body.body !== 'string') {
-      return res.status(400).json({ error: 'body must be a string' });
-    }
-    if (body.type !== undefined && !MEMORY_TYPES.has(body.type)) {
-      return res.status(400).json({ error: 'type must be fact, preference, or reference' });
-    }
-    if (body.reviewed !== undefined && typeof body.reviewed !== 'boolean') {
-      return res.status(400).json({ error: 'reviewed must be a boolean' });
-    }
-
-    try {
-      const result = await agentMemoryRuntime.update(target, req.params.memoryId, {
-        ...(body.title !== undefined ? { title: body.title } : {}),
-        ...(body.body !== undefined ? { body: body.body } : {}),
-        ...(body.type !== undefined ? { type: body.type } : {}),
-        ...(body.reviewed !== undefined ? { reviewed: body.reviewed } : {}),
-      });
-      if (!result) {
-        return res.status(404).json({ error: 'Memory not found' });
-      }
-      return res.json(result);
-    } catch (caught) {
-      return respondWithError(res, caught, 'Failed to save memory');
     }
   });
 

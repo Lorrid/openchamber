@@ -27,13 +27,29 @@ const toSummary = (entry, scope) => ({
   title: entry.title,
   type: entry.type,
   scope,
-  reviewed: entry.reviewed,
 });
 
 const toFullEntry = (entry, scope) => ({ ...toSummary(entry, scope), body: entry.body });
 
 export const createAgentMemoryActions = (dependencies) => {
-  const { agentMemoryRuntime, createError } = dependencies;
+  const { agentMemoryRuntime, createError, onMemoryChanged } = dependencies;
+
+  /**
+   * Announce a write so an open panel shows it without being reopened. The
+   * agent writes here on its own initiative, so without this the user only
+   * learns what was stored the next time something else happens to reload.
+   *
+   * Never allowed to fail the action: the memory is already on disk, and a
+   * broken notification must not report the write as failed.
+   */
+  const announce = (scope, projectId) => {
+    if (typeof onMemoryChanged !== 'function') return;
+    try {
+      onMemoryChanged({ scope, ...(projectId ? { projectId } : {}) });
+    } catch {
+      // A listener that throws must not take the write down with it.
+    }
+  };
 
   const fail = (message, status = 400) => {
     throw createError(message, status);
@@ -123,6 +139,7 @@ export const createAgentMemoryActions = (dependencies) => {
       type: input.type,
       sessionId: asNonEmptyString(input.sessionId),
     });
+    announce(target.scope, target.projectId);
     return {
       memory: toFullEntry(result.entry, target.scope),
       // Told plainly so the agent does not report storing a second memory when
@@ -140,6 +157,7 @@ export const createAgentMemoryActions = (dependencies) => {
     if (!result.deleted) {
       fail('No memory has that id in this scope', 404);
     }
+    announce(target.scope, target.projectId);
     return { deleted: true, memoryId };
   };
 

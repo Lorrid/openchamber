@@ -26,8 +26,6 @@ export interface AgentMemoryEntry {
   type: AgentMemoryType;
   createdAt: number;
   updatedAt: number;
-  /** False until the user has seen what the agent decided to keep. */
-  reviewed: boolean;
   /** The session this was learned in, when the agent recorded one. */
   sessionId?: string;
 }
@@ -113,7 +111,6 @@ const parseEntry = (value: unknown): AgentMemoryEntry | null => {
     type: record.type === 'preference' || record.type === 'reference' ? record.type : 'fact',
     createdAt: typeof record.createdAt === 'number' ? record.createdAt : 0,
     updatedAt: typeof record.updatedAt === 'number' ? record.updatedAt : 0,
-    reviewed: record.reviewed === true,
     ...(typeof record.sessionId === 'string' ? { sessionId: record.sessionId } : {}),
   };
 };
@@ -150,30 +147,6 @@ export const fetchAgentMemory = async (
     globalFailed: payload.globalFailed === true,
     projectFailed: payload.projectFailed === true,
   };
-};
-
-export const updateAgentMemory = async (
-  scope: AgentMemoryScope,
-  projectPath: string | null,
-  memoryId: string,
-  patch: { title?: string; body?: string; type?: AgentMemoryType; reviewed?: boolean },
-): Promise<AgentMemoryEntry> => {
-  const query = scopeQuery(scope, resolveMemoryProjectId(projectPath));
-  const response = await runtimeFetch(`${BASE_PATH}/${encodeURIComponent(memoryId)}?${query}`, {
-    method: 'PATCH',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(patch),
-  });
-  if (!response.ok) {
-    return failed(response, 'Failed to save memory');
-  }
-
-  const payload = await response.json() as { entry?: unknown } | null;
-  const entry = parseEntry(payload?.entry);
-  if (!entry) {
-    throw new Error('Malformed agent memory response');
-  }
-  return entry;
 };
 
 export const deleteAgentMemory = async (

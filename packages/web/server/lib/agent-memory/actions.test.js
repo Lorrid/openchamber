@@ -96,12 +96,31 @@ describe('save', () => {
     expect((await runtime.read({ scope: 'global' })).entries).toHaveLength(1);
   });
 
-  test('what the agent saves starts unreviewed', async () => {
-    const result = await actions.execute('memory.save', {
-      scope: 'global', title: 'T', body: 'Something learned.',
-    }, DIRECTORY);
+  test('announces the write so an open panel can show it', async () => {
+    const seen = [];
+    const announcing = createAgentMemoryActions({
+      agentMemoryRuntime: runtime,
+      createError: (message, status) => new TestError(message, status),
+      onMemoryChanged: (event) => seen.push(event),
+    });
 
-    expect(result.memory.reviewed).toBe(false);
+    await announcing.execute('memory.save', { scope: 'project', title: 'T', body: 'b' }, DIRECTORY);
+
+    expect(seen).toEqual([{ scope: 'project', projectId: createProjectIdFromPath(DIRECTORY) }]);
+  });
+
+  test('a broken listener does not fail the write', async () => {
+    const announcing = createAgentMemoryActions({
+      agentMemoryRuntime: runtime,
+      createError: (message, status) => new TestError(message, status),
+      onMemoryChanged: () => { throw new Error('listener exploded'); },
+    });
+
+    const result = await announcing.execute('memory.save', { scope: 'global', title: 'T', body: 'b' }, DIRECTORY);
+
+    // The memory is already on disk; a broken notification must not report it
+    // back as a failure.
+    expect(result.memory.title).toBe('T');
   });
 });
 

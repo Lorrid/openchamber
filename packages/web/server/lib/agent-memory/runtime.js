@@ -24,9 +24,10 @@
  * - **Restatements replace.** A memory the agent phrases differently the second
  *   time supersedes the first rather than sitting beside it, so the store
  *   cannot fill with variants of one fact that later disagree.
- * - **New entries are unreviewed.** Every entry carries `reviewed`, false until
- *   the user says otherwise, so what the agent decided to keep is visible
- *   rather than silently in effect. Rewriting an entry revokes that approval.
+ * - **Timestamps are the record of change.** The panel derives "new" and
+ *   "changed" from `createdAt` and `updatedAt` against when the user last
+ *   looked, so what the agent stored without asking stays visible without the
+ *   store carrying any review state of its own.
  */
 
 const MEMORY_VERSION = 1;
@@ -159,9 +160,6 @@ const sanitizeEntries = (value, now, scope) => {
       type: MEMORY_TYPES.has(entry.type) ? entry.type : 'fact',
       createdAt,
       updatedAt: Number.isFinite(entry.updatedAt) && entry.updatedAt >= 0 ? entry.updatedAt : createdAt,
-      // Anything without an explicit flag counts as unreviewed. Defaulting the
-      // other way would hide exactly the entries whose provenance is unclear.
-      reviewed: entry.reviewed === true,
       ...(sessionId ? { sessionId } : {}),
     });
   }
@@ -300,9 +298,6 @@ export const createAgentMemoryRuntime = (deps) => {
           title,
           body,
           updatedAt: now,
-          // The wording changed, so the user's earlier approval no longer
-          // covers what this entry now says.
-          reviewed: false,
           ...(MEMORY_TYPES.has(value?.type) ? { type: value.type } : {}),
         };
         const entries = current.entries.map((entry) => (entry.id === existing.id ? updated : entry));
@@ -323,57 +318,11 @@ export const createAgentMemoryRuntime = (deps) => {
         type: MEMORY_TYPES.has(value?.type) ? value.type : 'fact',
         createdAt: now,
         updatedAt: now,
-        reviewed: false,
         ...(sessionId ? { sessionId } : {}),
       };
       const entries = [entry, ...current.entries];
       await write(resolved, entries);
       return { entry, entries, replaced: false };
-    });
-  };
-
-  const update = async (target, memoryId, patch) => {
-    const resolved = resolveTarget(target);
-    const id = asNonEmptyString(memoryId);
-    if (!id) throw new Error('memoryId is required');
-
-    const hasTitle = typeof patch?.title === 'string';
-    const hasBody = typeof patch?.body === 'string';
-    const hasType = MEMORY_TYPES.has(patch?.type);
-    const hasReviewed = typeof patch?.reviewed === 'boolean';
-    if (!hasTitle && !hasBody && !hasType && !hasReviewed) {
-      throw new Error('title, body, type or reviewed is required');
-    }
-    const title = hasTitle ? clampLength(patch.title, MEMORY_TITLE_MAX_LENGTH).trim() : null;
-    const body = hasBody ? clampLength(patch.body, MEMORY_BODY_MAX_LENGTH).trim() : null;
-    if (hasTitle && !title) throw new Error('title is required');
-    if (hasBody && !body) throw new Error('body is required');
-
-    return withWriteLock(resolved.key, async () => {
-      const current = await read(target);
-      const existing = current.entries.find((entry) => entry.id === id);
-      if (!existing) {
-        return null;
-      }
-
-      // Rewritten wording drops back to unreviewed, because the user's earlier
-      // approval was of the old text. A caller that knows better — the panel,
-      // where the user is the one doing the editing — says so explicitly.
-      const reviewed = hasReviewed
-        ? patch.reviewed
-        : (hasTitle || hasBody ? false : existing.reviewed);
-
-      const updated = {
-        ...existing,
-        ...(hasTitle ? { title } : {}),
-        ...(hasBody ? { body } : {}),
-        ...(hasType ? { type: patch.type } : {}),
-        reviewed,
-        updatedAt: Date.now(),
-      };
-      const entries = current.entries.map((entry) => (entry.id === id ? updated : entry));
-      await write(resolved, entries);
-      return { entry: updated, entries };
     });
   };
 
@@ -412,5 +361,5 @@ export const createAgentMemoryRuntime = (deps) => {
     };
   };
 
-  return { read, readAll, create, update, remove, resolveTarget };
+  return { read, readAll, create, remove, resolveTarget };
 };

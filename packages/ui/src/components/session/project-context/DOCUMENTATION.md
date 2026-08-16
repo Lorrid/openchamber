@@ -12,7 +12,7 @@ drawer.
 | `NotesSection.tsx` | note composer, note list, per-note edit/pin/delete |
 | `TodosSection.tsx` | todo list, add/toggle/delete/clear, drag reorder, list resize |
 | `PlansSection.tsx` | plan list, import, pin, delete, open |
-| `MemorySection.tsx` | agent memory list, project/global scope switch, confirm, forget |
+| `MemorySection.tsx` | agent memory list, project/global scope switch, new/changed badges, forget |
 | `useProjectTodoSend.ts` | sending a todo to a current/new/worktree session |
 
 ## Memory is not a fifth kind of note
@@ -25,12 +25,27 @@ the user's notes.
 
 Two consequences shape this tab:
 
-- **Rows are read-only text.** The useful actions on someone else's claim are to
-  confirm it or forget it, not to rewrite it into something the agent will
-  contradict next session.
+- **Rows are read-only text.** The useful action on someone else's claim is to
+  forget it, not to rewrite it into something the agent will contradict next
+  session.
+- **Nothing gates the agent, and nothing asks the user to click.** An earlier
+  version had a confirm button. It was theatre: the agent already had the
+  memory whether or not the button was pressed, so the click bought the user
+  nothing. Entries now carry `new` and `changed` badges derived from
+  `createdAt` / `updatedAt` against a per-scope "last looked" mark, and looking
+  at the tab is the acknowledgement. Nothing about review is stored server-side.
 - **The scopes are a switch, never one merged list.** A claim about the user
   reaches every project, so which store an entry sits in is the most important
   thing about it and must not be something the reader has to infer.
+
+The mark is frozen while the tab is open and advanced on the way out, or every
+badge would clear the instant the tab appeared — the one moment the user is
+trying to read them. Each project keeps its own mark, so opening one project
+cannot silently clear another's badges.
+
+The panel reloads on `openchamber:agent-memory-changed`. The agent writes memory
+mid-turn through its own tool, so without that event what it stored would only
+appear the next time something else happened to reload the panel.
 
 `agentMemoryToolEnabled` is one switch for the whole feature: it removes the
 tool from the agent, this tab from the panel, and the index from new sessions.

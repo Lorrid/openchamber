@@ -15,7 +15,6 @@ import {
   AgentMemoryDisabledError,
   deleteAgentMemory,
   fetchAgentMemory,
-  updateAgentMemory,
   type AgentMemoryEntry,
   type AgentMemoryScope,
   type AgentMemorySnapshot,
@@ -36,7 +35,6 @@ interface AgentMemoryState {
   error: string | null;
 
   load: (projectPath: string | null) => Promise<void>;
-  setReviewed: (scope: AgentMemoryScope, memoryId: string, reviewed: boolean) => Promise<boolean>;
   deleteEntry: (scope: AgentMemoryScope, memoryId: string) => Promise<boolean>;
   snapshot: () => AgentMemorySnapshot | null;
   reset: () => void;
@@ -108,21 +106,6 @@ export const useAgentMemoryStore = create<AgentMemoryState>((set, get) => ({
     }
   },
 
-  setReviewed: async (scope, memoryId, reviewed) => enqueueWrite(async () => {
-    const previous = listFor(get(), scope);
-    const optimistic = previous.map((entry) => (entry.id === memoryId ? { ...entry, reviewed } : entry));
-    set(withList(scope, optimistic));
-
-    try {
-      const saved = await updateAgentMemory(scope, get().projectPath, memoryId, { reviewed });
-      set(withList(scope, listFor(get(), scope).map((entry) => (entry.id === memoryId ? saved : entry))));
-      return true;
-    } catch (error) {
-      set({ ...withList(scope, previous), error: errorMessage(error, 'Failed to save memory') });
-      return false;
-    }
-  }),
-
   deleteEntry: async (scope, memoryId) => enqueueWrite(async () => {
     const previous = listFor(get(), scope);
     set(withList(scope, previous.filter((entry) => entry.id !== memoryId)));
@@ -160,6 +143,3 @@ export const useAgentMemoryStore = create<AgentMemoryState>((set, get) => ({
   },
 }));
 
-export const countUnreviewedMemories = (entries: AgentMemoryEntry[]): number => (
-  entries.reduce((total, entry) => (entry.reviewed ? total : total + 1), 0)
-);

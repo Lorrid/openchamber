@@ -10,7 +10,6 @@ function entry(overrides: Partial<AgentMemoryEntry> = {}): AgentMemoryEntry {
     type: 'fact',
     createdAt: 1,
     updatedAt: 1,
-    reviewed: false,
     ...overrides,
   };
 }
@@ -27,22 +26,15 @@ interface MemoryReadResult {
  * behaviour it needs.
  */
 let readImpl: () => Promise<MemoryReadResult>;
-let updateImpl: (memoryId: string, patch: Record<string, unknown>) => Promise<AgentMemoryEntry>;
 let deleteImpl: () => Promise<void>;
 
 mock.module('@/lib/agentMemoryApi', () => ({
   AgentMemoryDisabledError,
   fetchAgentMemory: () => readImpl(),
-  updateAgentMemory: (
-    _scope: string,
-    _projectPath: string | null,
-    memoryId: string,
-    patch: Record<string, unknown>,
-  ) => updateImpl(memoryId, patch),
   deleteAgentMemory: () => deleteImpl(),
 }));
 
-const { useAgentMemoryStore, countUnreviewedMemories } = await import('./useAgentMemoryStore');
+const { useAgentMemoryStore } = await import('./useAgentMemoryStore');
 
 beforeEach(() => {
   useAgentMemoryStore.getState().reset();
@@ -52,7 +44,6 @@ beforeEach(() => {
     globalFailed: false,
     projectFailed: false,
   });
-  updateImpl = async (memoryId, patch) => ({ ...entry({ id: memoryId }), ...patch });
   deleteImpl = async () => undefined;
 });
 
@@ -122,36 +113,6 @@ describe('snapshot for the session index', () => {
   });
 });
 
-describe('review', () => {
-  test('marks an entry reviewed', async () => {
-    await useAgentMemoryStore.getState().load('/tmp/project');
-
-    const ok = await useAgentMemoryStore.getState().setReviewed('global', 'g1', true);
-
-    expect(ok).toBe(true);
-    expect(useAgentMemoryStore.getState().global[0].reviewed).toBe(true);
-  });
-
-  test('rolls back when the write fails', async () => {
-    await useAgentMemoryStore.getState().load('/tmp/project');
-    updateImpl = async () => { throw new Error('write failed'); };
-
-    const ok = await useAgentMemoryStore.getState().setReviewed('global', 'g1', true);
-
-    expect(ok).toBe(false);
-    expect(useAgentMemoryStore.getState().global[0].reviewed).toBe(false);
-    expect(useAgentMemoryStore.getState().error).toBe('write failed');
-  });
-
-  test('touches only the scope it was given', async () => {
-    await useAgentMemoryStore.getState().load('/tmp/project');
-
-    await useAgentMemoryStore.getState().setReviewed('global', 'g1', true);
-
-    expect(useAgentMemoryStore.getState().project[0].reviewed).toBe(false);
-  });
-});
-
 describe('delete', () => {
   test('removes the entry', async () => {
     await useAgentMemoryStore.getState().load('/tmp/project');
@@ -173,12 +134,3 @@ describe('delete', () => {
   });
 });
 
-describe('unreviewed count', () => {
-  test('counts only what the user has not confirmed', () => {
-    expect(countUnreviewedMemories([
-      entry({ id: 'a', reviewed: false }),
-      entry({ id: 'b', reviewed: true }),
-      entry({ id: 'c', reviewed: false }),
-    ])).toBe(2);
-  });
-});

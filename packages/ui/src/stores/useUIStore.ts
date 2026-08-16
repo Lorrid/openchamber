@@ -761,6 +761,11 @@ interface UIStore {
   agentControlToolEnabled: boolean;
   agentWebToolEnabled: boolean;
   agentMemoryToolEnabled: boolean;
+  /**
+   * When the user last looked at each memory scope, keyed by scope. Drives the
+   * new/changed badges; there is no stored review state.
+   */
+  agentMemoryViewedAt: Record<string, number>;
   /** Active tab of the project context panel (notes/todos/plans). */
   projectContextTab: string;
   inputSpellcheckEnabled: boolean;
@@ -937,6 +942,7 @@ interface UIStore {
   setAgentControlToolEnabled: (value: boolean) => void;
   setAgentWebToolEnabled: (value: boolean) => void;
   setAgentMemoryToolEnabled: (value: boolean) => void;
+  markAgentMemoryViewed: (key: string, viewedAt: number) => void;
   setProjectContextTab: (value: string) => void;
   setInputSpellcheckEnabled: (value: boolean) => void;
   setWideChatLayoutEnabled: (value: boolean) => void;
@@ -1097,6 +1103,7 @@ export const useUIStore = create<UIStore>()(
         agentControlToolEnabled: true,
         agentWebToolEnabled: true,
         agentMemoryToolEnabled: true,
+        agentMemoryViewedAt: {},
         projectContextTab: 'notes',
         inputSpellcheckEnabled: false,
         wideChatLayoutEnabled: false,
@@ -2322,6 +2329,15 @@ export const useUIStore = create<UIStore>()(
         setAgentMemoryToolEnabled: (value) => {
           set({ agentMemoryToolEnabled: value });
         },
+        markAgentMemoryViewed: (key, viewedAt) => {
+          set((state) => ({
+            // Never moves backwards: a stale unmount landing after a newer look
+            // would otherwise resurrect badges the user has already cleared.
+            agentMemoryViewedAt: viewedAt > (state.agentMemoryViewedAt[key] ?? 0)
+              ? { ...state.agentMemoryViewedAt, [key]: viewedAt }
+              : state.agentMemoryViewedAt,
+          }));
+        },
         setProjectContextTab: (value) => {
           set({ projectContextTab: value });
         },
@@ -2705,6 +2721,7 @@ export const useUIStore = create<UIStore>()(
           agentControlToolEnabled: state.agentControlToolEnabled,
           agentWebToolEnabled: state.agentWebToolEnabled,
           agentMemoryToolEnabled: state.agentMemoryToolEnabled,
+          agentMemoryViewedAt: state.agentMemoryViewedAt,
           inputSpellcheckEnabled: state.inputSpellcheckEnabled,
           wideChatLayoutEnabled: state.wideChatLayoutEnabled,
           codeBlockLineWrap: state.codeBlockLineWrap,

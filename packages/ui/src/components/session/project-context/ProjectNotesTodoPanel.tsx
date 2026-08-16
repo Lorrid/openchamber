@@ -7,7 +7,9 @@ import { SortableTabsStrip, type SortableTabsStripItem } from '@/components/ui/s
 import { useI18n } from '@/lib/i18n';
 import { resolveProjectContextId, type ProjectRef, type ProjectTodoItem } from '@/lib/projectContextApi';
 import { cn } from '@/lib/utils';
-import { countUnreviewedMemories, useAgentMemoryStore } from '@/stores/useAgentMemoryStore';
+import { useAgentMemoryStore } from '@/stores/useAgentMemoryStore';
+import { countHighlightedMemories, memoryViewKey } from '@/lib/agentMemoryBadges';
+import { subscribeOpenchamberEvents } from '@/lib/openchamberEvents';
 import { EMPTY_PROJECT_CONTEXT_ENTRY, useProjectContextStore } from '@/stores/useProjectContextStore';
 import { useUIStore } from '@/stores/useUIStore';
 import { TodoSendDialog } from '../TodoSendDialog';
@@ -127,11 +129,17 @@ export const ProjectNotesTodoPanel: React.FC<ProjectNotesTodoPanelProps> = ({
     };
   }, [contextEntry.notes, contextEntry.plans, memoryEntries, todos, trimmedQuery]);
 
-  // Counted across both scopes: an unreviewed global memory is the one the user
-  // most needs to see, and it would be invisible behind the project scope.
-  const unreviewedMemoryCount = React.useMemo(
-    () => countUnreviewedMemories(memoryEntries),
-    [memoryEntries],
+  // Counted across both scopes against their own marks: a new global memory is
+  // the one the user most needs to see, and it would be invisible behind the
+  // project scope.
+  const globalViewedAt = useUIStore((state) => state.agentMemoryViewedAt[memoryViewKey('global', null)] ?? 0);
+  const projectViewedAt = useUIStore(
+    (state) => state.agentMemoryViewedAt[memoryViewKey('project', projectRef?.path ?? null)] ?? 0,
+  );
+  const highlightedMemoryCount = React.useMemo(
+    () => countHighlightedMemories(globalMemory, globalViewedAt)
+      + countHighlightedMemories(projectMemory, projectViewedAt),
+    [globalMemory, globalViewedAt, projectMemory, projectViewedAt],
   );
 
   const send = useProjectTodoSend({ projectRef, canCreateWorktree, onActionComplete });
@@ -143,12 +151,28 @@ export const ProjectNotesTodoPanel: React.FC<ProjectNotesTodoPanelProps> = ({
     void loadProjectContext(projectRef);
   }, [loadProjectContext, projectRef]);
 
+  const memoryProjectPath = projectRef?.path ?? null;
   React.useEffect(() => {
     if (!memoryEnabled) {
       return;
     }
-    void loadAgentMemory(projectRef?.path ?? null);
-  }, [loadAgentMemory, memoryEnabled, projectRef?.path]);
+    void loadAgentMemory(memoryProjectPath);
+  }, [loadAgentMemory, memoryEnabled, memoryProjectPath]);
+
+  // The agent writes memory during a turn, through its own tool. Without
+  // listening for that, what it stored would only appear the next time the
+  // panel happened to reload — which is how it looked like nothing had been
+  // saved at all.
+  React.useEffect(() => {
+    if (!memoryEnabled) {
+      return;
+    }
+    return subscribeOpenchamberEvents((event) => {
+      if (event.type === 'agent-memory-changed') {
+        void loadAgentMemory(memoryProjectPath);
+      }
+    });
+  }, [loadAgentMemory, memoryEnabled, memoryProjectPath]);
 
   // Surface a load failure once. The store keeps whatever it already had, so
   // the panel never blanks out over an unreachable server.
@@ -220,13 +244,13 @@ export const ProjectNotesTodoPanel: React.FC<ProjectNotesTodoPanelProps> = ({
     },
     ...(memoryVisible ? [{
       id: 'memory',
-      // The unreviewed count replaces the total when there is anything to
-      // review: what the agent stored without asking is the number that
-      // deserves the glance.
-      label: `${t('rightSidebar.contextNotesTodo.tabs.memory')} ${unreviewedMemoryCount > 0 ? `${unreviewedMemoryCount}/${counts.memory}` : counts.memory}`,
+      // The new/changed count replaces the total when there is anything the
+      // user has not seen: what the agent stored without asking is the number
+      // that deserves the glance.
+      label: `${t('rightSidebar.contextNotesTodo.tabs.memory')} ${highlightedMemoryCount > 0 ? `${highlightedMemoryCount}/${counts.memory}` : counts.memory}`,
       icon: <Icon name="brain" className="h-3.5 w-3.5" />,
     }] : []),
-  ]), [counts, memoryVisible, t, unreviewedMemoryCount]);
+  ]), [counts, highlightedMemoryCount, memoryVisible, t]);
 
   if (!projectRef) {
     return (

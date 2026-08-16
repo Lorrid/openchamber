@@ -18,7 +18,6 @@ const entry = (overrides: Partial<AgentMemoryEntry> = {}): AgentMemoryEntry => (
   type: 'fact',
   createdAt: 1,
   updatedAt: 1,
-  reviewed: false,
   ...overrides,
 });
 

@@ -1207,6 +1207,25 @@ const emitSessionCreatedEvent = (event) => {
     }
   }
 };
+/**
+ * Tells open panels that the agent changed what it remembers, so what it just
+ * stored is visible without reopening anything.
+ */
+const emitAgentMemoryChangedEvent = (event) => {
+  for (const client of uiOpenChamberEventClients) {
+    try {
+      writeSseEvent(client, {
+        type: 'openchamber:agent-memory-changed',
+        properties: {
+          scope: event.scope,
+          ...(event.projectId ? { projectId: event.projectId } : {}),
+        },
+      });
+    } catch {
+      uiOpenChamberEventClients.delete(client);
+    }
+  }
+};
 const scheduledTaskService = createScheduledTaskService({
   readSettingsFromDiskMigrated,
   sanitizeProjects,
@@ -1265,6 +1284,7 @@ const openChamberControlService = createOpenChamberControlService({
   agentMemoryActions: createAgentMemoryActions({
     agentMemoryRuntime,
     createError: (message, status) => new OpenChamberControlError(message, status),
+    onMemoryChanged: emitAgentMemoryChangedEvent,
   }),
 });
 
