@@ -1560,6 +1560,7 @@ export const dict: Record<I18nKey, string> = {
   'rightSidebar.contextNotesTodo.tabs.notes': 'ノート',
   'rightSidebar.contextNotesTodo.tabs.todos': 'Todo',
   'rightSidebar.contextNotesTodo.tabs.plans': '計画',
+  'rightSidebar.contextNotesTodo.plans.actions.back': 'プラン一覧に戻る',
   'rightSidebar.contextNotesTodo.tabs.memory': 'メモリ',
   'rightSidebar.contextNotesTodo.sections.label': 'プロジェクトコンテキストのセクション',
   'rightSidebar.contextNotesTodo.sections.resize': 'セクションサイドバーの幅を変更',

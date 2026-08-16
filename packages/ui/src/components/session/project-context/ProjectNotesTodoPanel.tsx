@@ -18,6 +18,9 @@ import { PlansSection } from './PlansSection';
 import { TodosSection } from './TodosSection';
 import { useProjectTodoSend } from './useProjectTodoSend';
 
+/** Lazy: the plan editor is a large view, and most panel visits never open it. */
+const PlanView = React.lazy(() => import('@/components/views/PlanView').then((module) => ({ default: module.PlanView })));
+
 interface ProjectNotesTodoPanelProps {
   projectRef: ProjectRef | null;
   projectLabel?: string | null;
@@ -103,6 +106,12 @@ export const ProjectNotesTodoPanel: React.FC<ProjectNotesTodoPanelProps> = ({
     : requestedTab;
 
   const [query, setQuery] = React.useState('');
+  /**
+   * The plan being read, shown in place of the list. Plans used to open as a
+   * separate context-panel tab, which pushed the user out of the panel they
+   * were browsing to read something that belongs to it.
+   */
+  const [openPlan, setOpenPlan] = React.useState<{ id: string; title: string } | null>(null);
   const trimmedQuery = query.trim().toLowerCase();
 
   // Completed items sink to the bottom in the list; storage order is untouched.
@@ -211,6 +220,18 @@ export const ProjectNotesTodoPanel: React.FC<ProjectNotesTodoPanelProps> = ({
       toast.error(t('rightSidebar.contextNotesTodo.toast.loadNotesFailed'));
     }
   }, [contextEntry.error, contextEntry.loaded, t]);
+
+  // A plan belongs to its project and to its section; leaving either must not
+  // leave its editor open over a list it no longer matches.
+  React.useEffect(() => {
+    setOpenPlan(null);
+  }, [projectContextId]);
+
+  React.useEffect(() => {
+    if (activeTab !== 'plans') {
+      setOpenPlan(null);
+    }
+  }, [activeTab]);
 
   // Reset the filter when the project changes: a query that matched the old
   // project would silently hide everything in the new one.
@@ -341,7 +362,9 @@ export const ProjectNotesTodoPanel: React.FC<ProjectNotesTodoPanelProps> = ({
           drag-to-resize edge the files surface uses, so the two panels do not
           disagree about where navigation lives. */}
       <div className="flex min-h-0 flex-1">
-        <div className="min-h-0 min-w-0 flex-1 overflow-y-auto p-3">
+        {/* The plan editor scrolls itself; nesting it in this scroller would
+            give the panel two scrollbars for one document. */}
+        <div className={cn('min-h-0 min-w-0 flex-1 p-3', openPlan ? 'overflow-hidden' : 'overflow-y-auto')}>
         {activeTab === 'notes' ? (
           <NotesSection
             projectRef={projectRef}
@@ -369,13 +392,42 @@ export const ProjectNotesTodoPanel: React.FC<ProjectNotesTodoPanelProps> = ({
           <MemorySection projectPath={projectRef.path} query={query} />
         ) : null}
 
-        {activeTab === 'plans' ? (
+        {activeTab === 'plans' && !openPlan ? (
           <PlansSection
             projectRef={projectRef}
             plans={contextEntry.plans}
             query={query}
-            onOpenPlan={onOpenPlan}
+            // Hosts that own a fullscreen plan surface (mobile) keep it; on the
+            // desktop panel the plan opens here, in place of the list.
+            onOpenPlan={onOpenPlan ?? setOpenPlan}
           />
+        ) : null}
+
+        {activeTab === 'plans' && openPlan ? (
+          <div className="flex h-full min-h-0 flex-col gap-2">
+            <div className="flex flex-shrink-0 items-center gap-1.5">
+              <button
+                type="button"
+                onClick={() => setOpenPlan(null)}
+                className="inline-flex h-6 w-6 flex-shrink-0 items-center justify-center rounded-md text-muted-foreground hover:bg-interactive-hover/50 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50"
+                aria-label={t('rightSidebar.contextNotesTodo.plans.actions.back')}
+                title={t('rightSidebar.contextNotesTodo.plans.actions.back')}
+              >
+                <Icon name="arrow-left-s" className="h-4 w-4" />
+              </button>
+              <span className="min-w-0 flex-1 truncate typography-ui-label text-foreground" title={openPlan.title}>
+                {openPlan.title}
+              </span>
+            </div>
+            <div className="min-h-0 flex-1">
+              <React.Suspense fallback={null}>
+                <PlanView
+                  projectPlanId={openPlan.id}
+                  onNavigatedToChat={() => setOpenPlan(null)}
+                />
+              </React.Suspense>
+            </div>
+          </div>
         ) : null}
         </div>
 

@@ -1564,6 +1564,7 @@ export const dict = {
   'rightSidebar.contextNotesTodo.tabs.notes': 'Notes',
   'rightSidebar.contextNotesTodo.tabs.todos': 'Todo',
   'rightSidebar.contextNotesTodo.tabs.plans': 'Plans',
+  'rightSidebar.contextNotesTodo.plans.actions.back': 'Back to plans',
   'rightSidebar.contextNotesTodo.tabs.memory': 'Memory',
   'rightSidebar.contextNotesTodo.sections.label': 'Project context sections',
   'rightSidebar.contextNotesTodo.sections.resize': 'Resize sections sidebar',

@@ -1542,6 +1542,7 @@ export const dict: Record<I18nKey, string> = {
   "rightSidebar.contextNotesTodo.tabs.notes": "Notas",
   "rightSidebar.contextNotesTodo.tabs.todos": "Tareas",
   "rightSidebar.contextNotesTodo.tabs.plans": "Planes",
+  "rightSidebar.contextNotesTodo.plans.actions.back": "Volver a los planes",
   "rightSidebar.contextNotesTodo.tabs.memory": "Memoria",
   "rightSidebar.contextNotesTodo.sections.label": "Secciones del contexto del proyecto",
   "rightSidebar.contextNotesTodo.sections.resize": "Redimensionar la barra de secciones",

@@ -45,6 +45,20 @@ A collapsed card opens on a click anywhere on it. An expanded card closes only
 through its collapse action, because its body is editable and a stray click in
 the text must not throw the editor away.
 
+## Plans open in place
+
+Clicking a plan replaces the list with its editor and a back control, rather
+than opening a separate context-panel tab. A plan belongs to the project this
+panel is about, and sending the reader to another tab to read it made them leave
+the surface they were browsing.
+
+The editor is `PlanView`, lazily imported — it is a large view and most panel
+visits never open one. It scrolls itself, so the content column stops scrolling
+while a plan is open; two scrollbars for one document is what nesting them gives.
+Leaving the section or the project closes it, so its editor never sits over a
+list it no longer matches. Hosts that own a fullscreen plan surface (mobile)
+still pass `onOpenPlan` and keep theirs.
+
 ## Memory is not a fifth kind of note
 
 The first four tabs hold what the user wrote. Memory holds what the **agent**

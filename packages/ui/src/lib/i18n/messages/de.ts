@@ -1407,6 +1407,7 @@ export const dict = {
   'rightSidebar.contextNotesTodo.tabs.notes': 'Notizen',
   'rightSidebar.contextNotesTodo.tabs.todos': 'Todo',
   'rightSidebar.contextNotesTodo.tabs.plans': 'Pläne',
+  'rightSidebar.contextNotesTodo.plans.actions.back': 'Zurück zu den Plänen',
   'rightSidebar.contextNotesTodo.tabs.memory': 'Gedächtnis',
   'rightSidebar.contextNotesTodo.sections.label': 'Bereiche des Projektkontexts',
   'rightSidebar.contextNotesTodo.sections.resize': 'Breite der Bereichsleiste ändern',

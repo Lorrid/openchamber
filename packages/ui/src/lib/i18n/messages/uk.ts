@@ -1542,6 +1542,7 @@ export const dict: Record<I18nKey, string> = {
   "rightSidebar.contextNotesTodo.tabs.notes": "Нотатки",
   "rightSidebar.contextNotesTodo.tabs.todos": "Todo",
   "rightSidebar.contextNotesTodo.tabs.plans": "Плани",
+  "rightSidebar.contextNotesTodo.plans.actions.back": "Назад до планів",
   "rightSidebar.contextNotesTodo.tabs.memory": "Памʼять",
   "rightSidebar.contextNotesTodo.sections.label": "Розділи контексту проєкту",
   "rightSidebar.contextNotesTodo.sections.resize": "Змінити ширину бічної панелі розділів",

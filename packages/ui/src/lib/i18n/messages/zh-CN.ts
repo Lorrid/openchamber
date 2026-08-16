@@ -1530,6 +1530,7 @@ export const dict: Record<I18nKey, string> = {
   'rightSidebar.contextNotesTodo.tabs.notes': '笔记',
   'rightSidebar.contextNotesTodo.tabs.todos': '待办',
   'rightSidebar.contextNotesTodo.tabs.plans': '计划',
+  'rightSidebar.contextNotesTodo.plans.actions.back': '返回计划列表',
   'rightSidebar.contextNotesTodo.tabs.memory': '记忆',
   'rightSidebar.contextNotesTodo.sections.label': '项目上下文分区',
   'rightSidebar.contextNotesTodo.sections.resize': '调整分区侧栏宽度',

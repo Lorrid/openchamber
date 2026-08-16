@@ -1566,6 +1566,7 @@ export const dict: Record<I18nKey, string> = {
   'rightSidebar.contextNotesTodo.tabs.notes': '노트',
   'rightSidebar.contextNotesTodo.tabs.todos': '할 일',
   'rightSidebar.contextNotesTodo.tabs.plans': '계획',
+  'rightSidebar.contextNotesTodo.plans.actions.back': '계획 목록으로',
   'rightSidebar.contextNotesTodo.tabs.memory': '메모리',
   'rightSidebar.contextNotesTodo.sections.label': '프로젝트 컨텍스트 섹션',
   'rightSidebar.contextNotesTodo.sections.resize': '섹션 사이드바 너비 조절',
