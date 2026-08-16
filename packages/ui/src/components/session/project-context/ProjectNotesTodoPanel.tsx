@@ -305,10 +305,7 @@ export const ProjectNotesTodoPanel: React.FC<ProjectNotesTodoPanelProps> = ({
           items={tabItems}
           activeId={activeTab}
           onSelect={setStoredTab}
-          // Scrollable, not fit: fit tabs refuse to shrink below their content
-          // on desktop, so a panel too narrow for them silently clips the last
-          // tab out of reach instead of letting the strip scroll.
-          layoutMode="scrollable"
+          layoutMode="fit"
           variant="active-pill"
           className="h-8"
         />
