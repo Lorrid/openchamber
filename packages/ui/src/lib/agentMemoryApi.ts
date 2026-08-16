@@ -44,9 +44,6 @@ export interface AgentMemorySnapshot {
   projectFailed: boolean;
 }
 
-export const AGENT_MEMORY_TITLE_MAX_LENGTH = 120;
-export const AGENT_MEMORY_BODY_MAX_LENGTH = 2000;
-
 /** Raised when the server reports the whole memory surface as switched off. */
 export class AgentMemoryDisabledError extends Error {
   constructor() {
@@ -61,7 +58,7 @@ const BASE_PATH = '/api/agent-memory';
  * Mirrors the server: the storage id comes from the project path, not from
  * `project.id`, because the path-derived id is what names the file on disk.
  */
-export const resolveMemoryProjectId = (projectPath: string | null | undefined): string => {
+const resolveMemoryProjectId = (projectPath: string | null | undefined): string => {
   const trimmed = typeof projectPath === 'string' ? projectPath.trim() : '';
   return trimmed ? createProjectIdFromPath(trimmed) : '';
 };

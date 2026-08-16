@@ -20,7 +20,7 @@ import {
   type AgentMemoryScope,
   type AgentMemorySnapshot,
 } from '@/lib/agentMemoryApi';
-import { forgetMemoryIndexForSession, resetMemoryIndexTracking } from '@/lib/agentMemoryIndex';
+import { resetMemoryIndexTracking } from '@/lib/agentMemoryIndex';
 
 interface AgentMemoryState {
   global: AgentMemoryEntry[];
@@ -37,11 +37,6 @@ interface AgentMemoryState {
 
   load: (projectPath: string | null) => Promise<void>;
   setReviewed: (scope: AgentMemoryScope, memoryId: string, reviewed: boolean) => Promise<boolean>;
-  saveEntry: (
-    scope: AgentMemoryScope,
-    memoryId: string,
-    patch: { title?: string; body?: string },
-  ) => Promise<boolean>;
   deleteEntry: (scope: AgentMemoryScope, memoryId: string) => Promise<boolean>;
   snapshot: () => AgentMemorySnapshot | null;
   reset: () => void;
@@ -128,20 +123,6 @@ export const useAgentMemoryStore = create<AgentMemoryState>((set, get) => ({
     }
   }),
 
-  saveEntry: async (scope, memoryId, patch) => enqueueWrite(async () => {
-    const previous = listFor(get(), scope);
-    try {
-      // The user is the one editing, so their approval survives the rewrite;
-      // the store only revokes it for a rewrite the agent made.
-      const saved = await updateAgentMemory(scope, get().projectPath, memoryId, { ...patch, reviewed: true });
-      set(withList(scope, listFor(get(), scope).map((entry) => (entry.id === memoryId ? saved : entry))));
-      return true;
-    } catch (error) {
-      set({ ...withList(scope, previous), error: errorMessage(error, 'Failed to save memory') });
-      return false;
-    }
-  }),
-
   deleteEntry: async (scope, memoryId) => enqueueWrite(async () => {
     const previous = listFor(get(), scope);
     set(withList(scope, previous.filter((entry) => entry.id !== memoryId)));
@@ -178,10 +159,6 @@ export const useAgentMemoryStore = create<AgentMemoryState>((set, get) => ({
     set({ ...EMPTY_STATE });
   },
 }));
-
-export const forgetAgentMemoryForSession = (sessionId: string): void => {
-  forgetMemoryIndexForSession(sessionId);
-};
 
 export const countUnreviewedMemories = (entries: AgentMemoryEntry[]): number => (
   entries.reduce((total, entry) => (entry.reviewed ? total : total + 1), 0)

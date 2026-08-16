@@ -7,9 +7,11 @@ import { SortableTabsStrip, type SortableTabsStripItem } from '@/components/ui/s
 import { useI18n } from '@/lib/i18n';
 import { resolveProjectContextId, type ProjectRef, type ProjectTodoItem } from '@/lib/projectContextApi';
 import { cn } from '@/lib/utils';
+import { countUnreviewedMemories, useAgentMemoryStore } from '@/stores/useAgentMemoryStore';
 import { EMPTY_PROJECT_CONTEXT_ENTRY, useProjectContextStore } from '@/stores/useProjectContextStore';
 import { useUIStore } from '@/stores/useUIStore';
 import { TodoSendDialog } from '../TodoSendDialog';
+import { MemorySection } from './MemorySection';
 import { NotesSection } from './NotesSection';
 import { PlansSection } from './PlansSection';
 import { TodosSection } from './TodosSection';
@@ -26,9 +28,9 @@ interface ProjectNotesTodoPanelProps {
   className?: string;
 }
 
-type ProjectContextTab = 'notes' | 'todos' | 'plans';
+type ProjectContextTab = 'notes' | 'todos' | 'plans' | 'memory';
 
-const TAB_ORDER: ProjectContextTab[] = ['notes', 'todos', 'plans'];
+const TAB_ORDER: ProjectContextTab[] = ['notes', 'todos', 'plans', 'memory'];
 
 const sortTodosWithCompletedLast = (items: ProjectTodoItem[]): ProjectTodoItem[] => [
   ...items.filter((todo) => !todo.completed),
@@ -71,11 +73,25 @@ export const ProjectNotesTodoPanel: React.FC<ProjectNotesTodoPanelProps> = ({
   const loadProjectContext = useProjectContextStore((state) => state.load);
   const saveTodos = useProjectContextStore((state) => state.saveTodos);
 
+  // The whole feature is one switch: with memory off there is nothing for the
+  // agent to manage, so showing the user what is stored would be pointless.
+  const memoryEnabled = useUIStore((state) => state.agentMemoryToolEnabled);
+  const memoryDisabledByServer = useAgentMemoryStore((state) => state.disabled);
+  const memoryVisible = memoryEnabled && !memoryDisabledByServer;
+  const loadAgentMemory = useAgentMemoryStore((state) => state.load);
+  const globalMemory = useAgentMemoryStore((state) => state.global);
+  const projectMemory = useAgentMemoryStore((state) => state.project);
+
   const storedTab = useUIStore((state) => state.projectContextTab);
   const setStoredTab = useUIStore((state) => state.setProjectContextTab);
-  const activeTab: ProjectContextTab = TAB_ORDER.includes(storedTab as ProjectContextTab)
+  const requestedTab = TAB_ORDER.includes(storedTab as ProjectContextTab)
     ? storedTab as ProjectContextTab
     : 'notes';
+  // A persisted 'memory' must not survive the feature being turned off, or the
+  // panel would open on a tab that no longer exists.
+  const activeTab: ProjectContextTab = requestedTab === 'memory' && !memoryVisible
+    ? 'notes'
+    : requestedTab;
 
   const [query, setQuery] = React.useState('');
   const trimmedQuery = query.trim().toLowerCase();
@@ -87,20 +103,36 @@ export const ProjectNotesTodoPanel: React.FC<ProjectNotesTodoPanelProps> = ({
   );
   const isLoading = contextEntry.loading && !contextEntry.loaded;
 
+  const memoryEntries = React.useMemo(
+    () => [...globalMemory, ...projectMemory],
+    [globalMemory, projectMemory],
+  );
+
   const counts = React.useMemo(() => {
     if (!trimmedQuery) {
       return {
         notes: contextEntry.notes.length,
         todos: todos.length,
         plans: contextEntry.plans.length,
+        memory: memoryEntries.length,
       };
     }
     return {
       notes: contextEntry.notes.filter((note) => matches(note.body, trimmedQuery)).length,
       todos: todos.filter((todo) => matches(todo.text, trimmedQuery)).length,
       plans: contextEntry.plans.filter((plan) => matches(plan.title, trimmedQuery)).length,
+      memory: memoryEntries.filter((entry) => (
+        matches(entry.title, trimmedQuery) || matches(entry.body, trimmedQuery)
+      )).length,
     };
-  }, [contextEntry.notes, contextEntry.plans, todos, trimmedQuery]);
+  }, [contextEntry.notes, contextEntry.plans, memoryEntries, todos, trimmedQuery]);
+
+  // Counted across both scopes: an unreviewed global memory is the one the user
+  // most needs to see, and it would be invisible behind the project scope.
+  const unreviewedMemoryCount = React.useMemo(
+    () => countUnreviewedMemories(memoryEntries),
+    [memoryEntries],
+  );
 
   const send = useProjectTodoSend({ projectRef, canCreateWorktree, onActionComplete });
 
@@ -110,6 +142,13 @@ export const ProjectNotesTodoPanel: React.FC<ProjectNotesTodoPanelProps> = ({
     }
     void loadProjectContext(projectRef);
   }, [loadProjectContext, projectRef]);
+
+  React.useEffect(() => {
+    if (!memoryEnabled) {
+      return;
+    }
+    void loadAgentMemory(projectRef?.path ?? null);
+  }, [loadAgentMemory, memoryEnabled, projectRef?.path]);
 
   // Surface a load failure once. The store keeps whatever it already had, so
   // the panel never blanks out over an unreachable server.
@@ -179,7 +218,15 @@ export const ProjectNotesTodoPanel: React.FC<ProjectNotesTodoPanelProps> = ({
       label: `${t('rightSidebar.contextNotesTodo.tabs.plans')} ${counts.plans}`,
       icon: <Icon name="file-text" className="h-3.5 w-3.5" />,
     },
-  ]), [counts, t]);
+    ...(memoryVisible ? [{
+      id: 'memory',
+      // The unreviewed count replaces the total when there is anything to
+      // review: what the agent stored without asking is the number that
+      // deserves the glance.
+      label: `${t('rightSidebar.contextNotesTodo.tabs.memory')} ${unreviewedMemoryCount > 0 ? `${unreviewedMemoryCount}/${counts.memory}` : counts.memory}`,
+      icon: <Icon name="brain" className="h-3.5 w-3.5" />,
+    }] : []),
+  ]), [counts, memoryVisible, t, unreviewedMemoryCount]);
 
   if (!projectRef) {
     return (
@@ -261,6 +308,10 @@ export const ProjectNotesTodoPanel: React.FC<ProjectNotesTodoPanelProps> = ({
             onSendToNewSession={send.sendToNewSession}
             onSendToNewWorktreeSession={send.sendToNewWorktreeSession}
           />
+        ) : null}
+
+        {activeTab === 'memory' && memoryVisible ? (
+          <MemorySection projectPath={projectRef.path} query={query} />
         ) : null}
 
         {activeTab === 'plans' ? (

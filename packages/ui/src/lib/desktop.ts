@@ -155,6 +155,7 @@ export type DesktopSettings = {
   showOpenCodeUpdateNotifications?: boolean;
   agentControlToolEnabled?: boolean;
   agentWebToolEnabled?: boolean;
+  agentMemoryToolEnabled?: boolean;
   optimizeSystemPrompt?: boolean;
   openCodeUpdateToastDismissedVersion?: string;
   showToolFileIcons?: boolean;

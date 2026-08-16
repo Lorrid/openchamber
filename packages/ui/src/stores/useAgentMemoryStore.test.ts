@@ -24,12 +24,11 @@ interface MemoryReadResult {
 
 /**
  * Swappable implementations rather than mock helpers: each test states the one
- * behaviour it needs, and the recorded patch is asserted directly.
+ * behaviour it needs.
  */
 let readImpl: () => Promise<MemoryReadResult>;
 let updateImpl: (memoryId: string, patch: Record<string, unknown>) => Promise<AgentMemoryEntry>;
 let deleteImpl: () => Promise<void>;
-let lastUpdatePatch: Record<string, unknown> | null = null;
 
 mock.module('@/lib/agentMemoryApi', () => ({
   AgentMemoryDisabledError,
@@ -39,10 +38,7 @@ mock.module('@/lib/agentMemoryApi', () => ({
     _projectPath: string | null,
     memoryId: string,
     patch: Record<string, unknown>,
-  ) => {
-    lastUpdatePatch = patch;
-    return updateImpl(memoryId, patch);
-  },
+  ) => updateImpl(memoryId, patch),
   deleteAgentMemory: () => deleteImpl(),
 }));
 
@@ -50,7 +46,6 @@ const { useAgentMemoryStore, countUnreviewedMemories } = await import('./useAgen
 
 beforeEach(() => {
   useAgentMemoryStore.getState().reset();
-  lastUpdatePatch = null;
   readImpl = async () => ({
     global: [entry({ id: 'g1', title: 'About user' })],
     project: [entry({ id: 'p1', title: 'About project' })],
@@ -154,25 +149,6 @@ describe('review', () => {
     await useAgentMemoryStore.getState().setReviewed('global', 'g1', true);
 
     expect(useAgentMemoryStore.getState().project[0].reviewed).toBe(false);
-  });
-});
-
-describe('edit', () => {
-  test('a user edit keeps the entry reviewed', async () => {
-    await useAgentMemoryStore.getState().load('/tmp/project');
-
-    await useAgentMemoryStore.getState().saveEntry('project', 'p1', { body: 'Rewritten by the user.' });
-
-    // The store revokes approval only for a rewrite the agent made; the user
-    // editing an entry is them reviewing it.
-    expect(lastUpdatePatch).toEqual({ body: 'Rewritten by the user.', reviewed: true });
-  });
-
-  test('reports a failed edit', async () => {
-    await useAgentMemoryStore.getState().load('/tmp/project');
-    updateImpl = async () => { throw new Error('nope'); };
-
-    expect(await useAgentMemoryStore.getState().saveEntry('project', 'p1', { body: 'x' })).toBe(false);
   });
 });
 

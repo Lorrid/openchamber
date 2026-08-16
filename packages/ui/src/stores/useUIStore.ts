@@ -760,6 +760,7 @@ interface UIStore {
   showOpenCodeUpdateNotifications: boolean;
   agentControlToolEnabled: boolean;
   agentWebToolEnabled: boolean;
+  agentMemoryToolEnabled: boolean;
   /** Active tab of the project context panel (notes/todos/plans). */
   projectContextTab: string;
   inputSpellcheckEnabled: boolean;
@@ -935,6 +936,7 @@ interface UIStore {
   setShowOpenCodeUpdateNotifications: (value: boolean) => void;
   setAgentControlToolEnabled: (value: boolean) => void;
   setAgentWebToolEnabled: (value: boolean) => void;
+  setAgentMemoryToolEnabled: (value: boolean) => void;
   setProjectContextTab: (value: string) => void;
   setInputSpellcheckEnabled: (value: boolean) => void;
   setWideChatLayoutEnabled: (value: boolean) => void;
@@ -1094,6 +1096,7 @@ export const useUIStore = create<UIStore>()(
         showOpenCodeUpdateNotifications: !isWindowsArm64(),
         agentControlToolEnabled: true,
         agentWebToolEnabled: true,
+        agentMemoryToolEnabled: true,
         projectContextTab: 'notes',
         inputSpellcheckEnabled: false,
         wideChatLayoutEnabled: false,
@@ -2316,6 +2319,9 @@ export const useUIStore = create<UIStore>()(
         setAgentWebToolEnabled: (value) => {
           set({ agentWebToolEnabled: value });
         },
+        setAgentMemoryToolEnabled: (value) => {
+          set({ agentMemoryToolEnabled: value });
+        },
         setProjectContextTab: (value) => {
           set({ projectContextTab: value });
         },
@@ -2698,6 +2704,7 @@ export const useUIStore = create<UIStore>()(
           showOpenCodeUpdateNotifications: state.showOpenCodeUpdateNotifications,
           agentControlToolEnabled: state.agentControlToolEnabled,
           agentWebToolEnabled: state.agentWebToolEnabled,
+          agentMemoryToolEnabled: state.agentMemoryToolEnabled,
           inputSpellcheckEnabled: state.inputSpellcheckEnabled,
           wideChatLayoutEnabled: state.wideChatLayoutEnabled,
           codeBlockLineWrap: state.codeBlockLineWrap,

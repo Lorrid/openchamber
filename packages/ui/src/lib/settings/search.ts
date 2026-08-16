@@ -490,6 +490,14 @@ const SETTINGS_SEARCH_ITEMS: readonly SettingsSearchItem[] = [
     isAvailable: (ctx) => !ctx.isVSCode,
   },
   {
+    id: 'sessions.agent-memory-tool',
+    page: 'general',
+    titleKey: 'settings.openchamber.tools.field.agentMemoryTool',
+    descriptionKey: 'settings.openchamber.tools.field.agentMemoryToolInfo',
+    keywords: ['agent', 'tool', 'memory', 'remember', 'recall', 'preferences', 'openchamber'],
+    isAvailable: (ctx) => !ctx.isVSCode,
+  },
+  {
     id: 'git.github-account',
     page: 'git',
     titleKey: 'settings.github.page.actions.connect',

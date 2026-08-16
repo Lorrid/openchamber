@@ -1,7 +1,8 @@
 # Project Context Panel
 
-Notes, todos, and saved plans for the active project. Rendered by the `notes`
-surface in the desktop context rail and by the mobile workspace drawer.
+Notes, todos, saved plans, and agent memory for the active project. Rendered by
+the `notes` surface in the desktop context rail and by the mobile workspace
+drawer.
 
 ## Files
 
@@ -11,7 +12,31 @@ surface in the desktop context rail and by the mobile workspace drawer.
 | `NotesSection.tsx` | note composer, note list, per-note edit/pin/delete |
 | `TodosSection.tsx` | todo list, add/toggle/delete/clear, drag reorder, list resize |
 | `PlansSection.tsx` | plan list, import, pin, delete, open |
+| `MemorySection.tsx` | agent memory list, project/global scope switch, confirm, forget |
 | `useProjectTodoSend.ts` | sending a todo to a current/new/worktree session |
+
+## Memory is not a fifth kind of note
+
+The first four tabs hold what the user wrote. Memory holds what the **agent**
+wrote for itself, in its own store (`packages/web/server/lib/agent-memory`) and
+through its own client (`useAgentMemoryStore`). They share the panel and nothing
+else — keeping the stores apart is what stops an agent mistake from landing in
+the user's notes.
+
+Two consequences shape this tab:
+
+- **Rows are read-only text.** The useful actions on someone else's claim are to
+  confirm it or forget it, not to rewrite it into something the agent will
+  contradict next session.
+- **The scopes are a switch, never one merged list.** A claim about the user
+  reaches every project, so which store an entry sits in is the most important
+  thing about it and must not be something the reader has to infer.
+
+`agentMemoryToolEnabled` is one switch for the whole feature: it removes the
+tool from the agent, this tab from the panel, and the index from new sessions.
+The tab also hides when the server reports the surface disabled, so a stale
+client cannot keep showing memory that is off. A persisted `memory` tab
+selection falls back to `notes` rather than opening a tab that no longer exists.
 
 ## Data flow
 

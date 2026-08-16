@@ -27,6 +27,8 @@ export const OpenChamberToolsSettings: React.FC = () => {
   const setAgentControlToolEnabled = useUIStore((state) => state.setAgentControlToolEnabled);
   const agentWebToolEnabled = useUIStore((state) => state.agentWebToolEnabled);
   const setAgentWebToolEnabled = useUIStore((state) => state.setAgentWebToolEnabled);
+  const agentMemoryToolEnabled = useUIStore((state) => state.agentMemoryToolEnabled);
+  const setAgentMemoryToolEnabled = useUIStore((state) => state.setAgentMemoryToolEnabled);
 
   const handleAgentControlToolChange = React.useCallback((enabled: boolean) => {
     setAgentControlToolEnabled(enabled);
@@ -39,6 +41,15 @@ export const OpenChamberToolsSettings: React.FC = () => {
     void updateDesktopSettings({ agentWebToolEnabled: enabled });
     recordDeferredOpenCodeRestart('cli', { id: 'agent-web-tool' });
   }, [setAgentWebToolEnabled]);
+
+  // Turning memory off removes the whole feature, not just the tool: the panel
+  // tab goes with it and sessions stop being given the index. Showing the user
+  // what is stored would be pointless once the agent can no longer manage it.
+  const handleAgentMemoryToolChange = React.useCallback((enabled: boolean) => {
+    setAgentMemoryToolEnabled(enabled);
+    void updateDesktopSettings({ agentMemoryToolEnabled: enabled });
+    recordDeferredOpenCodeRestart('cli', { id: 'agent-memory-tool' });
+  }, [setAgentMemoryToolEnabled]);
 
   return (
     <SettingsSection title={t('settings.openchamber.tools.title')}>
@@ -59,6 +70,15 @@ export const OpenChamberToolsSettings: React.FC = () => {
           label={t('settings.openchamber.tools.field.agentWebTool')}
           ariaLabel={t('settings.openchamber.tools.field.agentWebToolAria')}
           info={t('settings.openchamber.tools.field.agentWebToolInfo')}
+        />
+
+        <SettingsCheckboxRow
+          settingsItem="sessions.agent-memory-tool"
+          checked={agentMemoryToolEnabled}
+          onChange={handleAgentMemoryToolChange}
+          label={t('settings.openchamber.tools.field.agentMemoryTool')}
+          ariaLabel={t('settings.openchamber.tools.field.agentMemoryToolAria')}
+          info={t('settings.openchamber.tools.field.agentMemoryToolInfo')}
         />
       </div>
     </SettingsSection>
