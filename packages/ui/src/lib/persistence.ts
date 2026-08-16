@@ -1326,11 +1326,7 @@ const sanitizeWebSettings = (payload: unknown): DesktopSettings | null => {
     for (const [providerId, config] of Object.entries(candidate.usageModelGroups)) {
       if (config && typeof config === 'object') {
         const typedConfig = config as Record<string, unknown>;
-        const providerConfig: {
-          customGroups?: Array<{id: string; label: string; models: string[]; order: number}>;
-          modelAssignments?: Record<string, string>;
-          renamedGroups?: Record<string, string>;
-        } = {};
+        const providerConfig: NonNullable<DesktopSettings['usageModelGroups']>[string] = {};
 
         // Parse customGroups
         if (Array.isArray(typedConfig.customGroups)) {
