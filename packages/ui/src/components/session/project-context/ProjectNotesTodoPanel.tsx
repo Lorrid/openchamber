@@ -226,21 +226,23 @@ export const ProjectNotesTodoPanel: React.FC<ProjectNotesTodoPanelProps> = ({
     [projectRef, saveTodos, t]
   );
 
+  /**
+   * No icons on these tabs. The labels are already plain words, so an icon adds
+   * nothing to read but costs width the counts need — and with four tabs that
+   * width is what pushed the last one off the edge.
+   */
   const tabItems: SortableTabsStripItem[] = React.useMemo(() => ([
     {
       id: 'notes',
       label: `${t('rightSidebar.contextNotesTodo.tabs.notes')} ${counts.notes}`,
-      icon: <Icon name="sticky-note" className="h-3.5 w-3.5" />,
     },
     {
       id: 'todos',
       label: `${t('rightSidebar.contextNotesTodo.tabs.todos')} ${counts.todos}`,
-      icon: <Icon name="checkbox-circle" className="h-3.5 w-3.5" />,
     },
     {
       id: 'plans',
       label: `${t('rightSidebar.contextNotesTodo.tabs.plans')} ${counts.plans}`,
-      icon: <Icon name="file-text" className="h-3.5 w-3.5" />,
     },
     ...(memoryVisible ? [{
       id: 'memory',
@@ -248,7 +250,6 @@ export const ProjectNotesTodoPanel: React.FC<ProjectNotesTodoPanelProps> = ({
       // user has not seen: what the agent stored without asking is the number
       // that deserves the glance.
       label: `${t('rightSidebar.contextNotesTodo.tabs.memory')} ${highlightedMemoryCount > 0 ? `${highlightedMemoryCount}/${counts.memory}` : counts.memory}`,
-      icon: <Icon name="brain" className="h-3.5 w-3.5" />,
     }] : []),
   ]), [counts, highlightedMemoryCount, memoryVisible, t]);
 
@@ -304,7 +305,10 @@ export const ProjectNotesTodoPanel: React.FC<ProjectNotesTodoPanelProps> = ({
           items={tabItems}
           activeId={activeTab}
           onSelect={setStoredTab}
-          layoutMode="fit"
+          // Scrollable, not fit: fit tabs refuse to shrink below their content
+          // on desktop, so a panel too narrow for them silently clips the last
+          // tab out of reach instead of letting the strip scroll.
+          layoutMode="scrollable"
           variant="active-pill"
           className="h-8"
         />
