@@ -1,18 +1,53 @@
 import { registerFsRoutes } from '../fs/routes.js';
 import { registerQuotaRoutes } from '../quota/routes.js';
+import { registerSmallModelRoutes } from '../small-model/routes.js';
+import { registerWalkthroughRoutes } from '../walkthrough/routes.js';
+import { registerSessionGoalRoutes } from '../session-goal/routes.js';
 import { registerGitHubRoutes } from '../github/routes.js';
 import { registerGitRoutes } from '../git/routes.js';
+import { registerDevServerRoutes } from '../dev-servers/routes.js';
 import { registerMagicPromptRoutes } from '../magic-prompts/routes.js';
 import { registerSessionFoldersRoutes } from '../session-folders/routes.js';
+import { registerPermissionAutoAcceptRoutes } from '../permission-auto-accept/runtime.js';
 import { registerConfigEntityRoutes } from './config-entity-routes.js';
 import { registerSettingsUtilityRoutes } from './core-routes.js';
 import { registerProjectIconRoutes } from './project-icon-routes.js';
 import { registerScheduledTaskRoutes } from '../scheduled-tasks/routes.js';
+import { registerOpenChamberSessionRoutes } from '../openchamber-sessions/routes.js';
+import { registerOpenChamberControlRoutes } from '../openchamber-control/routes.js';
+import { registerMarkdownImageGrantRoutes } from '../markdown-image-grants/routes.js';
 import { registerSkillRoutes } from './skill-routes.js';
 import { registerPluginRoutes } from './plugin-routes.js';
 import { getNpmInfo, clearCache as clearNpmCache } from './npm-registry.js';
 import { parseNpmSpec, parsePathSpec, isExactSemver } from './plugin-spec.js';
 import { registerOpenCodeRoutes } from './routes.js';
+import { getProviderSources, removeProviderConfig, upsertProviderConfig } from './providers.js';
+import { getAgentSources, getAgentConfig, createAgent, updateAgent, deleteAgent } from './agents.js';
+import { getCommandSources, createCommand, updateCommand, deleteCommand } from './commands.js';
+import { listMcpConfigs, getMcpConfig, createMcpConfig, updateMcpConfig, deleteMcpConfig } from './mcp.js';
+import { listSnippets, getSnippet, createSnippet, updateSnippet, deleteSnippet, expandSnippets } from './snippets.js';
+import {
+  listPluginEntries,
+  getPluginEntry,
+  createPluginEntry,
+  updatePluginEntry,
+  deletePluginEntry,
+  listPluginDirFiles,
+  readPluginDirFile,
+  writePluginDirFile,
+  deletePluginDirFile,
+  encodePluginId,
+  decodePluginId,
+} from './plugins.js';
+import { SKILL_DIR, SKILL_SCOPE, readSkillSupportingFile, writeSkillSupportingFile, deleteSkillSupportingFile } from './shared.js';
+import { getSkillSources, discoverSkills, mergeDiscoveredSkills, createSkill, updateSkill, deleteSkill, renameSkill, isManagedSkillPath } from './skills.js';
+import { getCuratedSkillsSources } from '../skills-catalog/curated-sources.js';
+import { getCacheKey, getCachedScan, setCachedScan } from '../skills-catalog/cache.js';
+import { isClawdHubSource, parseSkillRepoSource } from '../skills-catalog/source.js';
+import { scanSkillsRepository } from '../skills-catalog/scan.js';
+import { installSkillsFromRepository } from '../skills-catalog/install.js';
+import { scanClawdHubPage } from '../skills-catalog/clawdhub/scan.js';
+import { installSkillsFromClawdHub } from '../skills-catalog/clawdhub/install.js';
 
 export const createFeatureRoutesRuntime = (dependencies) => {
   const {
@@ -25,6 +60,26 @@ export const createFeatureRoutesRuntime = (dependencies) => {
       quotaProviders = await import('../quota/index.js');
     }
     return quotaProviders;
+  };
+
+  let smallModelService = null;
+  const getSmallModelService = async () => {
+    if (!smallModelService) {
+      smallModelService = await import('../small-model/index.js');
+    }
+    return smallModelService;
+  };
+
+  let walkthroughService = null;
+  const getWalkthroughService = async () => {
+    if (!walkthroughService) {
+      const [service, pullRequest] = await Promise.all([
+        import('../walkthrough/index.js'),
+        import('../walkthrough/pull-request.js'),
+      ]);
+      walkthroughService = { ...service, getPullRequestDiff: pullRequest.getPullRequestDiff };
+    }
+    return walkthroughService;
   };
 
   const registerRoutes = async (app, routeDependencies) => {
@@ -46,6 +101,7 @@ export const createFeatureRoutesRuntime = (dependencies) => {
       readCustomThemesFromDisk,
       refreshOpenCodeAfterConfigChange,
       getOpenCodeResolutionSnapshot,
+      getOpenCodeUpgradeCapability,
       formatSettingsResponse,
       readSettingsFromDisk,
       readSettingsFromDiskMigrated,
@@ -56,14 +112,20 @@ export const createFeatureRoutesRuntime = (dependencies) => {
       buildOpenCodeUrl,
       getOpenCodeAuthHeaders,
       getOpenCodePort,
+      getOwnPorts,
+      devServerScanner,
       buildAugmentedPath,
       projectConfigRuntime,
       scheduledTasksRuntime,
+      scheduledTaskService,
+      openChamberSessionService,
+      openChamberControlService,
+      waitForOpenCodeReady,
       getOpenChamberEventClients,
       writeSseEvent,
+      emitSessionCreatedEvent,
+      permissionAutoAcceptRuntime,
     } = routeDependencies;
-
-    const { getProviderSources, removeProviderConfig } = await import('./index.js');
 
     registerSettingsUtilityRoutes(app, {
       readCustomThemesFromDisk,
@@ -71,10 +133,13 @@ export const createFeatureRoutesRuntime = (dependencies) => {
       clientReloadDelayMs,
     });
 
+    registerPermissionAutoAcceptRoutes(app, permissionAutoAcceptRuntime);
+
     registerOpenCodeRoutes(app, {
       crypto,
       clientReloadDelayMs,
       getOpenCodeResolutionSnapshot,
+      getOpenCodeUpgradeCapability,
       formatSettingsResponse,
       readSettingsFromDisk,
       readSettingsFromDiskMigrated,
@@ -84,6 +149,7 @@ export const createFeatureRoutesRuntime = (dependencies) => {
       resolveProjectDirectory,
       getProviderSources,
       removeProviderConfig,
+      upsertProviderConfig,
       refreshOpenCodeAfterConfigChange,
       buildOpenCodeUrl,
       getOpenCodeAuthHeaders,
@@ -107,43 +173,33 @@ export const createFeatureRoutesRuntime = (dependencies) => {
       sanitizeProjects,
       projectConfigRuntime,
       scheduledTasksRuntime,
+      scheduledTaskService,
       getOpenChamberEventClients,
       writeSseEvent,
     });
 
-    const {
-      getAgentSources,
-      getAgentConfig,
-      createAgent,
-      updateAgent,
-      deleteAgent,
-      getCommandSources,
-      createCommand,
-      updateCommand,
-      deleteCommand,
-      listMcpConfigs,
-      getMcpConfig,
-      createMcpConfig,
-      updateMcpConfig,
-      deleteMcpConfig,
-      listSnippets,
-      getSnippet,
-      createSnippet,
-      updateSnippet,
-      deleteSnippet,
-      expandSnippets,
-      listPluginEntries,
-      getPluginEntry,
-      createPluginEntry,
-      updatePluginEntry,
-      deletePluginEntry,
-      listPluginDirFiles,
-      readPluginDirFile,
-      writePluginDirFile,
-      deletePluginDirFile,
-      encodePluginId,
-      decodePluginId,
-    } = await import('./index.js');
+    registerOpenChamberSessionRoutes(app, {
+      readSettingsFromDiskMigrated,
+      sanitizeProjects,
+      validateDirectoryPath,
+      buildOpenCodeUrl,
+      getOpenCodeAuthHeaders,
+      waitForOpenCodeReady,
+      emitSessionCreatedEvent,
+      sessionService: openChamberSessionService,
+    });
+
+    registerOpenChamberControlRoutes(app, { controlService: openChamberControlService });
+
+    registerMarkdownImageGrantRoutes(app, {
+      fsPromises,
+      path,
+      os,
+      crypto,
+      validateDirectoryPath,
+      buildOpenCodeUrl,
+      getOpenCodeAuthHeaders,
+    });
 
     registerConfigEntityRoutes(app, {
       resolveProjectDirectory,
@@ -193,32 +249,6 @@ export const createFeatureRoutesRuntime = (dependencies) => {
       isExactSemver,
     });
 
-    const {
-      getSkillSources,
-      discoverSkills,
-      mergeDiscoveredSkills,
-      createSkill,
-      updateSkill,
-      deleteSkill,
-      readSkillSupportingFile,
-      writeSkillSupportingFile,
-      deleteSkillSupportingFile,
-      SKILL_SCOPE,
-      SKILL_DIR,
-    } = await import('./index.js');
-
-    const {
-      getCuratedSkillsSources,
-      getCacheKey,
-      getCachedScan,
-      setCachedScan,
-      parseSkillRepoSource,
-      scanSkillsRepository,
-      installSkillsFromRepository,
-      scanClawdHubPage,
-      installSkillsFromClawdHub,
-      isClawdHubSource,
-    } = await import('../skills-catalog/index.js');
     const { getProfiles, getProfile } = await import('../git/index.js');
 
     registerSkillRoutes(app, {
@@ -241,6 +271,8 @@ export const createFeatureRoutesRuntime = (dependencies) => {
       createSkill,
       updateSkill,
       deleteSkill,
+      renameSkill,
+      isManagedSkillPath,
       readSkillSupportingFile,
       writeSkillSupportingFile,
       deleteSkillSupportingFile,
@@ -261,8 +293,12 @@ export const createFeatureRoutesRuntime = (dependencies) => {
     });
 
     registerQuotaRoutes(app, { getQuotaProviders });
+    registerSmallModelRoutes(app, { getSmallModelService });
+    registerWalkthroughRoutes(app, { getWalkthroughService });
+    registerSessionGoalRoutes(app);
     registerGitHubRoutes(app);
     registerGitRoutes(app);
+    registerDevServerRoutes(app, { scanner: devServerScanner, getOwnPorts });
     registerMagicPromptRoutes(app, {
       fsPromises,
       path,

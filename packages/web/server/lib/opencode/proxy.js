@@ -6,6 +6,10 @@ import {
   shouldForwardProxyResponseHeader,
 } from '../../proxy-headers.js';
 import { createRealpathCache } from '../path-realpath-cache.js';
+import { DEFAULT_UPSTREAM_STALL_TIMEOUT_MS } from '../event-stream/upstream-reader.js';
+import { recordStartupPerformance } from './startup-performance.js';
+
+const DEFAULT_SSE_HEARTBEAT_INTERVAL_MS = 20_000;
 
 export const createDirectoryQueryCanonicalizer = ({ realpath, ...cacheOptions } = {}) => {
   const realpathCache = createRealpathCache({ fallbackOnError: true, realpath, ...cacheOptions });
@@ -31,7 +35,26 @@ export const createDirectoryQueryCanonicalizer = ({ realpath, ...cacheOptions } 
   };
 };
 
-export const waitForSseDrain = (res, signal) => new Promise((resolve) => {
+export const normalizeForwardedDirectoryHeaders = (headers) => {
+  const rawDirectory = headers?.['x-opencode-directory'];
+  if (typeof rawDirectory !== 'string') {
+    return headers;
+  }
+
+  if (headers['x-opencode-directory-encoding'] !== 'uri') {
+    return headers;
+  }
+
+  try {
+    headers['x-opencode-directory'] = decodeURIComponent(rawDirectory);
+  } catch {
+    // Leave malformed values untouched; upstream will reject invalid paths.
+  }
+  delete headers['x-opencode-directory-encoding'];
+  return headers;
+};
+
+const waitForSseDrain = (res, signal) => new Promise((resolve) => {
   if (signal?.aborted || res.writableEnded || res.destroyed) {
     resolve();
     return;
@@ -113,7 +136,7 @@ const SESSION_LIST_ALLOWED_FIELDS = [
   'project',
 ];
 
-export const sanitizeSessionListItem = (session) => {
+const sanitizeSessionListItem = (session) => {
   if (!session || typeof session !== 'object' || Array.isArray(session)) {
     return session;
   }
@@ -149,7 +172,7 @@ export const sanitizeSessionListItem = (session) => {
   return sanitized;
 };
 
-export const sanitizeSessionListPayload = (payload) => {
+const sanitizeSessionListPayload = (payload) => {
   if (!Array.isArray(payload)) {
     return payload;
   }
@@ -162,10 +185,14 @@ export const registerOpenCodeProxy = (app, deps) => {
     os,
     path,
     OPEN_CODE_READY_GRACE_MS,
+    LONG_REQUEST_TIMEOUT_MS,
     getRuntime,
     getOpenCodeAuthHeaders,
     buildOpenCodeUrl,
     ensureOpenCodeApiPrefix,
+    SSE_HEARTBEAT_INTERVAL_MS = DEFAULT_SSE_HEARTBEAT_INTERVAL_MS,
+    SSE_UPSTREAM_STALL_TIMEOUT_MS = DEFAULT_UPSTREAM_STALL_TIMEOUT_MS,
+    getSseUpstreamStallTimeoutMs = () => SSE_UPSTREAM_STALL_TIMEOUT_MS,
   } = deps;
 
   if (app.get('opencodeProxyConfigured')) {
@@ -272,11 +299,60 @@ export const registerOpenCodeProxy = (app, deps) => {
       return externalBase;
     }
 
-    if (runtimeState.openCodePort) {
-      return `http://localhost:${runtimeState.openCodePort}`;
+    return FALLBACK_PROXY_TARGET;
+  };
+
+  const normalizeProxyTimeout = (value) => {
+    return Number.isFinite(value) && value > 0 ? value : 4 * 60 * 1000;
+  };
+
+  const PROXY_REQUEST_TIMEOUT_MS = normalizeProxyTimeout(LONG_REQUEST_TIMEOUT_MS);
+  const PROXY_TIMEOUT_MARKER = Symbol('openchamberProxyTimedOut');
+
+  // A provider OAuth callback blocks upstream for as long as the user takes to
+  // sign in in their browser (device-code polling, or a loopback redirect), so
+  // it cannot share the ordinary request deadline. Bounded by the shortest
+  // upstream expiry we know of — GitHub device codes last ~15 minutes.
+  const INTERACTIVE_OAUTH_TIMEOUT_MS = 15 * 60 * 1000;
+  const INTERACTIVE_OAUTH_PATH = /^\/provider\/[^/]+\/oauth\/callback\/?$/;
+
+  const isInteractiveOAuthCallback = (req) =>
+    req.method === 'POST' && INTERACTIVE_OAUTH_PATH.test(req.path);
+
+  const isProxyTimeoutError = (error) => {
+    const code = typeof error?.code === 'string' ? error.code : '';
+    const message = typeof error?.message === 'string' ? error.message.toLowerCase() : '';
+    return code === 'ETIMEDOUT'
+      || code === 'ESOCKETTIMEDOUT'
+      || message.includes('timeout')
+      || message.includes('timed out');
+  };
+
+  const sendProxyErrorResponse = (res, statusCode) => {
+    if (!res || res.headersSent || res.writableEnded || typeof res.status !== 'function') {
+      return false;
+    }
+    res.status(statusCode).json({ error: statusCode === 504 ? 'OpenCode upstream timed out' : 'OpenCode service unavailable' });
+    return true;
+  };
+
+  const applyProxyResponseDeadline = (req, res, next) => {
+    if (isInteractiveOAuthCallback(req)) {
+      return next();
     }
 
-    return FALLBACK_PROXY_TARGET;
+    const timeout = setTimeout(() => {
+      req[PROXY_TIMEOUT_MARKER] = true;
+      if (sendProxyErrorResponse(res, 504)) {
+        res.once('finish', () => req.destroy?.());
+      }
+    }, PROXY_REQUEST_TIMEOUT_MS);
+    timeout.unref?.();
+
+    const clear = () => clearTimeout(timeout);
+    res.once('finish', clear);
+    res.once('close', clear);
+    next();
   };
 
   const forwardSseRequest = async (req, res) => {
@@ -285,6 +361,8 @@ export const registerOpenCodeProxy = (app, deps) => {
     let upstream = null;
     let reader = null;
     let heartbeatTimer = null;
+    let upstreamStallTimer = null;
+    let didUpstreamStall = false;
     let writeQueue = Promise.resolve(true);
     const sseBoundary = createSseBoundaryTracker();
 
@@ -295,7 +373,9 @@ export const registerOpenCodeProxy = (app, deps) => {
         ? req.originalUrl
         : (typeof req.url === 'string' ? req.url : '');
       const upstreamPath = requestUrl.startsWith('/api') ? requestUrl.slice(4) || '/' : requestUrl;
-      const headers = collectForwardProxyHeaders(req.headers, getOpenCodeAuthHeaders());
+      const headers = normalizeForwardedDirectoryHeaders(
+        collectForwardProxyHeaders(req.headers, getOpenCodeAuthHeaders())
+      );
       headers.accept ??= 'text/event-stream';
       headers['cache-control'] ??= 'no-cache';
 
@@ -335,8 +415,6 @@ export const registerOpenCodeProxy = (app, deps) => {
         res.socket.setNoDelay(true);
       }
 
-      const SSE_HEARTBEAT_INTERVAL_MS = 20_000;
-
       const scheduleHeartbeat = () => {
         heartbeatTimer = setTimeout(async () => {
           if (abortController.signal.aborted || res.writableEnded || res.destroyed) {
@@ -353,6 +431,20 @@ export const registerOpenCodeProxy = (app, deps) => {
         }, SSE_HEARTBEAT_INTERVAL_MS);
       };
 
+      const clearUpstreamStallTimer = () => {
+        clearTimeout(upstreamStallTimer);
+        upstreamStallTimer = null;
+      };
+
+      const resetUpstreamStallTimer = () => {
+        clearUpstreamStallTimer();
+        upstreamStallTimer = setTimeout(() => {
+          didUpstreamStall = true;
+          abortController.abort();
+        }, getSseUpstreamStallTimeoutMs());
+        upstreamStallTimer.unref?.();
+      };
+
       const enqueueSseWrite = (value) => {
         writeQueue = writeQueue
           .catch(() => false)
@@ -366,6 +458,7 @@ export const registerOpenCodeProxy = (app, deps) => {
       };
 
       scheduleHeartbeat();
+      resetUpstreamStallTimer();
 
       reader = upstream.body.getReader();
       while (!abortController.signal.aborted) {
@@ -374,6 +467,7 @@ export const registerOpenCodeProxy = (app, deps) => {
           break;
         }
         if (value && value.length > 0) {
+          resetUpstreamStallTimer();
           sseBoundary.observe(value);
           const canContinue = await enqueueSseWrite(value);
           if (!canContinue) {
@@ -385,6 +479,10 @@ export const registerOpenCodeProxy = (app, deps) => {
       res.end();
     } catch (error) {
       if (isAbortError(error)) {
+        if (didUpstreamStall && !res.writableEnded && !res.destroyed) {
+          await writeQueue.catch(() => false);
+          res.end();
+        }
         return;
       }
       console.error('[proxy] OpenCode SSE proxy error:', error?.message ?? error);
@@ -397,6 +495,10 @@ export const registerOpenCodeProxy = (app, deps) => {
       if (heartbeatTimer) {
         clearTimeout(heartbeatTimer);
         heartbeatTimer = null;
+      }
+      if (upstreamStallTimer) {
+        clearTimeout(upstreamStallTimer);
+        upstreamStallTimer = null;
       }
       req.off('close', closeUpstream);
       try {
@@ -414,7 +516,7 @@ export const registerOpenCodeProxy = (app, deps) => {
   const fetchSessionListPayload = async (upstreamPath, { req = null, timeoutMs = null } = {}) => {
     const headers = req
       ? {
-          ...collectForwardProxyHeaders(req.headers, getOpenCodeAuthHeaders()),
+          ...normalizeForwardedDirectoryHeaders(collectForwardProxyHeaders(req.headers, getOpenCodeAuthHeaders())),
           accept: 'application/json',
           'accept-encoding': 'identity',
         }
@@ -511,6 +613,12 @@ export const registerOpenCodeProxy = (app, deps) => {
       !runtimeState.openCodePort
     );
   };
+  const classifyReadinessRoute = (requestPath) => {
+    if (/^\/session\/[^/]+\/message(?:\/|$)/.test(requestPath)) return 'session-messages';
+    if (requestPath === '/session' || requestPath.startsWith('/session/')) return 'session';
+    if (requestPath === '/event' || requestPath === '/global/event') return 'events';
+    return 'other';
+  };
 
   app.use('/api', async (req, res, next) => {
     if (
@@ -530,16 +638,35 @@ export const registerOpenCodeProxy = (app, deps) => {
       return next();
     }
 
+    const holdStartedAt = performance.now();
+    const routeClass = classifyReadinessRoute(req.path);
     const deadline = Date.now() + Math.min(OPEN_CODE_READY_GRACE_MS, READINESS_HOLD_MAX_MS);
     while (Date.now() < deadline) {
       // Client gave up (closed/aborted) — stop holding.
-      if (res.writableEnded || req.aborted) return;
+      if (res.writableEnded || req.aborted) {
+        recordStartupPerformance('proxy.readiness-hold', {
+          durationMs: performance.now() - holdStartedAt,
+          outcome: 'aborted',
+          routeClass,
+        });
+        return;
+      }
       await sleep(READINESS_HOLD_POLL_MS);
       if (!isStillWaiting(getRuntime())) {
+        recordStartupPerformance('proxy.readiness-hold', {
+          durationMs: performance.now() - holdStartedAt,
+          outcome: 'ready',
+          routeClass,
+        });
         return next();
       }
     }
 
+    recordStartupPerformance('proxy.readiness-hold', {
+      durationMs: performance.now() - holdStartedAt,
+      outcome: 'timeout',
+      routeClass,
+    });
     if (!res.headersSent) {
       res.status(503).json({
         error: 'OpenCode is restarting',
@@ -640,10 +767,12 @@ export const registerOpenCodeProxy = (app, deps) => {
   });
 
   // Generic proxy for non-SSE OpenCode API routes.
-  const apiProxy = createProxyMiddleware({
+  const createApiProxy = (timeoutMs) => createProxyMiddleware({
     target: resolveProxyTarget(),
     changeOrigin: true,
     pathRewrite: { '^/api': '' },
+    timeout: timeoutMs,
+    proxyTimeout: timeoutMs,
     // Dynamic target — port can change after restart
     router: () => resolveProxyTarget(),
     on: {
@@ -652,6 +781,18 @@ export const registerOpenCodeProxy = (app, deps) => {
         const authHeaders = getOpenCodeAuthHeaders();
         if (authHeaders.Authorization) {
           proxyReq.setHeader('Authorization', authHeaders.Authorization);
+        }
+
+        if (req.headers?.['x-opencode-directory-encoding'] === 'uri') {
+          const rawDirectory = req.headers['x-opencode-directory'];
+          if (typeof rawDirectory === 'string') {
+            try {
+              proxyReq.setHeader('x-opencode-directory', decodeURIComponent(rawDirectory));
+            } catch {
+              proxyReq.setHeader('x-opencode-directory', rawDirectory);
+            }
+          }
+          proxyReq.removeHeader?.('x-opencode-directory-encoding');
         }
 
         // Defensive: request identity encoding from upstream OpenCode.
@@ -667,14 +808,19 @@ export const registerOpenCodeProxy = (app, deps) => {
           }
         }
       },
-      error: (err, _req, res) => {
+      error: (err, req, res) => {
         console.error('[proxy] OpenCode proxy error:', err.message);
-        if (res && !res.headersSent && typeof res.status === 'function') {
-          res.status(503).json({ error: 'OpenCode service unavailable' });
+        if (req?.[PROXY_TIMEOUT_MARKER]) {
+          return;
         }
+        const statusCode = isProxyTimeoutError(err) ? 504 : 503;
+        sendProxyErrorResponse(res, statusCode);
       },
     },
   });
+
+  const apiProxy = createApiProxy(PROXY_REQUEST_TIMEOUT_MS);
+  const interactiveOAuthProxy = createApiProxy(INTERACTIVE_OAUTH_TIMEOUT_MS);
 
   // Best-effort fallback for stale clients still sending symlink paths.
   // Settings and project selection normalize at source; this cached async path
@@ -691,5 +837,11 @@ export const registerOpenCodeProxy = (app, deps) => {
     next();
   });
 
+  app.use('/api', applyProxyResponseDeadline);
+  app.post('/api/provider/:providerID/oauth/callback', interactiveOAuthProxy);
+  // OpenCode's native MCP OAuth flow: the request blocks until the user
+  // finishes authorization in the browser (up to OpenCode's 5-minute callback
+  // timeout), so it needs the interactive-OAuth deadline, not the default one.
+  app.post('/api/mcp/:name/auth/authenticate', interactiveOAuthProxy);
   app.use('/api', apiProxy);
 };
