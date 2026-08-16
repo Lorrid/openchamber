@@ -9,9 +9,13 @@
  * Letting the agent name a project id would let a memory learned in one
  * checkout be filed against another, which the user would have no way to
  * notice.
+ *
+ * The directory is resolved to the project first. A session running in a
+ * worktree has the worktree's own path, and keying memory by that path filed it
+ * under a project the panel never looks at — the memory was written, stored,
+ * and invisible. Every worktree of a repository shares one project memory,
+ * which is also what the user means by "this project".
  */
-
-import { createProjectIdFromPath } from '../projects/project-id.js';
 
 const MEMORY_TYPES = new Set(['fact', 'preference', 'reference']);
 
@@ -32,7 +36,7 @@ const toSummary = (entry, scope) => ({
 const toFullEntry = (entry, scope) => ({ ...toSummary(entry, scope), body: entry.body });
 
 export const createAgentMemoryActions = (dependencies) => {
-  const { agentMemoryRuntime, createError, onMemoryChanged } = dependencies;
+  const { agentMemoryRuntime, createError, onMemoryChanged, resolveProjectId: resolveProjectIdForDirectory } = dependencies;
 
   /**
    * Announce a write so an open panel shows it without being reopened. The
@@ -55,27 +59,27 @@ export const createAgentMemoryActions = (dependencies) => {
     throw createError(message, status);
   };
 
-  const resolveProjectId = (contextDirectory) => {
+  const resolveProjectId = async (contextDirectory) => {
     const directory = asNonEmptyString(contextDirectory);
-    const projectId = directory ? createProjectIdFromPath(directory) : '';
+    const projectId = directory ? await resolveProjectIdForDirectory(directory) : '';
     if (!projectId) {
       fail('Project memory needs a session directory, and this session has none', 400);
     }
     return projectId;
   };
 
-  const resolveTarget = (input, contextDirectory) => {
+  const resolveTarget = async (input, contextDirectory) => {
     const scope = asNonEmptyString(input.scope);
     if (scope === 'global') return { scope: 'global' };
     if (scope === 'project') {
-      return { scope: 'project', projectId: resolveProjectId(contextDirectory) };
+      return { scope: 'project', projectId: await resolveProjectId(contextDirectory) };
     }
     return fail('scope must be global or project', 400);
   };
 
   const listBothScopes = async (contextDirectory) => {
     const directory = asNonEmptyString(contextDirectory);
-    const projectId = directory ? createProjectIdFromPath(directory) : null;
+    const projectId = directory ? await resolveProjectIdForDirectory(directory) : null;
     const result = await agentMemoryRuntime.readAll(projectId);
 
     // A scope that failed to load is reported, never rendered as empty: an
@@ -95,7 +99,7 @@ export const createAgentMemoryActions = (dependencies) => {
     if (!scope || scope === 'both') {
       return listBothScopes(contextDirectory);
     }
-    const target = resolveTarget(input, contextDirectory);
+    const target = await resolveTarget(input, contextDirectory);
     const { entries } = await agentMemoryRuntime.read(target);
     return { memories: entries.map((entry) => toSummary(entry, target.scope)) };
   };
@@ -106,7 +110,7 @@ export const createAgentMemoryActions = (dependencies) => {
    * just to translate what the agent can already see.
    */
   const read = async (input, contextDirectory) => {
-    const target = resolveTarget(input, contextDirectory);
+    const target = await resolveTarget(input, contextDirectory);
     const memoryId = asNonEmptyString(input.memoryId);
     const title = asNonEmptyString(input.title);
     if (!memoryId && !title) {
@@ -124,7 +128,7 @@ export const createAgentMemoryActions = (dependencies) => {
   };
 
   const save = async (input, contextDirectory) => {
-    const target = resolveTarget(input, contextDirectory);
+    const target = await resolveTarget(input, contextDirectory);
     const title = asNonEmptyString(input.title);
     const body = asNonEmptyString(input.body);
     if (!title) fail('title is required for memory.save', 400);
@@ -149,7 +153,7 @@ export const createAgentMemoryActions = (dependencies) => {
   };
 
   const remove = async (input, contextDirectory) => {
-    const target = resolveTarget(input, contextDirectory);
+    const target = await resolveTarget(input, contextDirectory);
     const memoryId = asNonEmptyString(input.memoryId);
     if (!memoryId) fail('memoryId is required for memory.delete', 400);
 

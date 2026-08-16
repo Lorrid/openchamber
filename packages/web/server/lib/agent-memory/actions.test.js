@@ -30,6 +30,7 @@ beforeEach(async () => {
   actions = createAgentMemoryActions({
     agentMemoryRuntime: runtime,
     createError: (message, status) => new TestError(message, status),
+    resolveProjectId: async (directory) => createProjectIdFromPath(directory),
   });
 });
 
@@ -101,6 +102,7 @@ describe('save', () => {
     const announcing = createAgentMemoryActions({
       agentMemoryRuntime: runtime,
       createError: (message, status) => new TestError(message, status),
+      resolveProjectId: async (directory) => createProjectIdFromPath(directory),
       onMemoryChanged: (event) => seen.push(event),
     });
 
@@ -113,6 +115,7 @@ describe('save', () => {
     const announcing = createAgentMemoryActions({
       agentMemoryRuntime: runtime,
       createError: (message, status) => new TestError(message, status),
+      resolveProjectId: async (directory) => createProjectIdFromPath(directory),
       onMemoryChanged: () => { throw new Error('listener exploded'); },
     });
 
@@ -121,6 +124,42 @@ describe('save', () => {
     // The memory is already on disk; a broken notification must not report it
     // back as a failure.
     expect(result.memory.title).toBe('T');
+  });
+});
+
+describe('worktree sessions reach the project store', () => {
+  test('every memory action resolves the directory through the project resolver', async () => {
+    const WORKTREE = '/tmp/worktree-checkout';
+    const worktreeAware = createAgentMemoryActions({
+      agentMemoryRuntime: runtime,
+      createError: (message, status) => new TestError(message, status),
+      // A worktree session must land in the project's store, not one keyed by
+      // the worktree path that the panel never reads.
+      resolveProjectId: async () => createProjectIdFromPath(DIRECTORY),
+    });
+
+    const saved = await worktreeAware.execute('memory.save', {
+      scope: 'project', title: 'Learned in a worktree', body: 'Body.',
+    }, WORKTREE);
+
+    expect((await runtime.read({ scope: 'project', projectId: createProjectIdFromPath(DIRECTORY) })).entries)
+      .toHaveLength(1);
+
+    // Reading and listing must agree with the write, or the agent would store
+    // something it can never find again.
+    const read = await worktreeAware.execute('memory.read', {
+      scope: 'project', memoryId: saved.memory.memoryId,
+    }, WORKTREE);
+    expect(read.memory.body).toBe('Body.');
+
+    const listed = await worktreeAware.execute('memory.list', {}, WORKTREE);
+    expect(listed.memories.map((memory) => memory.title)).toEqual(['Learned in a worktree']);
+
+    await worktreeAware.execute('memory.delete', {
+      scope: 'project', memoryId: saved.memory.memoryId,
+    }, WORKTREE);
+    expect((await runtime.read({ scope: 'project', projectId: createProjectIdFromPath(DIRECTORY) })).entries)
+      .toHaveLength(0);
   });
 });
 
@@ -188,6 +227,7 @@ describe('list', () => {
         readAll: async () => ({ global: [], project: [], globalFailed: true, projectFailed: false }),
       },
       createError: (message, status) => new TestError(message, status),
+      resolveProjectId: async (directory) => createProjectIdFromPath(directory),
     });
 
     const result = await failing.execute('memory.list', {}, DIRECTORY);

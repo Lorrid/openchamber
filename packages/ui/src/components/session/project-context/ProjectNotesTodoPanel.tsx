@@ -9,7 +9,6 @@ import { resolveProjectContextId, type ProjectRef, type ProjectTodoItem } from '
 import { cn } from '@/lib/utils';
 import { useAgentMemoryStore } from '@/stores/useAgentMemoryStore';
 import { countHighlightedMemories, memoryViewKey } from '@/lib/agentMemoryBadges';
-import { subscribeOpenchamberEvents } from '@/lib/openchamberEvents';
 import { EMPTY_PROJECT_CONTEXT_ENTRY, useProjectContextStore } from '@/stores/useProjectContextStore';
 import { useUIStore } from '@/stores/useUIStore';
 import { TodoSendDialog } from '../TodoSendDialog';
@@ -80,7 +79,6 @@ export const ProjectNotesTodoPanel: React.FC<ProjectNotesTodoPanelProps> = ({
   const memoryEnabled = useUIStore((state) => state.agentMemoryToolEnabled);
   const memoryDisabledByServer = useAgentMemoryStore((state) => state.disabled);
   const memoryVisible = memoryEnabled && !memoryDisabledByServer;
-  const loadAgentMemory = useAgentMemoryStore((state) => state.load);
   const globalMemory = useAgentMemoryStore((state) => state.global);
   const projectMemory = useAgentMemoryStore((state) => state.project);
 
@@ -150,29 +148,6 @@ export const ProjectNotesTodoPanel: React.FC<ProjectNotesTodoPanelProps> = ({
     }
     void loadProjectContext(projectRef);
   }, [loadProjectContext, projectRef]);
-
-  const memoryProjectPath = projectRef?.path ?? null;
-  React.useEffect(() => {
-    if (!memoryEnabled) {
-      return;
-    }
-    void loadAgentMemory(memoryProjectPath);
-  }, [loadAgentMemory, memoryEnabled, memoryProjectPath]);
-
-  // The agent writes memory during a turn, through its own tool. Without
-  // listening for that, what it stored would only appear the next time the
-  // panel happened to reload — which is how it looked like nothing had been
-  // saved at all.
-  React.useEffect(() => {
-    if (!memoryEnabled) {
-      return;
-    }
-    return subscribeOpenchamberEvents((event) => {
-      if (event.type === 'agent-memory-changed') {
-        void loadAgentMemory(memoryProjectPath);
-      }
-    });
-  }, [loadAgentMemory, memoryEnabled, memoryProjectPath]);
 
   // Surface a load failure once. The store keeps whatever it already had, so
   // the panel never blanks out over an unreachable server.

@@ -43,9 +43,16 @@ badge would clear the instant the tab appeared — the one moment the user is
 trying to read them. Each project keeps its own mark, so opening one project
 cannot silently clear another's badges.
 
-The panel reloads on `openchamber:agent-memory-changed`. The agent writes memory
-mid-turn through its own tool, so without that event what it stored would only
-appear the next time something else happened to reload the panel.
+The store is loaded by `useAgentMemorySync` in `App.tsx`, not by this panel. The
+session memory index is built from that snapshot, so leaving the load here meant
+a user who never opened Project notes sent every message with no index at all.
+It reloads on `openchamber:agent-memory-changed`, because the agent writes
+mid-turn through its own tool.
+
+Both sides resolve a worktree to its project before touching the store — the
+client through `resolveProjectForSessionDirectory`, the server through
+`agent-memory/project-resolution`. Keying by the session directory instead filed
+a worktree's memories under a project nothing reads.
 
 `agentMemoryToolEnabled` is one switch for the whole feature: it removes the
 tool from the agent, this tab from the panel, and the index from new sessions.
