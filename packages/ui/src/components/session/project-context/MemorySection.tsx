@@ -1,8 +1,8 @@
 import React from 'react';
 
 import { toast } from '@/components/ui';
+import { Button } from '@/components/ui/button';
 import { Icon } from '@/components/icon/Icon';
-import { SortableTabsStrip, type SortableTabsStripItem } from '@/components/ui/sortable-tabs-strip';
 import { useI18n } from '@/lib/i18n';
 import type { AgentMemoryEntry, AgentMemoryScope } from '@/lib/agentMemoryApi';
 import { classifyMemory, memoryViewKey, type MemoryBadge } from '@/lib/agentMemoryBadges';
@@ -145,29 +145,32 @@ export const MemorySection: React.FC<{
     }
   }, [deleteEntry, scope, t]);
 
-  const scopeItems: SortableTabsStripItem[] = React.useMemo(() => ([
-    {
-      id: 'project',
-      label: `${t('rightSidebar.contextNotesTodo.memory.scope.project')} ${projectEntries.length}`,
-    },
-    {
-      id: 'global',
-      label: `${t('rightSidebar.contextNotesTodo.memory.scope.global')} ${globalEntries.length}`,
-    },
-  ]), [globalEntries.length, projectEntries.length, t]);
+  const scopeOptions: Array<{ id: AgentMemoryScope; label: string; count: number }> = [
+    { id: 'project', label: t('rightSidebar.contextNotesTodo.memory.scope.project'), count: projectEntries.length },
+    { id: 'global', label: t('rightSidebar.contextNotesTodo.memory.scope.global'), count: globalEntries.length },
+  ];
 
   return (
     <div className="flex flex-col gap-2">
-      {/* The same strip the panel's own tabs use, so "which one is selected"
-          looks identical everywhere instead of being styled by hand here. */}
-      <SortableTabsStrip
-        items={scopeItems}
-        activeId={scope}
-        onSelect={(id) => setScope(id as AgentMemoryScope)}
-        layoutMode="fit"
-        variant="active-pill"
-        className="h-7"
-      />
+      {/* Chips rather than a tab strip: these pick which store you are reading,
+          not which view you are in, and the chip's pressed state says which one
+          is selected far more plainly than a pill sitting on a matching
+          background did. */}
+      <div role="group" aria-label={t('rightSidebar.contextNotesTodo.memory.scope.label')} className="flex items-center gap-1">
+        {scopeOptions.map((option) => (
+          <Button
+            key={option.id}
+            type="button"
+            variant="chip"
+            size="xs"
+            aria-pressed={scope === option.id}
+            className="!font-normal"
+            onClick={() => setScope(option.id)}
+          >
+            {`${option.label} ${option.count}`}
+          </Button>
+        ))}
+      </div>
 
       {scope === 'project' && !projectPath ? (
         <p className="typography-meta text-muted-foreground">

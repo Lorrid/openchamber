@@ -8,12 +8,26 @@ drawer.
 
 | File | Owns |
 |---|---|
-| `ProjectNotesTodoPanel.tsx` | container: store subscription, load, failure toast, tabs, search query, the todo write |
+| `ProjectNotesTodoPanel.tsx` | container: store subscription, load, failure toast, section sidebar, search query, the todo write |
 | `NotesSection.tsx` | note composer, note list, per-note edit/pin/delete |
 | `TodosSection.tsx` | todo list, add/toggle/delete/clear, drag reorder, list resize |
 | `PlansSection.tsx` | plan list, import, pin, delete, open |
 | `MemorySection.tsx` | agent memory list, project/global scope switch, new/changed badges, forget |
 | `useProjectTodoSend.ts` | sending a todo to a current/new/worktree session |
+
+## Layout
+
+A section sidebar on the left, content on the right — the same split the files
+surface uses. The sections were a horizontal tab strip until four of them stopped
+fitting: a strip has one line of width to divide, and each section added took
+width from the rest, while a vertical list grows downwards where there is room.
+The surface's default width matches the files surface for the same reason; at a
+third of the window the content column is too narrow to read a note in.
+
+Search stays above both columns. Sections divide, and search is the one thing
+that division would hurt — you do not always remember whether something was
+written as a note or lives in a plan — so each sidebar entry carries its own
+match count.
 
 ## Memory is not a fifth kind of note
 
@@ -36,7 +50,10 @@ Two consequences shape this tab:
   at the tab is the acknowledgement. Nothing about review is stored server-side.
 - **The scopes are a switch, never one merged list.** A claim about the user
   reaches every project, so which store an entry sits in is the most important
-  thing about it and must not be something the reader has to infer.
+  thing about it and must not be something the reader has to infer. The switch
+  is a chip group, not a tab strip: it picks which store you are reading, not
+  which view you are in, and the pressed state reads plainly against the
+  panel background.
 
 The mark is frozen while the tab is open and advanced on the way out, or every
 badge would clear the instant the tab appeared — the one moment the user is

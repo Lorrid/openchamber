@@ -2,8 +2,8 @@ import React from 'react';
 
 import { toast } from '@/components/ui';
 import { Icon } from '@/components/icon/Icon';
+import type { IconName } from '@/components/icon/icons';
 import { Input } from '@/components/ui/input';
-import { SortableTabsStrip, type SortableTabsStripItem } from '@/components/ui/sortable-tabs-strip';
 import { useI18n } from '@/lib/i18n';
 import { resolveProjectContextId, type ProjectRef, type ProjectTodoItem } from '@/lib/projectContextApi';
 import { cn } from '@/lib/utils';
@@ -202,29 +202,39 @@ export const ProjectNotesTodoPanel: React.FC<ProjectNotesTodoPanelProps> = ({
   );
 
   /**
-   * No icons on these tabs. The labels are already plain words, so an icon adds
-   * nothing to read but costs width the counts need — and with four tabs that
-   * width is what pushed the last one off the edge.
+   * The sidebar entries. Icons are worth their width here: a vertical list has
+   * the room a horizontal strip did not, and they make the sections scannable
+   * without reading.
    */
-  const tabItems: SortableTabsStripItem[] = React.useMemo(() => ([
+  const sections: Array<{ id: ProjectContextTab; icon: IconName; label: string; count: string }> = React.useMemo(() => ([
     {
       id: 'notes',
-      label: `${t('rightSidebar.contextNotesTodo.tabs.notes')} ${counts.notes}`,
+      icon: 'sticky-note',
+      label: t('rightSidebar.contextNotesTodo.tabs.notes'),
+      count: String(counts.notes),
     },
     {
       id: 'todos',
-      label: `${t('rightSidebar.contextNotesTodo.tabs.todos')} ${counts.todos}`,
+      icon: 'checkbox-circle',
+      label: t('rightSidebar.contextNotesTodo.tabs.todos'),
+      count: String(counts.todos),
     },
     {
       id: 'plans',
-      label: `${t('rightSidebar.contextNotesTodo.tabs.plans')} ${counts.plans}`,
+      icon: 'file-text',
+      label: t('rightSidebar.contextNotesTodo.tabs.plans'),
+      count: String(counts.plans),
     },
     ...(memoryVisible ? [{
-      id: 'memory',
+      id: 'memory' as const,
+      icon: 'book-3' as IconName,
+      label: t('rightSidebar.contextNotesTodo.tabs.memory'),
       // The new/changed count replaces the total when there is anything the
       // user has not seen: what the agent stored without asking is the number
       // that deserves the glance.
-      label: `${t('rightSidebar.contextNotesTodo.tabs.memory')} ${highlightedMemoryCount > 0 ? `${highlightedMemoryCount}/${counts.memory}` : counts.memory}`,
+      count: highlightedMemoryCount > 0
+        ? `${highlightedMemoryCount}/${counts.memory}`
+        : String(counts.memory),
     }] : []),
   ]), [counts, highlightedMemoryCount, memoryVisible, t]);
 
@@ -276,17 +286,42 @@ export const ProjectNotesTodoPanel: React.FC<ProjectNotesTodoPanelProps> = ({
           ) : null}
         </div>
 
-        <SortableTabsStrip
-          items={tabItems}
-          activeId={activeTab}
-          onSelect={setStoredTab}
-          layoutMode="fit"
-          variant="active-pill"
-          className="h-8"
-        />
       </div>
 
-      <div className="min-h-0 flex-1 overflow-y-auto px-3 pb-3">
+      {/* Sidebar and content, the same split the files surface uses. A
+          horizontal strip had to squeeze every label to fit four sections;
+          a vertical list grows downwards, where there is room to spare. */}
+      <div className="flex min-h-0 flex-1">
+        <nav
+          className="flex w-[9.5rem] flex-shrink-0 flex-col gap-0.5 overflow-y-auto border-r border-[var(--interactive-border)] p-2"
+          aria-label={t('rightSidebar.contextNotesTodo.sections.label')}
+        >
+          {sections.map((section) => {
+            const isActive = activeTab === section.id;
+            return (
+              <button
+                key={section.id}
+                type="button"
+                onClick={() => setStoredTab(section.id)}
+                aria-current={isActive ? 'page' : undefined}
+                className={cn(
+                  'flex min-w-0 items-center gap-2 rounded-md px-2 py-1.5 text-left transition-colors',
+                  'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50',
+                  isActive
+                    ? 'bg-interactive-active text-foreground'
+                    : 'text-muted-foreground hover:bg-interactive-hover/50 hover:text-foreground',
+                )}
+                style={{ minHeight: 0 }}
+              >
+                <Icon name={section.icon} className="h-3.5 w-3.5 flex-shrink-0" />
+                <span className="min-w-0 flex-1 truncate typography-meta">{section.label}</span>
+                <span className="flex-shrink-0 typography-micro text-muted-foreground">{section.count}</span>
+              </button>
+            );
+          })}
+        </nav>
+
+        <div className="min-h-0 min-w-0 flex-1 overflow-y-auto p-3">
         {activeTab === 'notes' ? (
           <NotesSection
             projectRef={projectRef}
@@ -322,6 +357,7 @@ export const ProjectNotesTodoPanel: React.FC<ProjectNotesTodoPanelProps> = ({
             onOpenPlan={onOpenPlan}
           />
         ) : null}
+        </div>
       </div>
 
       <TodoSendDialog
