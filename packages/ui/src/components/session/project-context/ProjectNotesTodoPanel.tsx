@@ -325,6 +325,20 @@ export const ProjectNotesTodoPanel: React.FC<ProjectNotesTodoPanelProps> = ({
           on screen, not a heading, and a full-width field read as the panel's
           primary control. */}
       <div className="flex flex-shrink-0 items-center gap-2 p-3 pb-2">
+        {/* Back sits here, beside the project name, rather than above the
+            editor: PlanView already titles the plan, and a second title row
+            said the same thing twice. */}
+        {openPlan ? (
+          <button
+            type="button"
+            onClick={() => setOpenPlan(null)}
+            className="inline-flex h-6 w-6 flex-shrink-0 items-center justify-center rounded-md text-muted-foreground hover:bg-interactive-hover/50 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50"
+            aria-label={t('rightSidebar.contextNotesTodo.plans.actions.back')}
+            title={t('rightSidebar.contextNotesTodo.plans.actions.back')}
+          >
+            <Icon name="arrow-left-s" className="h-4 w-4" />
+          </button>
+        ) : null}
         <h3
           className="min-w-0 flex-1 truncate typography-ui-label font-semibold text-foreground"
           title={projectRef.path}
@@ -404,30 +418,12 @@ export const ProjectNotesTodoPanel: React.FC<ProjectNotesTodoPanelProps> = ({
         ) : null}
 
         {activeTab === 'plans' && openPlan ? (
-          <div className="flex h-full min-h-0 flex-col gap-2">
-            <div className="flex flex-shrink-0 items-center gap-1.5">
-              <button
-                type="button"
-                onClick={() => setOpenPlan(null)}
-                className="inline-flex h-6 w-6 flex-shrink-0 items-center justify-center rounded-md text-muted-foreground hover:bg-interactive-hover/50 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50"
-                aria-label={t('rightSidebar.contextNotesTodo.plans.actions.back')}
-                title={t('rightSidebar.contextNotesTodo.plans.actions.back')}
-              >
-                <Icon name="arrow-left-s" className="h-4 w-4" />
-              </button>
-              <span className="min-w-0 flex-1 truncate typography-ui-label text-foreground" title={openPlan.title}>
-                {openPlan.title}
-              </span>
-            </div>
-            <div className="min-h-0 flex-1">
-              <React.Suspense fallback={null}>
-                <PlanView
-                  projectPlanId={openPlan.id}
-                  onNavigatedToChat={() => setOpenPlan(null)}
-                />
-              </React.Suspense>
-            </div>
-          </div>
+          <React.Suspense fallback={null}>
+            <PlanView
+              projectPlanId={openPlan.id}
+              onNavigatedToChat={() => setOpenPlan(null)}
+            />
+          </React.Suspense>
         ) : null}
         </div>
 

@@ -47,8 +47,9 @@ the text must not throw the editor away.
 
 ## Plans open in place
 
-Clicking a plan replaces the list with its editor and a back control, rather
-than opening a separate context-panel tab. A plan belongs to the project this
+Clicking a plan replaces the list with its editor, and the back control appears
+in the panel header beside the project name — PlanView titles the plan itself, so
+a title row above it would say the same thing twice. A plan belongs to the project this
 panel is about, and sending the reader to another tab to read it made them leave
 the surface they were browsing.
 
