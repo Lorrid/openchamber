@@ -272,7 +272,7 @@ export const NotesSection: React.FC<{
               : t('rightSidebar.contextNotesTodo.notes.empty')}
           </p>
         ) : (
-          <ul className="divide-y divide-border/50">
+          <ul className="flex flex-col gap-1.5">
             {visibleNotes.map((note) => (
               <NoteRow
                 key={note.id}
