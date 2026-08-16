@@ -9,9 +9,9 @@ import { registerAgentMemoryRoutes } from './routes.js';
  *
  * Mounted on a bare express app, exactly as production runs: `core-routes`
  * parses only an allowlist of path prefixes so the OpenCode proxy keeps an
- * unread stream. These routes carry no request body, so none of them attaches a
- * parser — a body-carrying route added here would need its own `express.json()`
- * and these tests would be the place to prove it.
+ * unread stream. The PATCH route is the one that carries a body, so it is the
+ * one that has to attach its own `express.json()` — and these tests are what
+ * would fail if it stopped.
  */
 
 const entry = (overrides = {}) => ({
@@ -34,6 +34,12 @@ const createApp = (overrides = {}) => {
     readAll: async (projectId) => {
       received.readAllProjectId = projectId;
       return { global: [entry()], project: [], globalFailed: false, projectFailed: false };
+    },
+    update: async (target, memoryId, patch) => {
+      received.updateTarget = target;
+      received.patch = patch;
+      received.updatedId = memoryId;
+      return { entry: entry(patch), entries: [entry(patch)] };
     },
     remove: async (target, memoryId) => {
       received.removeTarget = target;
@@ -141,6 +147,42 @@ describe('failures', () => {
     const response = await request(app).get('/api/agent-memory?scope=project&projectId=..');
 
     expect(response.status).toBe(400);
+  });
+});
+
+describe('corrections', () => {
+  it('patches a memory from a JSON body', async () => {
+    // This route is the only one here that carries a body, so it is the only
+    // one that needs its own parser — and the only place that can prove it.
+    const { app, received } = createApp();
+
+    const response = await request(app)
+      .patch('/api/agent-memory/mem-1?scope=global')
+      .send({ title: 'Clearer', body: 'Reworded.' });
+
+    expect(response.status).toBe(200);
+    expect(received.patch).toEqual({ title: 'Clearer', body: 'Reworded.' });
+    expect(received.updatedId).toBe('mem-1');
+  });
+
+  it('rejects a non-string title', async () => {
+    const { app } = createApp();
+
+    const response = await request(app)
+      .patch('/api/agent-memory/mem-1?scope=global')
+      .send({ title: 42 });
+
+    expect(response.status).toBe(400);
+  });
+
+  it('reports a missing memory as 404', async () => {
+    const { app } = createApp({ runtime: { update: async () => null } });
+
+    const response = await request(app)
+      .patch('/api/agent-memory/nope?scope=global')
+      .send({ body: 'x' });
+
+    expect(response.status).toBe(404);
   });
 });
 

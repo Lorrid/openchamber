@@ -3,6 +3,7 @@ import React from 'react';
 import { toast } from '@/components/ui';
 import { Icon } from '@/components/icon/Icon';
 import { Textarea } from '@/components/ui/textarea';
+import { KnowledgeCard } from './KnowledgeCard';
 import { useI18n } from '@/lib/i18n';
 import { PROJECT_NOTE_BODY_MAX_LENGTH, type ProjectNote, type ProjectRef } from '@/lib/projectContextApi';
 import { cn } from '@/lib/utils';
@@ -92,43 +93,15 @@ const NoteRow: React.FC<{
       : null;
 
   return (
-    <li className="space-y-1 px-2.5 py-2">
-      <div className="flex items-start gap-1.5">
-        {expanded ? (
-          <Textarea
-            simple
-            autoFocus
-            rows={Math.min(20, Math.max(3, draft.split('\n').length + 1))}
-            value={draft}
-            onChange={(event) => setDraft(event.target.value.slice(0, PROJECT_NOTE_BODY_MAX_LENGTH))}
-            onBlur={handleBlur}
-            className="min-h-0 w-full flex-1 resize-none bg-transparent p-0 typography-ui-label leading-normal text-foreground focus-visible:outline-none focus-visible:ring-0"
-          />
-        ) : (
-          <button
-            type="button"
-            onClick={onToggleExpanded}
-            className="min-w-0 flex-1 bg-transparent p-0 text-left typography-ui-label leading-normal text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50"
-            aria-label={t('rightSidebar.contextNotesTodo.notes.actions.expand')}
-            title={draft}
-          >
-            <span className="line-clamp-3 whitespace-pre-wrap break-words">{draft}</span>
-          </button>
-        )}
-        {/* Stacked, so the actions cost one icon of width instead of three and
-            the note text keeps the full row. */}
-        <div className="flex flex-shrink-0 flex-col items-center gap-0.5">
-          {expanded ? (
-            <button
-              type="button"
-              onClick={onToggleExpanded}
-              className="inline-flex h-6 w-6 items-center justify-center rounded-md text-muted-foreground hover:text-foreground hover:bg-interactive-hover/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50"
-              aria-label={t('rightSidebar.contextNotesTodo.notes.actions.collapse')}
-              title={t('rightSidebar.contextNotesTodo.notes.actions.collapse')}
-            >
-              <Icon name="arrow-up-s" className="h-3.5 w-3.5" />
-            </button>
-          ) : null}
+    <KnowledgeCard
+      expanded={expanded}
+      onToggleExpanded={onToggleExpanded}
+      expandLabel={t('rightSidebar.contextNotesTodo.notes.actions.expand')}
+      footer={sourceLabel ? (
+        <span className="typography-micro text-muted-foreground">{sourceLabel}</span>
+      ) : null}
+      actions={(
+        <>
           <button
             type="button"
             onClick={onTogglePinned}
@@ -149,18 +122,31 @@ const NoteRow: React.FC<{
           <button
             type="button"
             onClick={onDelete}
-            className="inline-flex h-6 w-6 items-center justify-center rounded-md text-muted-foreground hover:text-foreground hover:bg-interactive-hover/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50"
+            className="inline-flex h-6 w-6 items-center justify-center rounded-md text-muted-foreground hover:bg-interactive-hover/50 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50"
             aria-label={t('rightSidebar.contextNotesTodo.notes.actions.delete')}
             title={t('rightSidebar.contextNotesTodo.notes.actions.delete')}
           >
             <Icon name="delete-bin" className="h-3.5 w-3.5" />
           </button>
-        </div>
-      </div>
-      {sourceLabel ? (
-        <span className="typography-micro text-muted-foreground">{sourceLabel}</span>
-      ) : null}
-    </li>
+        </>
+      )}
+    >
+      {expanded ? (
+        <Textarea
+          simple
+          autoFocus
+          rows={Math.min(20, Math.max(3, draft.split('\n').length + 1))}
+          value={draft}
+          onChange={(event) => setDraft(event.target.value.slice(0, PROJECT_NOTE_BODY_MAX_LENGTH))}
+          onBlur={handleBlur}
+          className="min-h-0 w-full resize-none bg-transparent p-0 typography-ui-label leading-normal text-foreground focus-visible:outline-none focus-visible:ring-0"
+        />
+      ) : (
+        <p className="line-clamp-3 whitespace-pre-wrap break-words typography-ui-label leading-normal text-foreground" title={draft}>
+          {draft}
+        </p>
+      )}
+    </KnowledgeCard>
   );
 };
 

@@ -42,6 +42,10 @@ export interface AgentMemorySnapshot {
   projectFailed: boolean;
 }
 
+/** Mirrors the server's clamps, so the editor stops where storage would cut. */
+export const AGENT_MEMORY_TITLE_MAX_LENGTH = 120;
+export const AGENT_MEMORY_BODY_MAX_LENGTH = 2000;
+
 /** Raised when the server reports the whole memory surface as switched off. */
 export class AgentMemoryDisabledError extends Error {
   constructor() {
@@ -147,6 +151,31 @@ export const fetchAgentMemory = async (
     globalFailed: payload.globalFailed === true,
     projectFailed: payload.projectFailed === true,
   };
+};
+
+/** A user correction from the panel; the agent rewrites by saving again. */
+export const updateAgentMemory = async (
+  scope: AgentMemoryScope,
+  projectPath: string | null,
+  memoryId: string,
+  patch: { title?: string; body?: string; type?: AgentMemoryType },
+): Promise<AgentMemoryEntry> => {
+  const query = scopeQuery(scope, resolveMemoryProjectId(projectPath));
+  const response = await runtimeFetch(`${BASE_PATH}/${encodeURIComponent(memoryId)}?${query}`, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(patch),
+  });
+  if (!response.ok) {
+    return failed(response, 'Failed to save memory');
+  }
+
+  const payload = await response.json() as { entry?: unknown } | null;
+  const entry = parseEntry(payload?.entry);
+  if (!entry) {
+    throw new Error('Malformed agent memory response');
+  }
+  return entry;
 };
 
 export const deleteAgentMemory = async (

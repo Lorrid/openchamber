@@ -15,6 +15,7 @@ import {
   AgentMemoryDisabledError,
   deleteAgentMemory,
   fetchAgentMemory,
+  updateAgentMemory,
   type AgentMemoryEntry,
   type AgentMemoryScope,
   type AgentMemorySnapshot,
@@ -35,6 +36,11 @@ interface AgentMemoryState {
   error: string | null;
 
   load: (projectPath: string | null) => Promise<void>;
+  saveEntry: (
+    scope: AgentMemoryScope,
+    memoryId: string,
+    patch: { title?: string; body?: string },
+  ) => Promise<boolean>;
   deleteEntry: (scope: AgentMemoryScope, memoryId: string) => Promise<boolean>;
   snapshot: () => AgentMemorySnapshot | null;
   reset: () => void;
@@ -105,6 +111,18 @@ export const useAgentMemoryStore = create<AgentMemoryState>((set, get) => ({
       set({ loading: false, error: errorMessage(error, 'Failed to load agent memory') });
     }
   },
+
+  saveEntry: async (scope, memoryId, patch) => enqueueWrite(async () => {
+    const previous = listFor(get(), scope);
+    try {
+      const saved = await updateAgentMemory(scope, get().projectPath, memoryId, patch);
+      set(withList(scope, listFor(get(), scope).map((entry) => (entry.id === memoryId ? saved : entry))));
+      return true;
+    } catch (error) {
+      set({ ...withList(scope, previous), error: errorMessage(error, 'Failed to save memory') });
+      return false;
+    }
+  }),
 
   deleteEntry: async (scope, memoryId) => enqueueWrite(async () => {
     const previous = listFor(get(), scope);

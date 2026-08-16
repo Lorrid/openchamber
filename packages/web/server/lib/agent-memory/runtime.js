@@ -326,6 +326,47 @@ export const createAgentMemoryRuntime = (deps) => {
     });
   };
 
+  /**
+   * A user correction. The agent rewrites by saving the same memory again, so
+   * this exists for the panel: a memory worded badly enough to mislead should
+   * be fixable where it is read, not only deletable.
+   */
+  const update = async (target, memoryId, patch) => {
+    const resolved = resolveTarget(target);
+    const id = asNonEmptyString(memoryId);
+    if (!id) throw new Error('memoryId is required');
+
+    const hasTitle = typeof patch?.title === 'string';
+    const hasBody = typeof patch?.body === 'string';
+    const hasType = MEMORY_TYPES.has(patch?.type);
+    if (!hasTitle && !hasBody && !hasType) {
+      throw new Error('title, body or type is required');
+    }
+    const title = hasTitle ? clampLength(patch.title, MEMORY_TITLE_MAX_LENGTH).trim() : null;
+    const body = hasBody ? clampLength(patch.body, MEMORY_BODY_MAX_LENGTH).trim() : null;
+    if (hasTitle && !title) throw new Error('title is required');
+    if (hasBody && !body) throw new Error('body is required');
+
+    return withWriteLock(resolved.key, async () => {
+      const current = await read(target);
+      const existing = current.entries.find((entry) => entry.id === id);
+      if (!existing) {
+        return null;
+      }
+
+      const updated = {
+        ...existing,
+        ...(hasTitle ? { title } : {}),
+        ...(hasBody ? { body } : {}),
+        ...(hasType ? { type: patch.type } : {}),
+        updatedAt: Date.now(),
+      };
+      const entries = current.entries.map((entry) => (entry.id === id ? updated : entry));
+      await write(resolved, entries);
+      return { entry: updated, entries };
+    });
+  };
+
   const remove = async (target, memoryId) => {
     const resolved = resolveTarget(target);
     const id = asNonEmptyString(memoryId);
@@ -361,5 +402,5 @@ export const createAgentMemoryRuntime = (deps) => {
     };
   };
 
-  return { read, readAll, create, remove, resolveTarget };
+  return { read, readAll, create, update, remove, resolveTarget };
 };

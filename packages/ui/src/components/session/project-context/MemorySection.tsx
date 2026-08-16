@@ -2,9 +2,12 @@ import React from 'react';
 
 import { toast } from '@/components/ui';
 import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Textarea } from '@/components/ui/textarea';
+import { KnowledgeCard } from './KnowledgeCard';
 import { Icon } from '@/components/icon/Icon';
 import { useI18n } from '@/lib/i18n';
-import type { AgentMemoryEntry, AgentMemoryScope } from '@/lib/agentMemoryApi';
+import { AGENT_MEMORY_BODY_MAX_LENGTH, AGENT_MEMORY_TITLE_MAX_LENGTH, type AgentMemoryEntry, type AgentMemoryScope } from '@/lib/agentMemoryApi';
 import { classifyMemory, memoryViewKey, type MemoryBadge } from '@/lib/agentMemoryBadges';
 import { cn } from '@/lib/utils';
 import { useAgentMemoryStore } from '@/stores/useAgentMemoryStore';
@@ -26,62 +29,105 @@ const MemoryRow: React.FC<{
   badge: MemoryBadge;
   expanded: boolean;
   onToggleExpanded: () => void;
+  onSave: (patch: { title?: string; body?: string }) => void;
   onDelete: () => void;
-}> = ({ entry, badge, expanded, onToggleExpanded, onDelete }) => {
+}> = ({ entry, badge, expanded, onToggleExpanded, onSave, onDelete }) => {
   const { t } = useI18n();
+  const [titleDraft, setTitleDraft] = React.useState(entry.title);
+  const [bodyDraft, setBodyDraft] = React.useState(entry.body);
+
+  // Adopt an external rewrite only while this row is not being edited, so the
+  // agent saving mid-edit cannot swallow what the user is typing.
+  React.useEffect(() => {
+    if (expanded) return;
+    setTitleDraft(entry.title);
+    setBodyDraft(entry.body);
+  }, [entry.body, entry.title, expanded]);
+
+  const commit = React.useCallback(() => {
+    const title = titleDraft.trim();
+    const body = bodyDraft.trim();
+    // An emptied field is a rejected write, not a delete: restore it rather
+    // than sending something the server will refuse.
+    if (!title || !body) {
+      setTitleDraft(entry.title);
+      setBodyDraft(entry.body);
+      return;
+    }
+    if (title === entry.title && body === entry.body) {
+      return;
+    }
+    onSave({ title, body });
+  }, [bodyDraft, entry.body, entry.title, onSave, titleDraft]);
 
   const typeLabel = t(`rightSidebar.contextNotesTodo.memory.type.${entry.type}` as Parameters<typeof t>[0]);
 
   return (
-    <li className="flex flex-col gap-1 rounded-lg border border-[var(--interactive-border)] bg-[var(--surface-elevated)] px-2 py-1.5">
-      <div className="flex min-w-0 items-start gap-2">
-        <div className="min-w-0 flex-1">
-          <button
-            type="button"
-            onClick={onToggleExpanded}
-            className="flex w-full min-w-0 items-center gap-1.5 rounded-sm text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50"
-            aria-expanded={expanded}
-          >
-            {badge ? (
-              <span
-                className={cn(
-                  'flex-shrink-0 rounded-full px-1.5 py-px typography-micro font-medium',
-                  badge === 'new'
-                    ? 'bg-[var(--status-success)]/15 text-[var(--status-success)]'
-                    : 'bg-[var(--status-warning)]/15 text-[var(--status-warning)]',
-                )}
-              >
-                {t(badge === 'new'
-                  ? 'rightSidebar.contextNotesTodo.memory.badge.new'
-                  : 'rightSidebar.contextNotesTodo.memory.badge.changed')}
-              </span>
-            ) : null}
-            <span className="min-w-0 flex-1 truncate typography-ui-label text-foreground">
-              {entry.title}
-            </span>
-            <Icon
-              name={expanded ? 'arrow-up-s' : 'arrow-down-s'}
-              className="h-3.5 w-3.5 flex-shrink-0 text-muted-foreground"
-            />
-          </button>
-          <p className={cn('typography-meta text-muted-foreground', expanded ? '' : 'line-clamp-2')}>
-            {entry.body}
-          </p>
-        </div>
-
+    <KnowledgeCard
+      expanded={expanded}
+      onToggleExpanded={() => {
+        if (expanded) commit();
+        onToggleExpanded();
+      }}
+      expandLabel={entry.title}
+      footer={<span className="typography-micro text-muted-foreground">{typeLabel}</span>}
+      header={badge ? (
+        <span
+          className={cn(
+            'mb-0.5 mr-1.5 inline-block rounded-full px-1.5 py-px typography-micro font-medium',
+            badge === 'new'
+              ? 'bg-[var(--status-success)]/15 text-[var(--status-success)]'
+              : 'bg-[var(--status-warning)]/15 text-[var(--status-warning)]',
+          )}
+        >
+          {t(badge === 'new'
+            ? 'rightSidebar.contextNotesTodo.memory.badge.new'
+            : 'rightSidebar.contextNotesTodo.memory.badge.changed')}
+        </span>
+      ) : null}
+      actions={(
         <button
           type="button"
           onClick={onDelete}
-          className="inline-flex h-6 w-6 flex-shrink-0 items-center justify-center rounded-md text-muted-foreground hover:bg-interactive-hover/50 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50"
+          className="inline-flex h-6 w-6 items-center justify-center rounded-md text-muted-foreground hover:bg-interactive-hover/50 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50"
           aria-label={t('rightSidebar.contextNotesTodo.memory.actions.delete')}
           title={t('rightSidebar.contextNotesTodo.memory.actions.delete')}
         >
           <Icon name="delete-bin" className="h-3.5 w-3.5" />
         </button>
-      </div>
-
-      <span className="typography-micro text-muted-foreground">{typeLabel}</span>
-    </li>
+      )}
+    >
+      {expanded ? (
+        // Editable on purpose. A memory worded badly enough to mislead should
+        // be fixable where it is read; deleting it and hoping the agent learns
+        // it again, better, is not a repair.
+        <div className="flex flex-col gap-1">
+          <Input
+            value={titleDraft}
+            onChange={(event) => setTitleDraft(event.target.value.slice(0, AGENT_MEMORY_TITLE_MAX_LENGTH))}
+            onBlur={commit}
+            aria-label={t('rightSidebar.contextNotesTodo.memory.actions.editTitle')}
+            className="h-7 typography-ui-label"
+          />
+          <Textarea
+            simple
+            rows={Math.min(20, Math.max(3, bodyDraft.split('\n').length + 1))}
+            value={bodyDraft}
+            onChange={(event) => setBodyDraft(event.target.value.slice(0, AGENT_MEMORY_BODY_MAX_LENGTH))}
+            onBlur={commit}
+            aria-label={t('rightSidebar.contextNotesTodo.memory.actions.editBody')}
+            className="min-h-0 w-full resize-none bg-transparent p-0 typography-meta leading-normal text-muted-foreground focus-visible:outline-none focus-visible:ring-0"
+          />
+        </div>
+      ) : (
+        <>
+          <span className="block min-w-0 truncate typography-ui-label text-foreground">{entry.title}</span>
+          <p className="line-clamp-2 whitespace-pre-wrap break-words typography-meta text-muted-foreground">
+            {entry.body}
+          </p>
+        </>
+      )}
+    </KnowledgeCard>
   );
 };
 
@@ -105,6 +151,7 @@ export const MemorySection: React.FC<{
   const globalFailed = useAgentMemoryStore((state) => state.globalFailed);
   const projectFailed = useAgentMemoryStore((state) => state.projectFailed);
   const deleteEntry = useAgentMemoryStore((state) => state.deleteEntry);
+  const saveEntry = useAgentMemoryStore((state) => state.saveEntry);
   const markViewed = useUIStore((state) => state.markAgentMemoryViewed);
 
   const entries = scope === 'global' ? globalEntries : projectEntries;
@@ -144,6 +191,16 @@ export const MemorySection: React.FC<{
       );
     }
   }, [deleteEntry, scope, t]);
+
+  const handleSave = React.useCallback(async (memoryId: string, patch: { title?: string; body?: string }) => {
+    if (!await saveEntry(scope, memoryId, patch)) {
+      const detail = useAgentMemoryStore.getState().error;
+      toast.error(
+        t('rightSidebar.contextNotesTodo.memory.toast.saveFailed'),
+        detail ? { description: detail } : undefined,
+      );
+    }
+  }, [saveEntry, scope, t]);
 
   const scopeOptions: Array<{ id: AgentMemoryScope; label: string; count: number }> = [
     { id: 'project', label: t('rightSidebar.contextNotesTodo.memory.scope.project'), count: projectEntries.length },
@@ -197,6 +254,7 @@ export const MemorySection: React.FC<{
               badge={classifyMemory(entry, baseline)}
               expanded={expandedId === entry.id}
               onToggleExpanded={() => setExpandedId(expandedId === entry.id ? null : entry.id)}
+              onSave={(patch) => void handleSave(entry.id, patch)}
               onDelete={() => void handleDelete(entry.id)}
             />
           ))}

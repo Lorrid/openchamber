@@ -27,11 +27,22 @@ interface MemoryReadResult {
  */
 let readImpl: () => Promise<MemoryReadResult>;
 let deleteImpl: () => Promise<void>;
+let updateImpl: (memoryId: string, patch: Record<string, unknown>) => Promise<AgentMemoryEntry>;
+let lastPatch: Record<string, unknown> | null = null;
 
 mock.module('@/lib/agentMemoryApi', () => ({
   AgentMemoryDisabledError,
   fetchAgentMemory: () => readImpl(),
   deleteAgentMemory: () => deleteImpl(),
+  updateAgentMemory: (
+    _scope: string,
+    _projectPath: string | null,
+    memoryId: string,
+    patch: Record<string, unknown>,
+  ) => {
+    lastPatch = patch;
+    return updateImpl(memoryId, patch);
+  },
 }));
 
 const { useAgentMemoryStore } = await import('./useAgentMemoryStore');
@@ -45,6 +56,8 @@ beforeEach(() => {
     projectFailed: false,
   });
   deleteImpl = async () => undefined;
+  updateImpl = async (memoryId, patch) => ({ ...entry({ id: memoryId }), ...patch });
+  lastPatch = null;
 });
 
 afterEach(() => {
@@ -134,3 +147,34 @@ describe('delete', () => {
   });
 });
 
+
+describe('user corrections', () => {
+  test('sends only what changed and adopts the saved entry', async () => {
+    await useAgentMemoryStore.getState().load('/tmp/project');
+
+    const ok = await useAgentMemoryStore.getState().saveEntry('project', 'p1', { body: 'Reworded.' });
+
+    expect(ok).toBe(true);
+    expect(lastPatch).toEqual({ body: 'Reworded.' });
+    expect(useAgentMemoryStore.getState().project[0].body).toBe('Reworded.');
+  });
+
+  test('a failed save leaves the entry as it was', async () => {
+    await useAgentMemoryStore.getState().load('/tmp/project');
+    updateImpl = async () => { throw new Error('offline'); };
+
+    const ok = await useAgentMemoryStore.getState().saveEntry('project', 'p1', { body: 'Reworded.' });
+
+    expect(ok).toBe(false);
+    expect(useAgentMemoryStore.getState().project[0].body).toBe('Tests run with bun test.');
+    expect(useAgentMemoryStore.getState().error).toBe('offline');
+  });
+
+  test('touches only the scope it was given', async () => {
+    await useAgentMemoryStore.getState().load('/tmp/project');
+
+    await useAgentMemoryStore.getState().saveEntry('project', 'p1', { title: 'Clearer' });
+
+    expect(useAgentMemoryStore.getState().global[0].title).toBe('About user');
+  });
+});

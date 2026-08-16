@@ -303,3 +303,42 @@ describe('restated duplicates', () => {
     expect(result.entry.body).toBe('Corrected body.');
   });
 });
+
+describe('user corrections', () => {
+  test('rewrites the wording without changing identity', async () => {
+    const { entry } = await runtime.create(PROJECT, { title: 'Vague', body: 'Original.' });
+    await new Promise((resolve) => setTimeout(resolve, 2));
+
+    const result = await runtime.update(PROJECT, entry.id, { title: 'Clear', body: 'Reworded.' });
+
+    expect(result.entry.id).toBe(entry.id);
+    expect(result.entry.createdAt).toBe(entry.createdAt);
+    expect(result.entry.updatedAt).toBeGreaterThan(entry.updatedAt);
+    expect(result.entry.title).toBe('Clear');
+  });
+
+  test('patches only the named fields', async () => {
+    const { entry } = await runtime.create(PROJECT, { title: 'Kept', body: 'Original.' });
+
+    const result = await runtime.update(PROJECT, entry.id, { body: 'Reworded.' });
+
+    expect(result.entry.title).toBe('Kept');
+  });
+
+  test('refuses to empty a field', async () => {
+    const { entry } = await runtime.create(PROJECT, { title: 'T', body: 'b' });
+
+    await expect(runtime.update(PROJECT, entry.id, { title: '   ' })).rejects.toThrow('title is required');
+    await expect(runtime.update(PROJECT, entry.id, { body: '   ' })).rejects.toThrow('body is required');
+  });
+
+  test('rejects an empty patch', async () => {
+    const { entry } = await runtime.create(PROJECT, { title: 'T', body: 'b' });
+
+    await expect(runtime.update(PROJECT, entry.id, {})).rejects.toThrow('title, body or type is required');
+  });
+
+  test('an unknown id is reported, not invented', async () => {
+    expect(await runtime.update(PROJECT, 'absent', { body: 'x' })).toBeNull();
+  });
+});

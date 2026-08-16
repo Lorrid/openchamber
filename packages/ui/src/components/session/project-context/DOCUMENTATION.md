@@ -12,7 +12,8 @@ drawer.
 | `NotesSection.tsx` | note composer, note list, per-note edit/pin/delete |
 | `TodosSection.tsx` | todo list, add/toggle/delete/clear, drag reorder, list resize |
 | `PlansSection.tsx` | plan list, import, pin, delete, open |
-| `MemorySection.tsx` | agent memory list, project/global scope switch, new/changed badges, forget |
+| `MemorySection.tsx` | agent memory list, project/global scope switch, new/changed badges, edit, forget |
+| `KnowledgeCard.tsx` | the shared card shell and expand interaction every entry list uses |
 | `useProjectTodoSend.ts` | sending a todo to a current/new/worktree session |
 
 ## Layout
@@ -32,6 +33,18 @@ that division would hurt — you do not always remember whether something was
 written as a note or lives in a plan — so each sidebar entry carries its own
 match count.
 
+## One card, one interaction
+
+Every entry list renders `KnowledgeCard`. Notes and memories had drifted into
+two different-looking rows in the same panel — one a bare block of text opened by
+clicking the text, the other a bordered card opened by a chevron — which is the
+kind of split that makes a panel feel unfinished regardless of how either half
+behaves.
+
+A collapsed card opens on a click anywhere on it. An expanded card closes only
+through its collapse action, because its body is editable and a stray click in
+the text must not throw the editor away.
+
 ## Memory is not a fifth kind of note
 
 The first four tabs hold what the user wrote. Memory holds what the **agent**
@@ -42,9 +55,10 @@ the user's notes.
 
 Two consequences shape this tab:
 
-- **Rows are read-only text.** The useful action on someone else's claim is to
-  forget it, not to rewrite it into something the agent will contradict next
-  session.
+- **Entries are editable.** A memory worded badly enough to mislead should be
+  fixable where it is read; deleting it and hoping the agent learns it again,
+  better, is not a repair. The agent rewrites by saving the same memory again,
+  so `PATCH` exists for the panel alone.
 - **Nothing gates the agent, and nothing asks the user to click.** An earlier
   version had a confirm button. It was theatre: the agent already had the
   memory whether or not the button was pressed, so the click bought the user
