@@ -707,7 +707,7 @@ function App({ apis }: AppProps) {
   // Loaded here rather than by the Memory tab: the session index is built from
   // this snapshot, so leaving it to the panel meant a user who never opened
   // Project notes sent every message with no memory index at all.
-  useAgentMemorySync();
+  useAgentMemorySync(currentDirectory || null);
   usePwaInstallPrompt();
 
   useWindowTitle();

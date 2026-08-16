@@ -13,7 +13,6 @@
 
 import React from 'react';
 
-import { useEffectiveDirectory } from '@/hooks/useEffectiveDirectory';
 import { resolveProjectForSessionDirectory } from '@/lib/projectResolution';
 import { subscribeOpenchamberEvents } from '@/lib/openchamberEvents';
 import { useAgentMemoryStore } from '@/stores/useAgentMemoryStore';
@@ -21,11 +20,16 @@ import { useProjectsStore } from '@/stores/useProjectsStore';
 import { useSessionUIStore } from '@/sync/session-ui-store';
 import { useUIStore } from '@/stores/useUIStore';
 
-export const useAgentMemorySync = (): void => {
+/**
+ * The directory is a parameter rather than read from `useEffectiveDirectory`,
+ * because this runs above `SyncProvider` — that hook reads the sync context and
+ * throws outside it, which took the whole app down with a blank window.
+ */
+export const useAgentMemorySync = (directory: string | null): void => {
   const enabled = useUIStore((state) => state.agentMemoryToolEnabled);
   const projects = useProjectsStore((state) => state.projects);
   const availableWorktreesByProject = useSessionUIStore((state) => state.availableWorktreesByProject);
-  const effectiveDirectory = useEffectiveDirectory() ?? '';
+  const effectiveDirectory = directory ?? '';
   const load = useAgentMemoryStore((state) => state.load);
 
   const projectPath = React.useMemo(() => {
