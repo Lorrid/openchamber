@@ -17,14 +17,17 @@ drawer.
 
 ## Layout
 
-A section sidebar on the left, content on the right — the same split the files
-surface uses. The sections were a horizontal tab strip until four of them stopped
+Content on the left, a section sidebar on the right with a drag-to-resize edge —
+the same arrangement the files surface uses, so the two panels do not disagree
+about where navigation lives. The sections were a horizontal tab strip until four of them stopped
 fitting: a strip has one line of width to divide, and each section added took
 width from the rest, while a vertical list grows downwards where there is room.
 The surface's default width matches the files surface for the same reason; at a
 third of the window the content column is too narrow to read a note in.
 
-Search stays above both columns. Sections divide, and search is the one thing
+Search shares the title row rather than owning one of its own: it filters what
+is already on screen, and a full-width field read as the panel's primary control.
+It stays above both columns. Sections divide, and search is the one thing
 that division would hurt — you do not always remember whether something was
 written as a note or lives in a plan — so each sidebar entry carries its own
 match count.

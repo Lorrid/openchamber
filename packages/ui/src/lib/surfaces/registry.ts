@@ -109,7 +109,7 @@ export const CONTEXT_SURFACES: readonly ContextSurfaceDescriptor[] = [
     // narrow to read a note in.
     defaultWidthFraction: 3 / 5,
     mode: 'notes',
-    icon: 'sticky-note',
+    icon: 'book-marked',
     labelKey: 'contextRail.surface.notes',
     availability: 'always',
   },

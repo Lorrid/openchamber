@@ -33,6 +33,15 @@ type ProjectContextTab = 'notes' | 'todos' | 'plans' | 'memory';
 
 const TAB_ORDER: ProjectContextTab[] = ['notes', 'todos', 'plans', 'memory'];
 
+/** Wide enough for the longest section label, narrow enough to leave the
+    content column usable in a half-width panel. */
+const SIDEBAR_MIN_WIDTH = 120;
+const SIDEBAR_MAX_WIDTH = 320;
+
+const clampSidebarWidth = (width: number): number => (
+  Math.min(SIDEBAR_MAX_WIDTH, Math.max(SIDEBAR_MIN_WIDTH, Math.round(width)))
+);
+
 const sortTodosWithCompletedLast = (items: ProjectTodoItem[]): ProjectTodoItem[] => [
   ...items.filter((todo) => !todo.completed),
   ...items.filter((todo) => todo.completed),
@@ -140,6 +149,43 @@ export const ProjectNotesTodoPanel: React.FC<ProjectNotesTodoPanelProps> = ({
     [globalMemory, globalViewedAt, projectMemory, projectViewedAt],
   );
 
+  const storedSidebarWidth = useUIStore((state) => state.projectContextSidebarWidth);
+  const setSidebarWidth = useUIStore((state) => state.setProjectContextSidebarWidth);
+  const [isResizing, setIsResizing] = React.useState(false);
+  // Held locally while dragging so every pointer move does not write through
+  // the persisted store, then committed once on release.
+  const [draggedWidth, setDraggedWidth] = React.useState<number | null>(null);
+  const sidebarWidth = clampSidebarWidth(draggedWidth ?? storedSidebarWidth);
+
+  const handleResizeStart = React.useCallback((event: React.PointerEvent<HTMLDivElement>) => {
+    event.currentTarget.setPointerCapture(event.pointerId);
+    setIsResizing(true);
+    setDraggedWidth(sidebarWidth);
+  }, [sidebarWidth]);
+
+  const handleResizeMove = React.useCallback((event: React.PointerEvent<HTMLDivElement>) => {
+    if (!event.currentTarget.hasPointerCapture(event.pointerId)) {
+      return;
+    }
+    // The sidebar is on the right, so dragging its left edge leftwards widens
+    // it: the width is the distance from the pointer to the panel's edge.
+    const panelRight = event.currentTarget.closest('nav')?.getBoundingClientRect().right ?? 0;
+    setDraggedWidth(clampSidebarWidth(panelRight - event.clientX));
+  }, []);
+
+  const handleResizeEnd = React.useCallback((event: React.PointerEvent<HTMLDivElement>) => {
+    if (event.currentTarget.hasPointerCapture(event.pointerId)) {
+      event.currentTarget.releasePointerCapture(event.pointerId);
+    }
+    setIsResizing(false);
+    setDraggedWidth((current) => {
+      if (current !== null) {
+        setSidebarWidth(clampSidebarWidth(current));
+      }
+      return null;
+    });
+  }, [setSidebarWidth]);
+
   const send = useProjectTodoSend({ projectRef, canCreateWorktree, onActionComplete });
 
   React.useEffect(() => {
@@ -227,7 +273,7 @@ export const ProjectNotesTodoPanel: React.FC<ProjectNotesTodoPanelProps> = ({
     },
     ...(memoryVisible ? [{
       id: 'memory' as const,
-      icon: 'book-3' as IconName,
+      icon: 'brain-4' as IconName,
       label: t('rightSidebar.contextNotesTodo.tabs.memory'),
       // The new/changed count replaces the total when there is anything the
       // user has not seen: what the agent stored without asking is the number
@@ -254,15 +300,18 @@ export const ProjectNotesTodoPanel: React.FC<ProjectNotesTodoPanelProps> = ({
 
   return (
     <div className={cn('flex h-full min-h-0 w-full min-w-0 flex-col', className)}>
-      <div className="flex flex-shrink-0 flex-col gap-2 p-3 pb-2">
+      {/* Title and search share a row: search is a filter over what is already
+          on screen, not a heading, and a full-width field read as the panel's
+          primary control. */}
+      <div className="flex flex-shrink-0 items-center gap-2 p-3 pb-2">
         <h3
-          className="min-w-0 truncate typography-ui-label font-semibold text-foreground"
+          className="min-w-0 flex-1 truncate typography-ui-label font-semibold text-foreground"
           title={projectRef.path}
         >
           {projectTitle}
         </h3>
 
-        <div className="relative">
+        <div className="relative w-40 flex-shrink-0">
           <Icon
             name="search"
             className="pointer-events-none absolute left-2 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground"
@@ -288,39 +337,10 @@ export const ProjectNotesTodoPanel: React.FC<ProjectNotesTodoPanelProps> = ({
 
       </div>
 
-      {/* Sidebar and content, the same split the files surface uses. A
-          horizontal strip had to squeeze every label to fit four sections;
-          a vertical list grows downwards, where there is room to spare. */}
+      {/* Content first, sidebar on the right — the same order and the same
+          drag-to-resize edge the files surface uses, so the two panels do not
+          disagree about where navigation lives. */}
       <div className="flex min-h-0 flex-1">
-        <nav
-          className="flex w-[9.5rem] flex-shrink-0 flex-col gap-0.5 overflow-y-auto border-r border-[var(--interactive-border)] p-2"
-          aria-label={t('rightSidebar.contextNotesTodo.sections.label')}
-        >
-          {sections.map((section) => {
-            const isActive = activeTab === section.id;
-            return (
-              <button
-                key={section.id}
-                type="button"
-                onClick={() => setStoredTab(section.id)}
-                aria-current={isActive ? 'page' : undefined}
-                className={cn(
-                  'flex min-w-0 items-center gap-2 rounded-md px-2 py-1.5 text-left transition-colors',
-                  'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50',
-                  isActive
-                    ? 'bg-interactive-active text-foreground'
-                    : 'text-muted-foreground hover:bg-interactive-hover/50 hover:text-foreground',
-                )}
-                style={{ minHeight: 0 }}
-              >
-                <Icon name={section.icon} className="h-3.5 w-3.5 flex-shrink-0" />
-                <span className="min-w-0 flex-1 truncate typography-meta">{section.label}</span>
-                <span className="flex-shrink-0 typography-micro text-muted-foreground">{section.count}</span>
-              </button>
-            );
-          })}
-        </nav>
-
         <div className="min-h-0 min-w-0 flex-1 overflow-y-auto p-3">
         {activeTab === 'notes' ? (
           <NotesSection
@@ -358,6 +378,49 @@ export const ProjectNotesTodoPanel: React.FC<ProjectNotesTodoPanelProps> = ({
           />
         ) : null}
         </div>
+
+        <nav
+          className="relative flex flex-shrink-0 flex-col gap-0.5 overflow-y-auto border-l border-[var(--interactive-border)] p-2"
+          style={{ width: `${sidebarWidth}px` }}
+          aria-label={t('rightSidebar.contextNotesTodo.sections.label')}
+        >
+          <div
+            className={cn(
+              'absolute left-0 top-0 z-20 h-full w-[3px] cursor-col-resize transition-colors hover:bg-[var(--interactive-border)]/80',
+              isResizing && 'bg-[var(--interactive-border)]',
+            )}
+            onPointerDown={handleResizeStart}
+            onPointerMove={handleResizeMove}
+            onPointerUp={handleResizeEnd}
+            onPointerCancel={handleResizeEnd}
+            role="separator"
+            aria-orientation="vertical"
+            aria-label={t('rightSidebar.contextNotesTodo.sections.resize')}
+          />
+          {sections.map((section) => {
+            const isActive = activeTab === section.id;
+            return (
+              <button
+                key={section.id}
+                type="button"
+                onClick={() => setStoredTab(section.id)}
+                aria-current={isActive ? 'page' : undefined}
+                className={cn(
+                  'flex min-w-0 items-center gap-2 rounded-md px-2 py-1.5 text-left transition-colors',
+                  'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50',
+                  isActive
+                    ? 'bg-interactive-active text-foreground'
+                    : 'text-muted-foreground hover:bg-interactive-hover/50 hover:text-foreground',
+                )}
+                style={{ minHeight: 0 }}
+              >
+                <Icon name={section.icon} className="h-3.5 w-3.5 flex-shrink-0" />
+                <span className="min-w-0 flex-1 truncate typography-meta">{section.label}</span>
+                <span className="flex-shrink-0 typography-micro text-muted-foreground">{section.count}</span>
+              </button>
+            );
+          })}
+        </nav>
       </div>
 
       <TodoSendDialog

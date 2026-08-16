@@ -766,6 +766,8 @@ interface UIStore {
    * new/changed badges; there is no stored review state.
    */
   agentMemoryViewedAt: Record<string, number>;
+  /** Width of the project context panel's section sidebar, in pixels. */
+  projectContextSidebarWidth: number;
   /** Active tab of the project context panel (notes/todos/plans). */
   projectContextTab: string;
   inputSpellcheckEnabled: boolean;
@@ -943,6 +945,7 @@ interface UIStore {
   setAgentWebToolEnabled: (value: boolean) => void;
   setAgentMemoryToolEnabled: (value: boolean) => void;
   markAgentMemoryViewed: (key: string, viewedAt: number) => void;
+  setProjectContextSidebarWidth: (width: number) => void;
   setProjectContextTab: (value: string) => void;
   setInputSpellcheckEnabled: (value: boolean) => void;
   setWideChatLayoutEnabled: (value: boolean) => void;
@@ -1104,6 +1107,7 @@ export const useUIStore = create<UIStore>()(
         agentWebToolEnabled: true,
         agentMemoryToolEnabled: true,
         agentMemoryViewedAt: {},
+        projectContextSidebarWidth: 168,
         projectContextTab: 'notes',
         inputSpellcheckEnabled: false,
         wideChatLayoutEnabled: false,
@@ -2329,6 +2333,9 @@ export const useUIStore = create<UIStore>()(
         setAgentMemoryToolEnabled: (value) => {
           set({ agentMemoryToolEnabled: value });
         },
+        setProjectContextSidebarWidth: (width) => {
+          set({ projectContextSidebarWidth: width });
+        },
         markAgentMemoryViewed: (key, viewedAt) => {
           set((state) => ({
             // Never moves backwards: a stale unmount landing after a newer look
@@ -2722,6 +2729,7 @@ export const useUIStore = create<UIStore>()(
           agentWebToolEnabled: state.agentWebToolEnabled,
           agentMemoryToolEnabled: state.agentMemoryToolEnabled,
           agentMemoryViewedAt: state.agentMemoryViewedAt,
+          projectContextSidebarWidth: state.projectContextSidebarWidth,
           inputSpellcheckEnabled: state.inputSpellcheckEnabled,
           wideChatLayoutEnabled: state.wideChatLayoutEnabled,
           codeBlockLineWrap: state.codeBlockLineWrap,
