@@ -201,7 +201,7 @@ describe('update', () => {
 
   test('rejects an empty patch', async () => {
     const { entry } = await runtime.create(PROJECT, { title: 'T', body: 'b' });
-    await expect(runtime.update(PROJECT, entry.id, {})).rejects.toThrow('title, body or type is required');
+    await expect(runtime.update(PROJECT, entry.id, {})).rejects.toThrow('title, body, type or reviewed is required');
   });
 
   test('rejects blanking a field', async () => {
@@ -301,5 +301,116 @@ describe('formatMemoryIndex', () => {
   test('warns that memory can be stale', () => {
     const text = formatMemoryIndex({ globalEntries: [entry()], projectEntries: [] });
     expect(text).toContain('Verify anything it says');
+  });
+});
+
+describe('restated duplicates', () => {
+  test('a reworded restatement replaces the entry instead of adding a second', async () => {
+    await runtime.create(PROJECT, {
+      title: 'Run UI tests per file',
+      body: 'UI tests must run one file at a time because module mocks leak between files.',
+    });
+
+    const result = await runtime.create(PROJECT, {
+      title: 'UI tests run one file at a time',
+      body: 'Because module mocks leak between files, UI tests must run per file.',
+    });
+
+    expect(result.replaced).toBe(true);
+    expect(result.entries).toHaveLength(1);
+    expect(result.entry.title).toBe('UI tests run one file at a time');
+  });
+
+  test('keeps entries that merely share vocabulary', async () => {
+    await runtime.create(PROJECT, {
+      title: 'Package manager',
+      body: 'This project installs dependencies with bun install.',
+    });
+
+    const result = await runtime.create(PROJECT, {
+      title: 'Test runner',
+      body: 'This project executes its unit suites through vitest.',
+    });
+
+    expect(result.replaced).toBe(false);
+    expect(result.entries).toHaveLength(2);
+  });
+
+  test('short entries fall back to exact-title matching', async () => {
+    await runtime.create(PROJECT, { title: 'Runtime', body: 'Use bun.' });
+    const result = await runtime.create(PROJECT, { title: 'Bundler', body: 'Use vite.' });
+
+    expect(result.replaced).toBe(false);
+    expect(result.entries).toHaveLength(2);
+  });
+
+  test('a full store can still correct an entry it already holds', async () => {
+    for (let index = 0; index < 60; index += 1) {
+      await runtime.create(GLOBAL, { title: `Entry ${index}`, body: `Body number ${index}.` });
+    }
+    await expect(runtime.create(GLOBAL, { title: 'One more', body: 'Overflows the store.' }))
+      .rejects.toThrow('at most 60 entries');
+
+    const result = await runtime.create(GLOBAL, { title: 'Entry 7', body: 'Corrected body.' });
+
+    expect(result.replaced).toBe(true);
+    expect(result.entries).toHaveLength(60);
+    expect(result.entry.body).toBe('Corrected body.');
+  });
+});
+
+describe('review flag', () => {
+  test('a new entry starts unreviewed', async () => {
+    const { entry } = await runtime.create(PROJECT, { title: 'Fresh', body: 'Written by the agent.' });
+    expect(entry.reviewed).toBe(false);
+  });
+
+  test('marking reviewed leaves the wording untouched', async () => {
+    const { entry } = await runtime.create(PROJECT, { title: 'Fresh', body: 'Written by the agent.' });
+    const result = await runtime.update(PROJECT, entry.id, { reviewed: true });
+
+    expect(result.entry.reviewed).toBe(true);
+    expect(result.entry.body).toBe('Written by the agent.');
+    expect((await runtime.read(PROJECT)).entries[0].reviewed).toBe(true);
+  });
+
+  test('a rewrite drops an approved entry back to unreviewed', async () => {
+    const { entry } = await runtime.create(PROJECT, { title: 'Fresh', body: 'Original claim.' });
+    await runtime.update(PROJECT, entry.id, { reviewed: true });
+
+    const result = await runtime.update(PROJECT, entry.id, { body: 'Something else entirely.' });
+    expect(result.entry.reviewed).toBe(false);
+  });
+
+  test('an editor that owns the approval keeps it while rewriting', async () => {
+    const { entry } = await runtime.create(PROJECT, { title: 'Fresh', body: 'Original claim.' });
+    const result = await runtime.update(PROJECT, entry.id, { body: 'User rewrote this.', reviewed: true });
+
+    expect(result.entry.reviewed).toBe(true);
+  });
+
+  test('a restatement of an approved entry needs approval again', async () => {
+    const { entry } = await runtime.create(PROJECT, {
+      title: 'Run UI tests per file',
+      body: 'UI tests must run one file at a time because module mocks leak between files.',
+    });
+    await runtime.update(PROJECT, entry.id, { reviewed: true });
+
+    const result = await runtime.create(PROJECT, {
+      title: 'UI tests run one file at a time',
+      body: 'Because module mocks leak between files, UI tests must run per file.',
+    });
+
+    expect(result.replaced).toBe(true);
+    expect(result.entry.reviewed).toBe(false);
+  });
+
+  test('stored entries without the flag read as unreviewed', async () => {
+    await writeJson(projectPath(), {
+      version: 1,
+      entries: [{ id: 'legacy', title: 'Old', body: 'Stored before the flag existed.', type: 'fact', createdAt: 1, updatedAt: 1 }],
+    });
+
+    expect((await runtime.read(PROJECT)).entries[0].reviewed).toBe(false);
   });
 });

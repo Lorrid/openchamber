@@ -91,6 +91,8 @@ import { createPermissionAutoAcceptRuntime } from './lib/permission-auto-accept/
 import { createGracefulShutdownRuntime } from './lib/opencode/shutdown-runtime.js';
 import { createProjectConfigRuntime } from './lib/projects/project-config.js';
 import { createProjectContextRuntime } from './lib/project-context/runtime.js';
+import { createAgentMemoryRuntime } from './lib/agent-memory/runtime.js';
+import { createAgentMemoryActions } from './lib/agent-memory/actions.js';
 import { createRemoteClientAuthRuntime } from './lib/client-auth/remote-clients.js';
 import { createClientPairingRuntime } from './lib/client-auth/pairing.js';
 import { attachRealtimeProxy } from './lib/realtime-proxy.js';
@@ -105,6 +107,7 @@ import { createSystemPromptRuntime } from './lib/system-prompt/runtime.js';
 import { createOpenChamberSessionService } from './lib/openchamber-sessions/routes.js';
 import { createScheduledTaskService } from './lib/scheduled-tasks/service.js';
 import { createOpenChamberControlService } from './lib/openchamber-control/service.js';
+import { OpenChamberControlError } from './lib/openchamber-control/error.js';
 import webPush from 'web-push';
 
 const __filename = fileURLToPath(import.meta.url);
@@ -478,6 +481,23 @@ const projectContextRuntime = createProjectContextRuntime({
   path,
   projectsDirPath: OPENCHAMBER_PROJECTS_CONFIG_DIR,
 });
+
+const agentMemoryRuntime = createAgentMemoryRuntime({
+  fsPromises,
+  path,
+  projectsDirPath: OPENCHAMBER_PROJECTS_CONFIG_DIR,
+  userConfigRoot: OPENCHAMBER_USER_CONFIG_ROOT,
+});
+
+/**
+ * One switch for everything memory-related. It gates the tool, these routes,
+ * and the session index alike, so turning memory off leaves nothing behind
+ * that still reads or writes the store.
+ */
+const isAgentMemoryEnabled = async () => {
+  const settings = await readSettingsFromDiskMigrated().catch(() => null);
+  return settings?.agentMemoryToolEnabled !== false;
+};
 
 // HMR-persistent state via globalThis
 // These values survive Vite HMR reloads to prevent zombie OpenCode processes
@@ -1107,8 +1127,9 @@ const openCodeLifecycleRuntime = createOpenCodeLifecycleRuntime({
     // injected while at least one of them is on.
     const includeControl = settings?.agentControlToolEnabled !== false;
     const includeWeb = settings?.agentWebToolEnabled !== false;
-    const managedEnv = includeControl || includeWeb
-      ? await (agentToolRuntime?.prepareManagedOpenCodeEnv({ includeControl, includeWeb }) || {})
+    const includeMemory = settings?.agentMemoryToolEnabled !== false;
+    const managedEnv = includeControl || includeWeb || includeMemory
+      ? await (agentToolRuntime?.prepareManagedOpenCodeEnv({ includeControl, includeWeb, includeMemory }) || {})
       : {};
     if (settings?.optimizeSystemPrompt !== true) return managedEnv;
 
@@ -1241,6 +1262,10 @@ const openChamberControlService = createOpenChamberControlService({
   sessionService: openChamberSessionService,
   scheduledTaskService,
   browserControl: browserControlBroker,
+  agentMemoryActions: createAgentMemoryActions({
+    agentMemoryRuntime,
+    createError: (message, status) => new OpenChamberControlError(message, status),
+  }),
 });
 
 const ensureGlobalWatcherStarted = async () => {
@@ -1752,6 +1777,8 @@ async function main(options = {}) {
     buildAugmentedPath,
     projectConfigRuntime,
     projectContextRuntime,
+    agentMemoryRuntime,
+    isAgentMemoryEnabled,
     scheduledTasksRuntime,
     scheduledTaskService,
     openChamberSessionService,

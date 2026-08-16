@@ -18,6 +18,15 @@
  * This is NOT the notes surface. Notes are what the user writes for themselves
  * and hands to the agent by pinning; memory is what the agent writes for
  * itself. Keeping them apart keeps an agent mistake out of the user's notes.
+ *
+ * Because the agent writes here unprompted, two invariants guard the store:
+ *
+ * - **Restatements replace.** A memory the agent phrases differently the second
+ *   time supersedes the first rather than sitting beside it, so the store
+ *   cannot fill with variants of one fact that later disagree.
+ * - **New entries are unreviewed.** Every entry carries `reviewed`, false until
+ *   the user says otherwise, so what the agent decided to keep is visible
+ *   rather than silently in effect. Rewriting an entry revokes that approval.
  */
 
 const MEMORY_VERSION = 1;
@@ -37,6 +46,79 @@ const PROJECT_MEMORY_MAX_ITEMS = 200;
 const MEMORY_TYPES = new Set(['fact', 'preference', 'reference']);
 
 const PROJECT_ID_PATTERN = /^[a-zA-Z0-9._:-]+$/;
+
+/**
+ * Two entries are the same memory when this much of the incoming one is already
+ * in the stored one. Set high on purpose: merging two genuinely different
+ * memories destroys one of them silently, which is far worse than keeping a
+ * near-duplicate the user can see and delete.
+ */
+const DUPLICATE_OVERLAP_THRESHOLD = 0.75;
+
+/**
+ * Below this many meaningful words, overlap is noise — "use bun" and "use npm"
+ * share half their tokens. Short entries fall back to exact-title matching.
+ */
+const DUPLICATE_MIN_TOKENS = 4;
+
+/**
+ * Words carried by almost every sentence, so their overlap says nothing about
+ * whether two memories mean the same thing.
+ */
+const STOP_WORDS = new Set([
+  'a', 'an', 'and', 'are', 'as', 'at', 'be', 'but', 'by', 'for', 'from', 'has',
+  'have', 'in', 'into', 'is', 'it', 'its', 'not', 'of', 'on', 'or', 'that',
+  'the', 'their', 'them', 'they', 'this', 'to', 'was', 'were', 'when', 'with',
+]);
+
+const tokenize = (value) => {
+  const tokens = new Set();
+  for (const raw of String(value).toLowerCase().split(/[^\p{L}\p{N}]+/u)) {
+    if (raw.length < 3 || STOP_WORDS.has(raw)) continue;
+    tokens.add(raw);
+  }
+  return tokens;
+};
+
+/** How much of `incoming` is already present in `existing`, in `[0, 1]`. */
+const overlapFraction = (incoming, existing) => {
+  if (incoming.size === 0) return 0;
+  let shared = 0;
+  for (const token of incoming) {
+    if (existing.has(token)) shared += 1;
+  }
+  return shared / incoming.size;
+};
+
+/**
+ * The stored entry a new one should replace, or null for a genuinely new
+ * memory.
+ *
+ * Exact title match alone is not enough: an agent that re-learns the same fact
+ * phrases it differently each time ("run UI tests per file" / "UI tests must be
+ * run one file at a time"), and storing both leaves the two free to drift apart
+ * until they contradict each other. Comparing the wording catches the restated
+ * duplicate that the title check misses.
+ */
+const findSupersededEntry = (entries, title, body) => {
+  const lowerTitle = title.toLowerCase();
+  const exact = entries.find((entry) => entry.title.toLowerCase() === lowerTitle);
+  if (exact) return exact;
+
+  const incoming = tokenize(`${title} ${body}`);
+  if (incoming.size < DUPLICATE_MIN_TOKENS) return null;
+
+  let best = null;
+  let bestScore = 0;
+  for (const entry of entries) {
+    const score = overlapFraction(incoming, tokenize(`${entry.title} ${entry.body}`));
+    if (score >= DUPLICATE_OVERLAP_THRESHOLD && score > bestScore) {
+      best = entry;
+      bestScore = score;
+    }
+  }
+  return best;
+};
 
 const asNonEmptyString = (value) => {
   if (typeof value !== 'string') return null;
@@ -77,6 +159,9 @@ const sanitizeEntries = (value, now, scope) => {
       type: MEMORY_TYPES.has(entry.type) ? entry.type : 'fact',
       createdAt,
       updatedAt: Number.isFinite(entry.updatedAt) && entry.updatedAt >= 0 ? entry.updatedAt : createdAt,
+      // Anything without an explicit flag counts as unreviewed. Defaulting the
+      // other way would hide exactly the entries whose provenance is unclear.
+      reviewed: entry.reviewed === true,
       ...(sessionId ? { sessionId } : {}),
     });
   }
@@ -234,22 +319,33 @@ export const createAgentMemoryRuntime = (deps) => {
     return withWriteLock(resolved.key, async () => {
       const now = Date.now();
       const current = await read(target);
-      const limit = limitForScope(resolved.scope);
-      if (current.entries.length >= limit) {
-        throw new Error(`${resolved.scope} memory holds at most ${limit} entries`);
-      }
 
-      // Same title in the same scope is an update, not a second copy: an agent
-      // re-learning a fact each session would otherwise fill the store with
-      // near-duplicates and contradict itself.
-      const existing = current.entries.find(
-        (entry) => entry.title.toLowerCase() === title.toLowerCase(),
-      );
+      // A restatement of something already stored is an update, not a second
+      // copy: an agent re-learning a fact each session would otherwise fill the
+      // store with near-duplicates and contradict itself.
+      //
+      // Checked before the capacity limit, because replacing an entry does not
+      // grow the store — a full store must still be able to correct itself.
+      const existing = findSupersededEntry(current.entries, title, body);
       if (existing) {
-        const updated = { ...existing, body, updatedAt: now, ...(MEMORY_TYPES.has(value?.type) ? { type: value.type } : {}) };
+        const updated = {
+          ...existing,
+          title,
+          body,
+          updatedAt: now,
+          // The wording changed, so the user's earlier approval no longer
+          // covers what this entry now says.
+          reviewed: false,
+          ...(MEMORY_TYPES.has(value?.type) ? { type: value.type } : {}),
+        };
         const entries = current.entries.map((entry) => (entry.id === existing.id ? updated : entry));
         await write(resolved, entries);
         return { entry: updated, entries, replaced: true };
+      }
+
+      const limit = limitForScope(resolved.scope);
+      if (current.entries.length >= limit) {
+        throw new Error(`${resolved.scope} memory holds at most ${limit} entries`);
       }
 
       const sessionId = asNonEmptyString(value?.sessionId);
@@ -260,6 +356,7 @@ export const createAgentMemoryRuntime = (deps) => {
         type: MEMORY_TYPES.has(value?.type) ? value.type : 'fact',
         createdAt: now,
         updatedAt: now,
+        reviewed: false,
         ...(sessionId ? { sessionId } : {}),
       };
       const entries = [entry, ...current.entries];
@@ -276,8 +373,9 @@ export const createAgentMemoryRuntime = (deps) => {
     const hasTitle = typeof patch?.title === 'string';
     const hasBody = typeof patch?.body === 'string';
     const hasType = MEMORY_TYPES.has(patch?.type);
-    if (!hasTitle && !hasBody && !hasType) {
-      throw new Error('title, body or type is required');
+    const hasReviewed = typeof patch?.reviewed === 'boolean';
+    if (!hasTitle && !hasBody && !hasType && !hasReviewed) {
+      throw new Error('title, body, type or reviewed is required');
     }
     const title = hasTitle ? clampLength(patch.title, MEMORY_TITLE_MAX_LENGTH).trim() : null;
     const body = hasBody ? clampLength(patch.body, MEMORY_BODY_MAX_LENGTH).trim() : null;
@@ -291,11 +389,19 @@ export const createAgentMemoryRuntime = (deps) => {
         return null;
       }
 
+      // Rewritten wording drops back to unreviewed, because the user's earlier
+      // approval was of the old text. A caller that knows better — the panel,
+      // where the user is the one doing the editing — says so explicitly.
+      const reviewed = hasReviewed
+        ? patch.reviewed
+        : (hasTitle || hasBody ? false : existing.reviewed);
+
       const updated = {
         ...existing,
         ...(hasTitle ? { title } : {}),
         ...(hasBody ? { body } : {}),
         ...(hasType ? { type: patch.type } : {}),
+        reviewed,
         updatedAt: Date.now(),
       };
       const entries = current.entries.map((entry) => (entry.id === id ? updated : entry));

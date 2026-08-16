@@ -53,8 +53,30 @@ export const OPENCHAMBER_WEB_ACTIONS = Object.freeze(
   OPENCHAMBER_WEB_ACTION_DEFINITIONS.map(({ action }) => action),
 );
 
+/**
+ * Memory is its own tool for the same reason web is: remembering across
+ * sessions is a distinct intent from controlling one, and a shared description
+ * would blur both. It also has to switch off cleanly and completely, which a
+ * shared schema cannot do.
+ *
+ * The session already carries an index of stored titles, so the descriptions
+ * push the model toward reading one entry it can already see rather than
+ * listing everything again.
+ */
+export const OPENCHAMBER_MEMORY_ACTION_DEFINITIONS = Object.freeze([
+  { action: 'memory.read', title: 'Read a stored memory', description: 'Read the full text of one memory listed in the session index; requires title or memoryId, and scope global or project' },
+  { action: 'memory.list', title: 'List stored memories', description: 'List stored memory titles when the session index is missing or stale; scope is global, project, or both (default)' },
+  { action: 'memory.save', title: 'Remember something', description: 'Store a durable fact, preference, or reference; requires title and body, plus scope global (about the user) or project (about this codebase). Restating something already stored updates it. Do not store secrets, one-off task state, or anything the user asked you not to keep' },
+  { action: 'memory.delete', title: 'Forget a memory', description: 'Delete a memory that turned out to be wrong or obsolete; requires memoryId and scope' },
+]);
+
+export const OPENCHAMBER_MEMORY_ACTIONS = Object.freeze(
+  OPENCHAMBER_MEMORY_ACTION_DEFINITIONS.map(({ action }) => action),
+);
+
 /** Everything the callback route will dispatch, whichever tool asked. */
 export const OPENCHAMBER_ALL_ACTIONS = Object.freeze([
   ...OPENCHAMBER_CONTROL_ACTIONS,
   ...OPENCHAMBER_WEB_ACTIONS,
+  ...OPENCHAMBER_MEMORY_ACTIONS,
 ]);

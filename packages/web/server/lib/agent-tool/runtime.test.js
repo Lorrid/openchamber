@@ -181,7 +181,7 @@ describe('managed agent tool runtime', () => {
 
   it('omits a tool the user turned off', async () => {
     const { runtime, dataDir } = await createRuntime();
-    await runtime.prepareManagedOpenCodeEnv({ includeControl: false, includeWeb: true });
+    await runtime.prepareManagedOpenCodeEnv({ includeControl: false, includeWeb: true, includeMemory: false });
     const pluginPath = path.join(dataDir, 'agent-tool', 'openchamber-plugin.js');
     const pluginModule = await import(`${pathToFileURL(pluginPath).href}?web=${Date.now()}`);
     const { tool } = await pluginModule.OpenChamberPlugin();
@@ -189,11 +189,46 @@ describe('managed agent tool runtime', () => {
     expect(Object.keys(tool)).toEqual(['openchamber_web']);
   });
 
+  it('exposes memory as its own tool carrying only its own inputs', async () => {
+    const { runtime, dataDir } = await createRuntime();
+    await runtime.prepareManagedOpenCodeEnv({ includeControl: true, includeWeb: false, includeMemory: true });
+    const pluginPath = path.join(dataDir, 'agent-tool', 'openchamber-plugin.js');
+    const pluginModule = await import(`${pathToFileURL(pluginPath).href}?memory=${Date.now()}`);
+    const { tool } = await pluginModule.OpenChamberPlugin();
+
+    expect(Object.keys(tool)).toEqual(['openchamber', 'openchamber_memory']);
+    expect(Object.keys(tool.openchamber_memory.args.parameters.properties).sort())
+      .toEqual(['body', 'memoryId', 'scope', 'title', 'type']);
+    // Memory inputs must not leak into the control tool's schema, which the
+    // model pays for on every unrelated call.
+    expect(Object.keys(tool.openchamber.args.parameters.properties)).not.toContain('memoryId');
+  });
+
+  it('omits memory entirely when the user turns it off', async () => {
+    const { runtime, dataDir } = await createRuntime();
+    await runtime.prepareManagedOpenCodeEnv({ includeControl: true, includeWeb: false, includeMemory: false });
+    const pluginPath = path.join(dataDir, 'agent-tool', 'openchamber-plugin.js');
+    const pluginModule = await import(`${pathToFileURL(pluginPath).href}?nomemory=${Date.now()}`);
+    const { tool } = await pluginModule.OpenChamberPlugin();
+
+    expect(Object.keys(tool)).toEqual(['openchamber']);
+  });
+
+  it('injects the plugin when memory is the only tool left on', async () => {
+    const { runtime, dataDir } = await createRuntime();
+    await runtime.prepareManagedOpenCodeEnv({ includeControl: false, includeWeb: false, includeMemory: true });
+    const pluginPath = path.join(dataDir, 'agent-tool', 'openchamber-plugin.js');
+    const pluginModule = await import(`${pathToFileURL(pluginPath).href}?onlymemory=${Date.now()}`);
+    const { tool } = await pluginModule.OpenChamberPlugin();
+
+    expect(Object.keys(tool)).toEqual(['openchamber_memory']);
+  });
+
   it('refuses to inject a plugin with no tools in it', async () => {
     const { runtime } = await createRuntime();
     let failed = false;
     try {
-      await runtime.prepareManagedOpenCodeEnv({ includeControl: false, includeWeb: false });
+      await runtime.prepareManagedOpenCodeEnv({ includeControl: false, includeWeb: false, includeMemory: false });
     } catch {
       failed = true;
     }
