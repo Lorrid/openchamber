@@ -50,8 +50,16 @@ export const buildMemoryIndexText = (selection: MemoryIndexSelection): string =>
   }
 
   return [
-    'You have stored memory from earlier sessions. Only the titles are listed;'
-      + ' read an entry with the openchamber_memory tool when it is relevant.',
+    'You have stored memory from earlier sessions. Only the titles are listed below.',
+    // The failure this exists to prevent: a title reads as a complete fact, so
+    // the entry is never opened. "Prefers Ukrainian" sounds self-explanatory
+    // and silently drops the condition that decides how to apply it.
+    'A title is an abbreviation, not the memory. Read the entry with the'
+      + ' openchamber_memory tool before you act on it: titles routinely leave out'
+      + ' the conditions, exceptions and reasons that decide how the memory'
+      + ' applies, and a title that looks self-explanatory is the most likely to'
+      + ' be hiding them. Read every title that could bear on the task at hand;'
+      + ' you need not read the ones unrelated to what you are doing.',
     // Stated every time on purpose: memory is the one context the agent has no
     // way to date-check, and acting on a stale note is the failure that costs
     // the user most.

@@ -66,6 +66,22 @@ describe('index text', () => {
       .toContain('Verify anything it says');
   });
 
+  test('tells the agent a title is not the memory', () => {
+    // The failure this guards: a title like "Prefers Ukrainian" reads as a
+    // complete fact, the entry is never opened, and the condition that decides
+    // how to apply it is silently lost.
+    const text = buildMemoryIndexText({ global: [entry()], project: [] });
+
+    expect(text).toContain('A title is an abbreviation, not the memory');
+    expect(text).toContain('before you act on it');
+  });
+
+  test('does not ask for every entry to be read regardless of the task', () => {
+    const text = buildMemoryIndexText({ global: [entry()], project: [] });
+
+    expect(text).toContain('could bear on the task at hand');
+  });
+
   test('an empty store produces no block at all', () => {
     expect(buildMemoryIndexText({ global: [], project: [] })).toBe('');
   });
