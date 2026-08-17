@@ -65,6 +65,11 @@ function fixture() {
   };
 }
 
+function writeFixtureFile(filePath, content, options) {
+  fs.writeFileSync(filePath, content, { mode: 0o644, ...options });
+  fs.chmodSync(filePath, options?.mode ?? 0o644);
+}
+
 function parse(value, directory) {
   return parseWorkspaceArtifact(value, {
     controlPlaneWorkspaceID: 'workspace-1',
@@ -81,7 +86,7 @@ describe('structured workspace artifacts', () => {
     const content = Buffer.from('hello from secure workspace\n');
     // The baseline stays the creation-time snapshot, so an add the user already applied
     // keeps appearing in later exports. Re-applying it must be a no-op, not a conflict.
-    fs.writeFileSync(path.join(data.directory, 'applied.txt'), content);
+    writeFixtureFile(path.join(data.directory, 'applied.txt'), content);
     const change = operation('add', null, fileEntry('applied.txt', content));
     const parsed = parse(artifact([change], [blob(content)], { targetDirectory: data.directory }), data.directory);
 
@@ -97,7 +102,7 @@ describe('structured workspace artifacts', () => {
     const data = fixture();
     const done = Buffer.from('already there\n');
     const fresh = Buffer.from('brand new\n');
-    fs.writeFileSync(path.join(data.directory, 'done.txt'), done);
+    writeFixtureFile(path.join(data.directory, 'done.txt'), done);
     const appliedChange = operation('add', null, fileEntry('done.txt', done));
     const pendingChange = operation('add', null, fileEntry('fresh.txt', fresh));
     const parsed = parse(artifact([appliedChange, pendingChange], [blob(done), blob(fresh)], { targetDirectory: data.directory }), data.directory);
@@ -111,7 +116,7 @@ describe('structured workspace artifacts', () => {
   it('still refuses when the host entry matches neither the baseline nor the result', async () => {
     const data = fixture();
     const content = Buffer.from('workspace version\n');
-    fs.writeFileSync(path.join(data.directory, 'contested.txt'), 'someone else wrote this\n');
+    writeFixtureFile(path.join(data.directory, 'contested.txt'), 'someone else wrote this\n');
     const change = operation('add', null, fileEntry('contested.txt', content));
     const parsed = parse(artifact([change], [blob(content)], { targetDirectory: data.directory }), data.directory);
 
@@ -124,8 +129,8 @@ describe('structured workspace artifacts', () => {
     const doneContent = Buffer.from('done\n');
     const freshContent = Buffer.from('fresh\n');
     const contestedContent = Buffer.from('expected\n');
-    fs.writeFileSync(path.join(data.directory, 'done.txt'), doneContent);
-    fs.writeFileSync(path.join(data.directory, 'contested.txt'), 'external edit\n');
+    writeFixtureFile(path.join(data.directory, 'done.txt'), doneContent);
+    writeFixtureFile(path.join(data.directory, 'contested.txt'), 'external edit\n');
     const done = operation('add', null, fileEntry('done.txt', doneContent));
     const fresh = operation('add', null, fileEntry('fresh.txt', freshContent));
     const contested = operation('add', null, fileEntry('contested.txt', contestedContent));
@@ -210,7 +215,7 @@ describe('structured workspace artifacts', () => {
     const data = fixture();
     const before = Buffer.from('removed');
     const after = Buffer.alloc(0);
-    fs.writeFileSync(path.join(data.directory, 'text.txt'), before);
+    writeFixtureFile(path.join(data.directory, 'text.txt'), before);
     const change = operation('modify', fileEntry('text.txt', before), fileEntry('text.txt', after), {
       textHunks: [{ id: 'delete-hunk', oldStart: 1, oldCount: 1, newStart: 1, newCount: 0, removed: ['removed'], added: [], contextHash }],
     });
@@ -265,10 +270,10 @@ describe('structured workspace artifacts', () => {
     const modeContent = Buffer.from('#!/bin/sh\n');
     const renameContent = Buffer.from('rename\n');
     const deletedContent = Buffer.from('delete\n');
-    fs.writeFileSync(path.join(data.directory, 'text.txt'), oldText);
-    fs.writeFileSync(path.join(data.directory, 'mode.sh'), modeContent, { mode: 0o644 });
-    fs.writeFileSync(path.join(data.directory, 'old-name'), renameContent);
-    fs.writeFileSync(path.join(data.directory, 'delete.txt'), deletedContent);
+    writeFixtureFile(path.join(data.directory, 'text.txt'), oldText);
+    writeFixtureFile(path.join(data.directory, 'mode.sh'), modeContent, { mode: 0o644 });
+    writeFixtureFile(path.join(data.directory, 'old-name'), renameContent);
+    writeFixtureFile(path.join(data.directory, 'delete.txt'), deletedContent);
     fs.symlinkSync('old-target', path.join(data.directory, 'link'));
     const linkMode = fs.lstatSync(path.join(data.directory, 'link')).mode & 0o7777;
     const oldLink = { path: 'link', type: 'symlink', mode: linkMode, target: 'old-target', hash: hash(Buffer.from('old-target')) };
@@ -307,7 +312,7 @@ describe('structured workspace artifacts', () => {
     const data = fixture();
     const before = Buffer.from('one\ntwo\nthree\n');
     const after = Buffer.from('ONE\ntwo\nTHREE\n');
-    fs.writeFileSync(path.join(data.directory, 'text.txt'), before);
+    writeFixtureFile(path.join(data.directory, 'text.txt'), before);
     const hunks = [
       { id: 'hunk-1', oldStart: 1, oldCount: 1, newStart: 1, newCount: 1, removed: ['one'], added: ['ONE'], contextHash: hash('a') },
       { id: 'hunk-2', oldStart: 3, oldCount: 1, newStart: 3, newCount: 1, removed: ['three'], added: ['THREE'], contextHash: hash('b') },
@@ -323,15 +328,15 @@ describe('structured workspace artifacts', () => {
     execFileSync('git', ['init', '--quiet'], { cwd: data.directory });
     const before = Buffer.from('old\n');
     const after = Buffer.from('new\n');
-    fs.writeFileSync(path.join(data.directory, 'tracked.txt'), before);
-    fs.writeFileSync(path.join(data.directory, 'dirty.txt'), 'unrelated dirty change\n');
+    writeFixtureFile(path.join(data.directory, 'tracked.txt'), before);
+    writeFixtureFile(path.join(data.directory, 'dirty.txt'), 'unrelated dirty change\n');
     const change = operation('modify', fileEntry('tracked.txt', before), fileEntry('tracked.txt', after));
     const parsed = parse(artifact([change], [blob(before), blob(after)], { targetDirectory: data.directory }), data.directory);
     await applyWorkspaceArtifact({ ...data, parsed, selections: [{ fileID: change.id }], checkOnly: false });
     expect(fs.readFileSync(path.join(data.directory, 'dirty.txt'), 'utf8')).toBe('unrelated dirty change\n');
 
     const conflictData = fixture();
-    fs.writeFileSync(path.join(conflictData.directory, 'tracked.txt'), 'concurrent\n');
+    writeFixtureFile(path.join(conflictData.directory, 'tracked.txt'), 'concurrent\n');
     const conflictParsed = parse(artifact([change], [blob(before), blob(after)], { targetDirectory: conflictData.directory }), conflictData.directory);
     await expect(applyWorkspaceArtifact({ ...conflictData, parsed: conflictParsed, selections: [{ fileID: change.id }], checkOnly: false })).rejects.toThrow(/conflicts/);
     expect(fs.readFileSync(path.join(conflictData.directory, 'tracked.txt'), 'utf8')).toBe('concurrent\n');
@@ -343,8 +348,8 @@ describe('structured workspace artifacts', () => {
     const newA = Buffer.from('new-a');
     const oldB = Buffer.from('old-b');
     const newB = Buffer.from('new-b');
-    fs.writeFileSync(path.join(data.directory, 'a'), oldA);
-    fs.writeFileSync(path.join(data.directory, 'b'), oldB);
+    writeFixtureFile(path.join(data.directory, 'a'), oldA);
+    writeFixtureFile(path.join(data.directory, 'b'), oldB);
     const files = [operation('modify', fileEntry('a', oldA), fileEntry('a', newA)), operation('modify', fileEntry('b', oldB), fileEntry('b', newB))];
     const parsed = parse(artifact(files, [oldA, newA, oldB, newB].map(blob), { targetDirectory: data.directory }), data.directory);
     await expect(applyWorkspaceArtifact({ ...data, parsed, selections: files.map((file) => ({ fileID: file.id })), checkOnly: false, beforeReplace: ({ index }) => { if (index === 1) throw new Error('injected failure'); } })).rejects.toThrow('injected failure');
@@ -356,8 +361,8 @@ describe('structured workspace artifacts', () => {
     const operationDirectory = path.join(recovery.transactionRoot, hash(canonicalDirectory), 'txn-crashed');
     const backups = path.join(operationDirectory, 'backups');
     fs.mkdirSync(backups, { recursive: true });
-    fs.writeFileSync(path.join(recovery.directory, 'a'), newA);
-    fs.writeFileSync(path.join(backups, '0'), oldA);
+    writeFixtureFile(path.join(recovery.directory, 'a'), newA);
+    writeFixtureFile(path.join(backups, '0'), oldA);
     const recoveryMode = fs.statSync(path.join(recovery.directory, 'a')).mode & 0o7777;
     fs.writeFileSync(path.join(operationDirectory, 'journal.json'), JSON.stringify({ version: 2, state: 'applying', directory: canonicalDirectory, backupDirectory: backups, records: [{ path: 'a', existed: true, backup: '0', touched: true, fingerprint: { type: 'file', mode: recoveryMode, size: oldA.length, hash: hash(oldA) }, finalFingerprint: { type: 'file', mode: recoveryMode, size: newA.length, hash: hash(newA) } }] }));
     const recoveryFile = operation('modify', fileEntry('a', oldA), fileEntry('a', newA));
@@ -370,7 +375,7 @@ describe('structured workspace artifacts', () => {
     const data = fixture();
     const before = Buffer.from('before');
     const after = Buffer.from('after');
-    fs.writeFileSync(path.join(data.directory, 'file'), before);
+    writeFixtureFile(path.join(data.directory, 'file'), before);
     const change = operation('modify', fileEntry('file', before), fileEntry('file', after));
     const parsed = parse(artifact([change], [blob(before), blob(after)], { targetDirectory: data.directory }), data.directory);
     await expect(applyWorkspaceArtifact({
@@ -378,7 +383,7 @@ describe('structured workspace artifacts', () => {
       parsed,
       selections: [{ fileID: change.id }],
       checkOnly: false,
-      beforeReplace: () => fs.writeFileSync(path.join(data.directory, 'file'), 'concurrent'),
+      beforeReplace: () => writeFixtureFile(path.join(data.directory, 'file'), 'concurrent'),
     })).rejects.toThrow(/changed before replacement/);
     expect(fs.readFileSync(path.join(data.directory, 'file'), 'utf8')).toBe('concurrent');
 
@@ -386,7 +391,7 @@ describe('structured workspace artifacts', () => {
     const outside = path.join(symlinkData.root, 'outside');
     fs.mkdirSync(path.join(symlinkData.directory, 'parent'));
     fs.mkdirSync(outside);
-    fs.writeFileSync(path.join(symlinkData.directory, 'parent/file'), before);
+    writeFixtureFile(path.join(symlinkData.directory, 'parent/file'), before);
     const nested = operation('modify', fileEntry('parent/file', before), fileEntry('parent/file', after));
     const nestedParsed = parse(artifact([nested], [blob(before), blob(after)], { targetDirectory: symlinkData.directory }), symlinkData.directory);
     await expect(applyWorkspaceArtifact({
@@ -413,7 +418,7 @@ describe('structured workspace artifacts', () => {
     const data = fixture();
     const before = Buffer.from('before');
     const after = Buffer.from('after');
-    fs.writeFileSync(path.join(data.directory, 'file'), before);
+    writeFixtureFile(path.join(data.directory, 'file'), before);
     const change = operation('modify', fileEntry('file', before), fileEntry('file', after));
     const parsed = parse(artifact([change], [blob(before), blob(after)], { targetDirectory: data.directory }), data.directory);
     await expect(applyWorkspaceArtifact({
@@ -421,7 +426,7 @@ describe('structured workspace artifacts', () => {
       parsed,
       selections: [{ fileID: change.id }],
       checkOnly: false,
-      afterReplace: () => fs.writeFileSync(path.join(data.directory, 'file'), 'tampered'),
+      afterReplace: () => writeFixtureFile(path.join(data.directory, 'file'), 'tampered'),
     })).rejects.toThrow(/final verification failed/);
     expect(fs.readFileSync(path.join(data.directory, 'file'))).toEqual(before);
 
