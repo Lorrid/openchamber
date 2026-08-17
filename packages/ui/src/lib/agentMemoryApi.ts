@@ -30,7 +30,7 @@ export interface AgentMemoryEntry {
   sessionId?: string;
 }
 
-export interface AgentMemorySnapshot {
+interface AgentMemorySnapshot {
   global: AgentMemoryEntry[];
   project: AgentMemoryEntry[];
   /**

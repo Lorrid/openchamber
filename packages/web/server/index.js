@@ -76,6 +76,7 @@ import { createOpenCodeWatcherRuntime } from './lib/opencode/watcher.js';
 import { createSessionAssistRuntime } from './lib/session-assist/runtime.js';
 import { createSessionGoalRuntime } from './lib/session-goal/runtime.js';
 import { createContextObligatoryRuntime } from './lib/context-obligatory/runtime.js';
+import { createSessionKnowledgeRuntime } from './lib/session-knowledge/runtime.js';
 import { createScheduledTasksRuntime } from './lib/scheduled-tasks/runtime.js';
 import { createServerStartupRuntime } from './lib/opencode/server-startup-runtime.js';
 import { createTunnelWiringRuntime } from './lib/opencode/tunnel-wiring-runtime.js';
@@ -803,9 +804,39 @@ const sessionGoalRuntime = createSessionGoalRuntime({
     });
   },
 });
+/**
+ * Owns what a session must be told about the project's knowledge. Every sender
+ * asks it — the UI over HTTP, scheduled tasks and agent-dispatched sessions in
+ * process — so the answer cannot differ between them.
+ */
+const sessionKnowledgeRuntime = createSessionKnowledgeRuntime({
+  projectContextRuntime,
+  agentMemoryRuntime,
+  resolveProjectId: resolveMemoryProjectId,
+  isAgentMemoryEnabled,
+  openCodeFetch: async (fetchPath, { directory, method = 'GET', body } = {}) => {
+    const params = new URLSearchParams();
+    if (directory) params.set('directory', directory);
+    const search = params.toString();
+    const response = await fetch(`${buildOpenCodeUrl(fetchPath, '')}${search ? `?${search}` : ''}`, {
+      method,
+      headers: {
+        Accept: 'application/json',
+        ...(body ? { 'Content-Type': 'application/json' } : {}),
+        ...getOpenCodeAuthHeaders(),
+      },
+      ...(body ? { body: JSON.stringify(body) } : {}),
+      signal: AbortSignal.timeout(15_000),
+    });
+    if (!response.ok) throw new Error(`OpenCode ${method} ${fetchPath} failed with ${response.status}`);
+    return response.json().catch(() => null);
+  },
+});
+
 const contextObligatoryRuntime = createContextObligatoryRuntime({
   buildOpenCodeUrl,
   getOpenCodeAuthHeaders,
+  sessionKnowledgeRuntime,
 });
 
 const globalMessageStreamHub = createGlobalMessageStreamHub({
@@ -1168,6 +1199,7 @@ const scheduledTasksRuntime = createScheduledTasksRuntime({
   buildOpenCodeUrl,
   getOpenCodeAuthHeaders,
   waitForOpenCodeReady,
+  sessionKnowledgeRuntime,
   setSessionAutoAccept: (sessionId, enabled, directory) => permissionAutoAcceptRuntime.setSessionPolicy(sessionId, enabled, directory),
   emitTaskRunEvent: (event) => {
     for (const client of uiOpenChamberEventClients) {
@@ -1254,6 +1286,7 @@ const openChamberSessionService = createOpenChamberSessionService({
   getOpenCodeAuthHeaders,
   waitForOpenCodeReady,
   emitSessionCreatedEvent,
+  sessionKnowledgeRuntime,
 });
 // Browser actions are published to whichever OpenChamber clients are connected;
 // the one owning the browser panel answers. `emitRequest` returns the number of
@@ -1814,6 +1847,7 @@ async function main(options = {}) {
     projectContextRuntime,
     agentMemoryRuntime,
     isAgentMemoryEnabled,
+    sessionKnowledgeRuntime,
     scheduledTasksRuntime,
     scheduledTaskService,
     openChamberSessionService,

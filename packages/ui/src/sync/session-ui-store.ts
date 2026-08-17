@@ -20,9 +20,7 @@ import { opencodeClient } from "@/lib/opencode/client"
 import { runtimeFetch } from "@/lib/runtime-fetch"
 import { useConfigStore } from "@/stores/useConfigStore"
 import { useProjectsStore } from "@/stores/useProjectsStore"
-import { forgetPinnedContextForSession, markPinnedContextSent, resolvePinnedContextPart } from "@/lib/projectContextPinning"
-import { forgetMemoryIndexForSession, markMemoryIndexSent, resolveMemoryIndexPart } from "@/lib/agentMemoryIndex"
-import { useAgentMemoryStore } from "@/stores/useAgentMemoryStore"
+import { fetchSessionKnowledge, reportSessionKnowledgeDelivered } from "@/lib/sessionKnowledgeApi"
 import { useGlobalSessionsStore, resolveGlobalSessionDirectory } from "@/stores/useGlobalSessionsStore"
 import { useDirectoryStore } from "@/stores/useDirectoryStore"
 import { useSessionFoldersStore } from "@/stores/useSessionFoldersStore"
@@ -1389,23 +1387,14 @@ export const useSessionUIStore = create<SessionUIState>()((set, get) => ({
       const draftParts = createdDraftSession.syntheticParts?.length
         ? [...(additionalParts || []), ...createdDraftSession.syntheticParts]
         : additionalParts
-      const draftPinned = await resolvePinnedContextPart({
-        sessionId: createdDraftSession.sessionId,
-        directory: createdDraftSession.directory,
-        projects: useProjectsStore.getState().projects,
-        worktreesByProject: get().availableWorktreesByProject,
-      })
-      // The stored memory index, listed before the pinned context so the
-      // session reads oldest background first. Resolved from the cached
-      // snapshot only: a send must never wait on a memory request.
-      const draftMemoryIndex = resolveMemoryIndexPart({
-        sessionId: createdDraftSession.sessionId,
-        snapshot: useAgentMemoryStore.getState().snapshot(),
-      })
-      const draftPrefixParts: Array<{ text: string; attachments?: AttachedFile[]; synthetic?: boolean }> = [
-        ...(draftMemoryIndex ? [{ text: draftMemoryIndex.text, synthetic: true }] : []),
-        ...(draftPinned ? [{ text: draftPinned.text, synthetic: true }] : []),
-      ]
+      // The server decides what this session still owes and assembles it; the
+      // client only carries it and reports it delivered.
+      const draftKnowledge = await fetchSessionKnowledge(
+        createdDraftSession.directory,
+        createdDraftSession.sessionId,
+      )
+      const draftPrefixParts: Array<{ text: string; attachments?: AttachedFile[]; synthetic?: boolean }> =
+        draftKnowledge.text ? [{ text: draftKnowledge.text, synthetic: true }] : []
       // Left undefined when nothing was added, as before: an empty array is not
       // the same as no additional parts to everything downstream.
       const mergedAdditionalParts = draftPrefixParts.length > 0
@@ -1449,11 +1438,12 @@ export const useSessionUIStore = create<SessionUIState>()((set, get) => ({
       })
       // Recorded only after the send resolves: a failed send must carry the
       // pinned context again rather than assume the agent already saw it.
-      if (draftPinned) {
-        markPinnedContextSent(draftPinned.sessionId, draftPinned.signature)
-      }
-      if (draftMemoryIndex) {
-        markMemoryIndexSent(draftMemoryIndex.sessionId, draftMemoryIndex.signature)
+      if (draftKnowledge.text) {
+        void reportSessionKnowledgeDelivered(
+          createdDraftSession.directory,
+          createdDraftSession.sessionId,
+          draftKnowledge.signature,
+        )
       }
       return
     }
@@ -1515,23 +1505,12 @@ export const useSessionUIStore = create<SessionUIState>()((set, get) => ({
       await applyArmedGoal(targetSessionId, currentSessionDirectory)
     }
 
-    // Standing project context the user pinned. Prepended so it reads as
-    // background before the message it accompanies, and resolved to null unless
-    // the pinned set actually changed since this session last received it.
-    const pinnedContext = await resolvePinnedContextPart({
-      sessionId: targetSessionId || "",
-      directory: currentSessionDirectory,
-      projects: useProjectsStore.getState().projects,
-      worktreesByProject: get().availableWorktreesByProject,
-    })
-    const memoryIndex = resolveMemoryIndexPart({
-      sessionId: targetSessionId || "",
-      snapshot: useAgentMemoryStore.getState().snapshot(),
-    })
-    const prefixParts: Array<{ text: string; attachments?: AttachedFile[]; synthetic?: boolean }> = [
-      ...(memoryIndex ? [{ text: memoryIndex.text, synthetic: true }] : []),
-      ...(pinnedContext ? [{ text: pinnedContext.text, synthetic: true }] : []),
-    ]
+    // Standing project context — pinned notes and plans, and the memory index.
+    // Prepended so it reads as background before the message it accompanies,
+    // and empty unless the session is actually missing it.
+    const knowledge = await fetchSessionKnowledge(currentSessionDirectory, targetSessionId || "")
+    const prefixParts: Array<{ text: string; attachments?: AttachedFile[]; synthetic?: boolean }> =
+      knowledge.text ? [{ text: knowledge.text, synthetic: true }] : []
     const partsWithPinnedContext = prefixParts.length > 0
       ? [...prefixParts, ...(additionalParts || [])]
       : additionalParts
@@ -1560,11 +1539,8 @@ export const useSessionUIStore = create<SessionUIState>()((set, get) => ({
         })),
       })),
     })
-    if (pinnedContext) {
-      markPinnedContextSent(pinnedContext.sessionId, pinnedContext.signature)
-    }
-    if (memoryIndex) {
-      markMemoryIndexSent(memoryIndex.sessionId, memoryIndex.signature)
+    if (knowledge.text) {
+      void reportSessionKnowledgeDelivered(currentSessionDirectory, targetSessionId || "", knowledge.signature)
     }
   },
 
@@ -1604,20 +1580,15 @@ export const useSessionUIStore = create<SessionUIState>()((set, get) => ({
   deleteSession: async (id, options) => {
     const deleted = await deleteSessionAction(id, options)
     if (deleted) {
-      // A recycled session id must not inherit the old session's belief that it
-      // already received the pinned context or the memory index.
-      forgetPinnedContextForSession(id)
-      forgetMemoryIndexForSession(id)
+      // Nothing to forget here any more: what a session was told lives in its
+      // own metadata and goes with it.
     }
     return deleted
   },
 
   deleteSessions: async (ids, options) => {
     const result = await deleteSessionsAction(ids, options)
-    for (const id of result.deletedIds) {
-      forgetPinnedContextForSession(id)
-      forgetMemoryIndexForSession(id)
-    }
+
     return result
   },
 

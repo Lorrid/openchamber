@@ -18,9 +18,7 @@ import {
   updateAgentMemory,
   type AgentMemoryEntry,
   type AgentMemoryScope,
-  type AgentMemorySnapshot,
 } from '@/lib/agentMemoryApi';
-import { resetMemoryIndexTracking } from '@/lib/agentMemoryIndex';
 
 interface AgentMemoryState {
   global: AgentMemoryEntry[];
@@ -44,7 +42,6 @@ interface AgentMemoryState {
     patch: { title?: string; body?: string },
   ) => Promise<boolean>;
   deleteEntry: (scope: AgentMemoryScope, memoryId: string) => Promise<boolean>;
-  snapshot: () => AgentMemorySnapshot | null;
   reset: () => void;
 }
 
@@ -155,26 +152,7 @@ export const useAgentMemoryStore = create<AgentMemoryState>((set, get) => ({
     }
   }),
 
-  /**
-   * What the send path indexes. Null until a load has actually succeeded, so a
-   * session is never told the agent remembers nothing merely because the panel
-   * has not been opened yet.
-   */
-  snapshot: () => {
-    const state = get();
-    if (!state.loaded || state.disabled) {
-      return null;
-    }
-    return {
-      global: state.global,
-      project: state.project,
-      globalFailed: state.globalFailed,
-      projectFailed: state.projectFailed,
-    };
-  },
-
   reset: () => {
-    resetMemoryIndexTracking();
     set({ ...EMPTY_STATE });
   },
 }));

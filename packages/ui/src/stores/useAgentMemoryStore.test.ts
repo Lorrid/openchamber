@@ -107,25 +107,6 @@ describe('load', () => {
   });
 });
 
-describe('snapshot for the session index', () => {
-  test('is null until a load has succeeded', () => {
-    expect(useAgentMemoryStore.getState().snapshot()).toBeNull();
-  });
-
-  test('is null while the feature is off', async () => {
-    readImpl = async () => { throw new AgentMemoryDisabledError(); };
-    await useAgentMemoryStore.getState().load(null);
-
-    expect(useAgentMemoryStore.getState().snapshot()).toBeNull();
-  });
-
-  test('carries both scopes once loaded', async () => {
-    await useAgentMemoryStore.getState().load('/tmp/project');
-
-    expect(useAgentMemoryStore.getState().snapshot()?.project).toHaveLength(1);
-  });
-});
-
 describe('delete', () => {
   test('removes the entry', async () => {
     await useAgentMemoryStore.getState().load('/tmp/project');

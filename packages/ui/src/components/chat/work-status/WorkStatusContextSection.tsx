@@ -5,6 +5,7 @@ import { useSkillsStore } from '@/stores/useSkillsStore';
 import { useMcpStore } from '@/stores/useMcpStore';
 import { useSession } from '@/sync/sync-context';
 import { getLinkedIssues } from '@/lib/linkedIssues';
+import { fetchSessionKnowledgeSummary, type SessionKnowledgeSummary } from '@/lib/sessionKnowledgeApi';
 import { WorkStatusCollapsibleSection, WorkStatusRow, WorkStatusValue } from './WorkStatusPrimitives';
 import { useReportWorkStatusPresence } from './presenceContext';
 
@@ -43,6 +44,25 @@ export const WorkStatusContextSection: React.FC<Props> = ({ sessionId, directory
     void loadSkills();
   }, [directory, loadSkills]);
 
+  /**
+   * What the project sends along with every message. Read from the server
+   * rather than from the notes panel's store, because this must be right
+   * whether or not that panel has ever been opened.
+   */
+  const [knowledge, setKnowledge] = React.useState<SessionKnowledgeSummary>(
+    { notes: [], plans: [], memory: { global: 0, project: 0 } },
+  );
+  React.useEffect(() => {
+    let cancelled = false;
+    void fetchSessionKnowledgeSummary(directory).then((summary) => {
+      if (!cancelled) setKnowledge(summary);
+    });
+    return () => { cancelled = true; };
+  }, [directory]);
+
+  const memoryCount = knowledge.memory.global + knowledge.memory.project;
+  const pinnedCount = knowledge.notes.length + knowledge.plans.length;
+
   const linked = React.useMemo(() => getLinkedIssues(session), [session]);
   // Connected servers only. A disabled server contributes nothing to the
   // context, so counting it here contradicts the MCP section right above,
@@ -52,9 +72,14 @@ export const WorkStatusContextSection: React.FC<Props> = ({ sessionId, directory
     [mcpStatus],
   );
 
-  useReportWorkStatusPresence('context-sources', linked.length > 0 || skills.length > 0 || mcpCount > 0);
+  useReportWorkStatusPresence(
+    'context-sources',
+    linked.length > 0 || skills.length > 0 || mcpCount > 0 || pinnedCount > 0 || memoryCount > 0,
+  );
 
-  if (linked.length === 0 && skills.length === 0 && mcpCount === 0) return null;
+  if (linked.length === 0 && skills.length === 0 && mcpCount === 0 && pinnedCount === 0 && memoryCount === 0) {
+    return null;
+  }
 
   // The heading names what is distinctive about this session when there is
   // something — an attached thread — and falls back to the ambient counts
@@ -71,6 +96,14 @@ export const WorkStatusContextSection: React.FC<Props> = ({ sessionId, directory
     summaryParts.push(prCount === 1
       ? t('chat.workStatus.breakdown.prCountSingle', { count: prCount })
       : t('chat.workStatus.breakdown.prCountPlural', { count: prCount }));
+  }
+  // Pinned knowledge outranks the ambient counts in the summary: it is
+  // something the user chose for this project, not something that happens to
+  // be installed.
+  if (summaryParts.length === 0 && pinnedCount > 0) {
+    summaryParts.push(pinnedCount === 1
+      ? t('chat.workStatus.breakdown.pinnedKnowledgeSingle', { count: pinnedCount })
+      : t('chat.workStatus.breakdown.pinnedKnowledgePlural', { count: pinnedCount }));
   }
   if (summaryParts.length === 0) {
     if (skills.length > 0) {
@@ -114,6 +147,34 @@ export const WorkStatusContextSection: React.FC<Props> = ({ sessionId, directory
           value={<WorkStatusValue tone="muted">{`#${entry.number}`}</WorkStatusValue>}
         />
       ))}
+
+      {/* Named individually: a count alone would not tell the user which note
+          is riding along with every message they send. */}
+      {knowledge.notes.map((note) => (
+        <WorkStatusRow
+          key={note.id}
+          muted
+          leading={<Icon name="pushpin" className="size-4 shrink-0 text-muted-foreground" />}
+          label={note.body.trim().split('\n')[0] || note.body.trim()}
+          value={<WorkStatusValue tone="muted">{t('chat.workStatus.breakdown.pinnedNote')}</WorkStatusValue>}
+        />
+      ))}
+      {knowledge.plans.map((plan) => (
+        <WorkStatusRow
+          key={plan.id}
+          muted
+          leading={<Icon name="pushpin" className="size-4 shrink-0 text-muted-foreground" />}
+          label={plan.title}
+          value={<WorkStatusValue tone="muted">{t('chat.workStatus.breakdown.pinnedPlan')}</WorkStatusValue>}
+        />
+      ))}
+      {memoryCount > 0 ? (
+        <WorkStatusRow
+          muted
+          label={t('chat.workStatus.breakdown.memory')}
+          value={<WorkStatusValue>{memoryCount}</WorkStatusValue>}
+        />
+      ) : null}
 
       <WorkStatusRow
         muted

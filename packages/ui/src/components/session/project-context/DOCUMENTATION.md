@@ -92,11 +92,11 @@ badge would clear the instant the tab appeared — the one moment the user is
 trying to read them. Each project keeps its own mark, so opening one project
 cannot silently clear another's badges.
 
-The store is loaded by `useAgentMemorySync` in `App.tsx`, not by this panel. The
-session memory index is built from that snapshot, so leaving the load here meant
-a user who never opened Project notes sent every message with no index at all.
-It reloads on `openchamber:agent-memory-changed`, because the agent writes
-mid-turn through its own tool.
+The store is loaded by `useAgentMemorySync` in `App.tsx` and reloads on
+`openchamber:agent-memory-changed`, because the agent writes mid-turn through
+its own tool. It feeds this panel only — what a session is told about memory is
+decided server-side by `packages/web/server/lib/session-knowledge`, so it
+reaches sessions that have no UI at all and survives compaction.
 
 Both sides resolve a worktree to its project before touching the store — the
 client through `resolveProjectForSessionDirectory`, the server through
