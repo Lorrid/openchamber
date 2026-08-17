@@ -156,6 +156,7 @@ export type DesktopSettings = {
   agentControlToolEnabled?: boolean;
   agentWebToolEnabled?: boolean;
   agentMemoryToolEnabled?: boolean;
+  agentMemoryFeatureAvailable?: boolean;
   optimizeSystemPrompt?: boolean;
   openCodeUpdateToastDismissedVersion?: string;
   showToolFileIcons?: boolean;

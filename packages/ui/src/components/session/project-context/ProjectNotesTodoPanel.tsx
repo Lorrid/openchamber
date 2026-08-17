@@ -88,7 +88,9 @@ export const ProjectNotesTodoPanel: React.FC<ProjectNotesTodoPanelProps> = ({
 
   // The whole feature is one switch: with memory off there is nothing for the
   // agent to manage, so showing the user what is stored would be pointless.
-  const memoryEnabled = useUIStore((state) => state.agentMemoryToolEnabled);
+  const memoryEnabled = useUIStore((state) => (
+    state.agentMemoryFeatureAvailable && state.agentMemoryToolEnabled
+  ));
   const memoryDisabledByServer = useAgentMemoryStore((state) => state.disabled);
   const memoryVisible = memoryEnabled && !memoryDisabledByServer;
   const globalMemory = useAgentMemoryStore((state) => state.global);

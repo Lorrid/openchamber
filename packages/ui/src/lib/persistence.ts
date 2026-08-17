@@ -744,6 +744,13 @@ const applyDesktopUiPreferences = (settings: DesktopSettings) => {
   ) {
     store.setAgentMemoryToolEnabled(settings.agentMemoryToolEnabled);
   }
+  // Server-owned: it says whether this build has the feature at all.
+  if (
+    typeof settings.agentMemoryFeatureAvailable === 'boolean'
+    && settings.agentMemoryFeatureAvailable !== store.agentMemoryFeatureAvailable
+  ) {
+    store.setAgentMemoryFeatureAvailable(settings.agentMemoryFeatureAvailable);
+  }
   if (typeof settings.showToolFileIcons === 'boolean' && settings.showToolFileIcons !== store.showToolFileIcons) {
     store.setShowToolFileIcons(settings.showToolFileIcons);
   }

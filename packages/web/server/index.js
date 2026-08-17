@@ -95,6 +95,7 @@ import { createProjectContextRuntime } from './lib/project-context/runtime.js';
 import { createAgentMemoryRuntime } from './lib/agent-memory/runtime.js';
 import { createAgentMemoryActions } from './lib/agent-memory/actions.js';
 import { createMemoryProjectResolver } from './lib/agent-memory/project-resolution.js';
+import { isAgentMemoryFeatureAvailable } from './lib/agent-memory/feature-flag.js';
 import { resolvePrimaryWorktreeRoot } from './lib/git/service.js';
 import { createRemoteClientAuthRuntime } from './lib/client-auth/remote-clients.js';
 import { createClientPairingRuntime } from './lib/client-auth/pairing.js';
@@ -498,8 +499,13 @@ const agentMemoryRuntime = createAgentMemoryRuntime({
  * that still reads or writes the store.
  */
 const isAgentMemoryEnabled = async () => {
+  // The feature gate comes first: unreleased means absent, not merely switched
+  // off, so no stored setting can bring it back.
+  if (!isAgentMemoryFeatureAvailable()) {
+    return false;
+  }
   const settings = await readSettingsFromDiskMigrated().catch(() => null);
-  return settings?.agentMemoryToolEnabled !== false;
+  return settings?.agentMemoryToolEnabled === true;
 };
 
 // HMR-persistent state via globalThis
@@ -1162,7 +1168,7 @@ const openCodeLifecycleRuntime = createOpenCodeLifecycleRuntime({
     // injected while at least one of them is on.
     const includeControl = settings?.agentControlToolEnabled !== false;
     const includeWeb = settings?.agentWebToolEnabled !== false;
-    const includeMemory = settings?.agentMemoryToolEnabled !== false;
+    const includeMemory = isAgentMemoryFeatureAvailable() && settings?.agentMemoryToolEnabled === true;
     const managedEnv = includeControl || includeWeb || includeMemory
       ? await (agentToolRuntime?.prepareManagedOpenCodeEnv({ includeControl, includeWeb, includeMemory }) || {})
       : {};

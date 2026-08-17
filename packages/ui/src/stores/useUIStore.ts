@@ -762,6 +762,11 @@ interface UIStore {
   agentWebToolEnabled: boolean;
   agentMemoryToolEnabled: boolean;
   /**
+   * Whether this build has agent memory at all. Server-owned and not
+   * persisted: an unreleased feature must not come back from a stale cache.
+   */
+  agentMemoryFeatureAvailable: boolean;
+  /**
    * When the user last looked at each memory scope, keyed by scope. Drives the
    * new/changed badges; there is no stored review state.
    */
@@ -944,6 +949,7 @@ interface UIStore {
   setAgentControlToolEnabled: (value: boolean) => void;
   setAgentWebToolEnabled: (value: boolean) => void;
   setAgentMemoryToolEnabled: (value: boolean) => void;
+  setAgentMemoryFeatureAvailable: (value: boolean) => void;
   markAgentMemoryViewed: (key: string, viewedAt: number) => void;
   setProjectContextSidebarWidth: (width: number) => void;
   setProjectContextTab: (value: string) => void;
@@ -1105,7 +1111,8 @@ export const useUIStore = create<UIStore>()(
         showOpenCodeUpdateNotifications: !isWindowsArm64(),
         agentControlToolEnabled: true,
         agentWebToolEnabled: true,
-        agentMemoryToolEnabled: true,
+        agentMemoryToolEnabled: false,
+        agentMemoryFeatureAvailable: false,
         agentMemoryViewedAt: {},
         projectContextSidebarWidth: 168,
         projectContextTab: 'notes',
@@ -2332,6 +2339,9 @@ export const useUIStore = create<UIStore>()(
         },
         setAgentMemoryToolEnabled: (value) => {
           set({ agentMemoryToolEnabled: value });
+        },
+        setAgentMemoryFeatureAvailable: (value) => {
+          set({ agentMemoryFeatureAvailable: value });
         },
         setProjectContextSidebarWidth: (width) => {
           set({ projectContextSidebarWidth: width });

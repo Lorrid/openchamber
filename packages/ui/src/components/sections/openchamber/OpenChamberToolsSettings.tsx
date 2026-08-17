@@ -29,6 +29,9 @@ export const OpenChamberToolsSettings: React.FC = () => {
   const agentWebToolEnabled = useUIStore((state) => state.agentWebToolEnabled);
   const setAgentWebToolEnabled = useUIStore((state) => state.setAgentWebToolEnabled);
   const agentMemoryToolEnabled = useUIStore((state) => state.agentMemoryToolEnabled);
+  // Absent, not merely off: the feature is finished but unreleased, and a
+  // visible switch invites turning on something that was never announced.
+  const agentMemoryAvailable = useUIStore((state) => state.agentMemoryFeatureAvailable);
   const setAgentMemoryToolEnabled = useUIStore((state) => state.setAgentMemoryToolEnabled);
 
   const handleAgentControlToolChange = React.useCallback((enabled: boolean) => {
@@ -82,6 +85,7 @@ export const OpenChamberToolsSettings: React.FC = () => {
           info={t('settings.openchamber.tools.field.agentWebToolInfo')}
         />
 
+        {agentMemoryAvailable ? (
         <SettingsCheckboxRow
           settingsItem="sessions.agent-memory-tool"
           checked={agentMemoryToolEnabled}
@@ -90,6 +94,7 @@ export const OpenChamberToolsSettings: React.FC = () => {
           ariaLabel={t('settings.openchamber.tools.field.agentMemoryToolAria')}
           info={t('settings.openchamber.tools.field.agentMemoryToolInfo')}
         />
+        ) : null}
       </div>
     </SettingsSection>
   );

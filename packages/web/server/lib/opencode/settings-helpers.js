@@ -1,3 +1,5 @@
+import { isAgentMemoryFeatureAvailable } from '../agent-memory/feature-flag.js';
+
 export const createSettingsHelpers = (dependencies) => {
   const {
     normalizePathForPersistence,
@@ -911,6 +913,9 @@ export const createSettingsHelpers = (dependencies) => {
     return {
       ...sanitized,
       hasManagedRemoteTunnelToken,
+      // Tells the client whether agent memory exists in this build at all, so
+      // its settings row and panel tab can be absent rather than merely off.
+      agentMemoryFeatureAvailable: isAgentMemoryFeatureAvailable(),
       ...(pwaAppName ? { pwaAppName } : {}),
       pwaOrientation,
       mobileKeyboardMode,

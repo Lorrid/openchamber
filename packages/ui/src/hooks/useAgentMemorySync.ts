@@ -26,7 +26,9 @@ import { useUIStore } from '@/stores/useUIStore';
  * throws outside it, which took the whole app down with a blank window.
  */
 export const useAgentMemorySync = (directory: string | null): void => {
-  const enabled = useUIStore((state) => state.agentMemoryToolEnabled);
+  const enabled = useUIStore((state) => (
+    state.agentMemoryFeatureAvailable && state.agentMemoryToolEnabled
+  ));
   const projects = useProjectsStore((state) => state.projects);
   const availableWorktreesByProject = useSessionUIStore((state) => state.availableWorktreesByProject);
   const effectiveDirectory = directory ?? '';
