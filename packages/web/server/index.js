@@ -812,7 +812,9 @@ const sessionGoalRuntime = createSessionGoalRuntime({
 const sessionKnowledgeRuntime = createSessionKnowledgeRuntime({
   projectContextRuntime,
   agentMemoryRuntime,
-  resolveProjectId: resolveMemoryProjectId,
+  // Called, not captured: the resolver is declared further down, and taking a
+  // reference here would read it before it exists.
+  resolveProjectId: (directory) => resolveMemoryProjectId(directory),
   isAgentMemoryEnabled,
   openCodeFetch: async (fetchPath, { directory, method = 'GET', body } = {}) => {
     const params = new URLSearchParams();
