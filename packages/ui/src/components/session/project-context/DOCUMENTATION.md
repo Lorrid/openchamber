@@ -60,6 +60,15 @@ Leaving the section or the project closes it, so its editor never sits over a
 list it no longer matches. Hosts that own a fullscreen plan surface (mobile)
 still pass `onOpenPlan` and keep theirs.
 
+## Pins are project state, not a message attachment
+
+Pinning a note or plan writes to the project, not to the session, so it holds
+across every session in that project until it is unpinned. The composer once
+carried a chip for it, from when pinned context was a one-shot attachment to the
+next message; standing state shown permanently above the input reads as
+something being attached to what you are typing, which it is not. What is
+attached, and the control to detach it, live in the work status panel instead.
+
 ## Memory is not a fifth kind of note
 
 The first four tabs hold what the user wrote. Memory holds what the **agent**
