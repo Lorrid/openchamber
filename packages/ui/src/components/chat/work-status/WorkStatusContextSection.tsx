@@ -184,14 +184,28 @@ export const WorkStatusContextSection: React.FC<Props> = ({ sessionId, directory
 
       {/* Named individually: a count alone would not tell the user which note
           is riding along with every message they send. */}
+      {/* The pin is the control, exactly as in the pinned-messages section
+          above: same icon, same placement, same behaviour. Two pins that look
+          different in one panel would read as two different things. */}
       {knowledge.notes.map((note) => (
         <WorkStatusRow
           key={note.id}
           muted
-          leading={<Icon name="pushpin" className="size-4 shrink-0 text-primary" />}
+          leading={(
+            <button
+              type="button"
+              disabled={!projectRef}
+              aria-label={t('chat.workStatus.breakdown.unpin')}
+              onClick={(event) => {
+                event.stopPropagation();
+                unpinNote(note.id);
+              }}
+              className="shrink-0 rounded p-0.5 transition-opacity hover:opacity-70 disabled:opacity-40"
+            >
+              <Icon name="pushpin-2-fill" className="size-3.5" style={{ color: 'var(--primary)' }} />
+            </button>
+          )}
           label={note.body.trim().split('\n')[0] || note.body.trim()}
-          onClick={projectRef ? () => unpinNote(note.id) : undefined}
-          ariaLabel={t('chat.workStatus.breakdown.unpin')}
           value={<WorkStatusValue tone="muted">{t('chat.workStatus.breakdown.pinnedNote')}</WorkStatusValue>}
         />
       ))}
@@ -199,10 +213,21 @@ export const WorkStatusContextSection: React.FC<Props> = ({ sessionId, directory
         <WorkStatusRow
           key={plan.id}
           muted
-          leading={<Icon name="pushpin" className="size-4 shrink-0 text-primary" />}
+          leading={(
+            <button
+              type="button"
+              disabled={!projectRef}
+              aria-label={t('chat.workStatus.breakdown.unpin')}
+              onClick={(event) => {
+                event.stopPropagation();
+                unpinPlan(plan.id);
+              }}
+              className="shrink-0 rounded p-0.5 transition-opacity hover:opacity-70 disabled:opacity-40"
+            >
+              <Icon name="pushpin-2-fill" className="size-3.5" style={{ color: 'var(--primary)' }} />
+            </button>
+          )}
           label={plan.title}
-          onClick={projectRef ? () => unpinPlan(plan.id) : undefined}
-          ariaLabel={t('chat.workStatus.breakdown.unpin')}
           value={<WorkStatusValue tone="muted">{t('chat.workStatus.breakdown.pinnedPlan')}</WorkStatusValue>}
         />
       ))}

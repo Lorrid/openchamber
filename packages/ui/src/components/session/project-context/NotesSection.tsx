@@ -117,7 +117,9 @@ const NoteRow: React.FC<{
               ? t('rightSidebar.contextNotesTodo.notes.actions.unpin')
               : t('rightSidebar.contextNotesTodo.notes.actions.pin')}
           >
-            <Icon name="pushpin" className="h-3.5 w-3.5" />
+            {/* Filled means pinned, outline means "pin this" — the same
+                language the work status panel uses. */}
+            <Icon name={note.pinned ? 'pushpin-2-fill' : 'pushpin'} className="h-3.5 w-3.5" />
           </button>
           <button
             type="button"

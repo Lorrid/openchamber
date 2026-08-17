@@ -80,7 +80,8 @@ export function ComposerPinnedContextChip() {
         className="inline-flex items-center gap-1.5 rounded-xl border border-[var(--interactive-border)] bg-[var(--surface-elevated)] px-2.5 py-1"
         title={t('chat.chatInput.pinnedContextTooltip')}
       >
-        <Icon name="pushpin" className="h-3.5 w-3.5 text-muted-foreground" />
+        {/* Filled: this chip only exists while something is pinned. */}
+        <Icon name="pushpin-2-fill" className="h-3.5 w-3.5" style={{ color: 'var(--primary)' }} />
         <span className="text-xs font-medium text-muted-foreground">{label}</span>
         <button
           type="button"
