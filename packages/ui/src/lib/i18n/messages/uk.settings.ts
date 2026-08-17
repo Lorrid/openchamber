@@ -1,3 +1,4 @@
+import { thirdPartyIntegrationI18n } from './third-party-integrations.i18n';
 export const settingsDict = {
   'settings.providers.page.openCodeGo.title': 'Відстеження використання OpenCode Go',
   'settings.providers.page.openCodeGo.description': 'Підключіть панель OpenCode Go, щоб бачити ковзну, тижневу та місячну квоту.',
@@ -1453,6 +1454,7 @@ export const settingsDict = {
   "settings.usage.page.header.providerUsage": "Використання {provider}",
   "settings.usage.page.header.refreshing": "Оновлення використання...",
   "settings.usage.page.header.lastUpdated": "Останнє оновлення: {time}",
+  "settings.usage.page.header.lastUpdatedWithPlan": "План: {plan} · Останнє оновлення: {time}",
   "settings.usage.page.options.showInWorkStatusAria": "Показувати в панелі статусу роботи",
   "settings.usage.page.options.showInWorkStatus": "Показувати в панелі статусу роботи",
   "settings.usage.page.options.showInWorkStatusTooltip": "Якщо ввімкнути, використання цього провайдера буде видно в панелі статусу роботи.",
@@ -2465,4 +2467,5 @@ export const settingsDict = {
   "settings.workspaces.handoff.cleanupTarget": "Очистити осиротілу сесію",
   "settings.workspaces.handoff.cleanupComplete": "Осиротілу цільову сесію видалено.",
   "settings.workspaces.handoff.cleanupFailed": "Не вдалося видалити осиротілу цільову сесію.",
+  ...thirdPartyIntegrationI18n.uk,
 } as const;

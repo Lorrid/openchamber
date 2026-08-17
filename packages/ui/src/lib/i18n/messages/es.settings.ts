@@ -1,3 +1,4 @@
+import { thirdPartyIntegrationI18n } from './third-party-integrations.i18n';
 export const settingsDict = {
   'settings.providers.page.openCodeGo.title': 'Seguimiento de uso de OpenCode Go',
   'settings.providers.page.openCodeGo.description': 'Conecta el panel de OpenCode Go para ver las cuotas móvil, semanal y mensual.',
@@ -1453,6 +1454,7 @@ export const settingsDict = {
   "settings.usage.page.header.providerUsage": "Uso de {provider}",
   "settings.usage.page.header.refreshing": "Actualizando uso...",
   "settings.usage.page.header.lastUpdated": "Última actualización: {time}",
+  "settings.usage.page.header.lastUpdatedWithPlan": "Plan: {plan} · Última actualización: {time}",
   "settings.usage.page.options.showInWorkStatusAria": "Mostrar en el panel de estado del trabajo",
   "settings.usage.page.options.showInWorkStatus": "Mostrar en el panel de estado del trabajo",
   "settings.usage.page.options.showInWorkStatusTooltip": "Cuando esté habilitado, el uso de este proveedor será visible en el panel de estado del trabajo.",
@@ -2465,4 +2467,5 @@ export const settingsDict = {
   "settings.workspaces.handoff.cleanupTarget": "Limpiar sesión huérfana",
   "settings.workspaces.handoff.cleanupComplete": "Se eliminó la sesión de destino huérfana.",
   "settings.workspaces.handoff.cleanupFailed": "No se pudo eliminar la sesión de destino huérfana.",
+  ...thirdPartyIntegrationI18n.es,
 } as const;

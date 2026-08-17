@@ -1,3 +1,4 @@
+import { thirdPartyIntegrationI18n } from './third-party-integrations.i18n';
 export const settingsDict = {
   'settings.providers.page.openCodeGo.title': 'Suivi de l’utilisation d’OpenCode Go',
   'settings.providers.page.openCodeGo.description': 'Connectez le tableau de bord OpenCode Go pour afficher les quotas glissant, hebdomadaire et mensuel.',
@@ -1078,6 +1079,7 @@ export const settingsDict = {
   'settings.usage.page.header.providerUsage': 'Utilisation de {provider}',
   'settings.usage.page.header.refreshing': 'Utilisation rafraîchissante...',
   'settings.usage.page.header.lastUpdated': 'Dernière mise à jour : {time}',
+  'settings.usage.page.header.lastUpdatedWithPlan': 'Forfait : {plan} · Dernière mise à jour : {time}',
   'settings.usage.page.options.showInWorkStatusAria': 'Afficher dans le panneau d’état du travail',
   'settings.usage.page.options.showInWorkStatus': 'Afficher dans le panneau d’état du travail',
   'settings.usage.page.options.showInWorkStatusTooltip': 'Lorsqu’elle est activée, l’utilisation de ce fournisseur sera visible dans le panneau d’état du travail.',
@@ -2465,4 +2467,5 @@ export const settingsDict = {
   'settings.workspaces.handoff.cleanupTarget': 'Nettoyer la session orpheline',
   'settings.workspaces.handoff.cleanupComplete': 'La session cible orpheline a été supprimée.',
   'settings.workspaces.handoff.cleanupFailed': 'Impossible de supprimer la session cible orpheline.',
+  ...thirdPartyIntegrationI18n.fr,
 } as const;

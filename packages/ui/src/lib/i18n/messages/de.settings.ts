@@ -1,3 +1,4 @@
+import { thirdPartyIntegrationI18n } from './third-party-integrations.i18n';
 export const settingsDict = {
   'settings.providers.page.openCodeGo.title': 'OpenCode Go Nutzungsverfolgung',
   'settings.providers.page.openCodeGo.description': 'Verbinden Sie das OpenCode Go Dashboard, um rollierenden, wöchentlichen und monatlichen Verbrauch anzuzeigen.',
@@ -1130,6 +1131,7 @@ export const settingsDict = {
   'settings.usage.page.header.providerUsage': '{provider} Nutzung',
   'settings.usage.page.header.refreshing': 'Aktualisiere Nutzung...',
   'settings.usage.page.header.lastUpdated': 'Zuletzt aktualisiert: {time}',
+  'settings.usage.page.header.lastUpdatedWithPlan': 'Tarif: {plan} · Zuletzt aktualisiert: {time}',
   'settings.usage.page.options.showInWorkStatusAria': 'Im Arbeitsstatusbereich anzeigen',
   'settings.usage.page.options.showInWorkStatus': 'Im Arbeitsstatusbereich anzeigen',
   'settings.usage.page.options.showInWorkStatusTooltip': 'Wenn aktiviert, ist die Nutzung dieses Anbieters im Arbeitsstatusbereich sichtbar.',
@@ -2456,4 +2458,5 @@ export const settingsDict = {
   'settings.workspaces.handoff.cleanupTarget': 'Verwaiste Sitzung bereinigen',
   'settings.workspaces.handoff.cleanupComplete': 'Die verwaiste Zielsitzung wurde entfernt.',
   'settings.workspaces.handoff.cleanupFailed': 'Die verwaiste Zielsitzung konnte nicht entfernt werden.',
+  ...thirdPartyIntegrationI18n.de,
 };

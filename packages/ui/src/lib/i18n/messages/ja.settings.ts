@@ -1,3 +1,4 @@
+import { thirdPartyIntegrationI18n } from './third-party-integrations.i18n';
 export const settingsDict = {
   'settings.providers.page.openCodeGo.title': 'OpenCode Go 使用量追跡',
   'settings.providers.page.openCodeGo.description': 'OpenCode Go ダッシュボードを接続して、ローリング、週間、月間のクォータを表示します。',
@@ -1486,6 +1487,7 @@ export const settingsDict = {
   'settings.usage.page.header.providerUsage': '{provider} の使用量',
   'settings.usage.page.header.refreshing': '使用量を更新中...',
   'settings.usage.page.header.lastUpdated': '最終更新: {time}',
+  'settings.usage.page.header.lastUpdatedWithPlan': 'プラン: {plan} · 最終更新: {time}',
   'settings.usage.page.options.showInWorkStatusAria': '作業ステータスパネルに表示',
   'settings.usage.page.options.showInWorkStatus': '作業ステータスパネルに表示',
   'settings.usage.page.options.showInWorkStatusTooltip': '有効にすると、このプロバイダーの使用量が作業ステータスパネルに表示されます。',
@@ -2465,4 +2467,5 @@ export const settingsDict = {
   'settings.workspaces.handoff.cleanupTarget': '孤立セッションを削除',
   'settings.workspaces.handoff.cleanupComplete': '孤立した移行先セッションを削除しました。',
   'settings.workspaces.handoff.cleanupFailed': '孤立した移行先セッションを削除できませんでした。',
+  ...thirdPartyIntegrationI18n.ja,
 } as const;

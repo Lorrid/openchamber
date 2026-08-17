@@ -1,4 +1,5 @@
-﻿export const settingsDict = {
+import { thirdPartyIntegrationI18n } from './third-party-integrations.i18n';
+export const settingsDict = {
   'settings.providers.page.openCodeGo.title': 'OpenCode Go 用量追蹤',
   'settings.providers.page.openCodeGo.description': '連接 OpenCode Go 控制面板以顯示滾動、每週和每月配額。',
   'settings.providers.page.openCodeGo.workspaceId': '工作區 ID',
@@ -1360,6 +1361,7 @@
   'settings.usage.page.header.providerUsage': '{provider} 用量',
   'settings.usage.page.header.refreshing': '正在重新整理用量...',
   'settings.usage.page.header.lastUpdated': '最後更新：{time}',
+  'settings.usage.page.header.lastUpdatedWithPlan': '方案：{plan} · 最後更新：{time}',
   'settings.usage.page.options.showInWorkStatusAria': '在工作狀態面板中顯示',
   'settings.usage.page.options.showInWorkStatus': '在工作狀態面板中顯示',
   'settings.usage.page.options.showInWorkStatusTooltip': '啟用後，該供應商的用量會顯示在工作狀態面板中。',
@@ -2465,4 +2467,5 @@
   'settings.workspaces.handoff.cleanupTarget': '清理孤立工作階段',
   'settings.workspaces.handoff.cleanupComplete': '已刪除孤立的目標工作階段。',
   'settings.workspaces.handoff.cleanupFailed': '無法刪除孤立的目標工作階段。',
+  ...thirdPartyIntegrationI18n['zh-TW'],
 } as const;

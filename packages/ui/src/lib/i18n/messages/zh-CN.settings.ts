@@ -1,3 +1,4 @@
+import { thirdPartyIntegrationI18n } from './third-party-integrations.i18n';
 export const settingsDict = {
   'settings.providers.page.openCodeGo.title': 'OpenCode Go 用量跟踪',
   'settings.providers.page.openCodeGo.description': '连接 OpenCode Go 控制面板以显示滚动、每周和每月配额。',
@@ -1453,6 +1454,7 @@ export const settingsDict = {
   'settings.usage.page.header.providerUsage': '{provider} 用量',
   'settings.usage.page.header.refreshing': '正在刷新用量...',
   'settings.usage.page.header.lastUpdated': '最后更新：{time}',
+  'settings.usage.page.header.lastUpdatedWithPlan': '套餐：{plan} · 最后更新：{time}',
   'settings.usage.page.options.showInWorkStatusAria': '在工作状态面板中显示',
   'settings.usage.page.options.showInWorkStatus': '在工作状态面板中显示',
   'settings.usage.page.options.showInWorkStatusTooltip': '启用后，该提供商的用量会显示在工作状态面板中。',
@@ -2465,4 +2467,5 @@ export const settingsDict = {
   'settings.workspaces.handoff.cleanupTarget': '清理孤立会话',
   'settings.workspaces.handoff.cleanupComplete': '已删除孤立的目标会话。',
   'settings.workspaces.handoff.cleanupFailed': '无法删除孤立的目标会话。',
+  ...thirdPartyIntegrationI18n['zh-CN'],
 } as const;
