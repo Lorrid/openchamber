@@ -3070,6 +3070,7 @@ export const dict: Record<I18nKey, string> = {
   'chat.workStatus.section.contextBreakdown': 'コンテキストソース',
   'chat.workStatus.breakdown.skills': 'スキル',
   'chat.workStatus.breakdown.pinnedNote': 'メモ',
+  'chat.workStatus.breakdown.unpin': 'コンテキストからピンを外す',
   'chat.workStatus.breakdown.pinnedPlan': 'プラン',
   'chat.workStatus.breakdown.memory': 'エージェントメモリ',
   'chat.workStatus.breakdown.pinnedKnowledgeSingle': '{count} 件ピン留め',

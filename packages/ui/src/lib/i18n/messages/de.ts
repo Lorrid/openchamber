@@ -3068,6 +3068,7 @@ export const dict = {
   'chat.workStatus.section.contextBreakdown': 'Kontextquellen',
   'chat.workStatus.breakdown.skills': 'Skills',
   'chat.workStatus.breakdown.pinnedNote': 'Notiz',
+  'chat.workStatus.breakdown.unpin': 'Vom Kontext lösen',
   'chat.workStatus.breakdown.pinnedPlan': 'Plan',
   'chat.workStatus.breakdown.memory': 'Agenten-Gedächtnis',
   'chat.workStatus.breakdown.pinnedKnowledgeSingle': '{count} angeheftet',

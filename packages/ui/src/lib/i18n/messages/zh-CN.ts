@@ -3071,6 +3071,7 @@ export const dict: Record<I18nKey, string> = {
   'chat.workStatus.section.contextBreakdown': '上下文来源',
   'chat.workStatus.breakdown.skills': '技能',
   'chat.workStatus.breakdown.pinnedNote': '笔记',
+  'chat.workStatus.breakdown.unpin': '从上下文取消固定',
   'chat.workStatus.breakdown.pinnedPlan': '计划',
   'chat.workStatus.breakdown.memory': '智能体记忆',
   'chat.workStatus.breakdown.pinnedKnowledgeSingle': '已固定 {count}',

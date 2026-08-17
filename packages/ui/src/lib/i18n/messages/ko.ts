@@ -3070,6 +3070,7 @@ export const dict: Record<I18nKey, string> = {
   'chat.workStatus.section.contextBreakdown': '컨텍스트 소스',
   'chat.workStatus.breakdown.skills': '스킬',
   'chat.workStatus.breakdown.pinnedNote': '노트',
+  'chat.workStatus.breakdown.unpin': '컨텍스트에서 고정 해제',
   'chat.workStatus.breakdown.pinnedPlan': '계획',
   'chat.workStatus.breakdown.memory': '에이전트 메모리',
   'chat.workStatus.breakdown.pinnedKnowledgeSingle': '{count}개 고정',

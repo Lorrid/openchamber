@@ -6,6 +6,11 @@ import { useMcpStore } from '@/stores/useMcpStore';
 import { useSession } from '@/sync/sync-context';
 import { getLinkedIssues } from '@/lib/linkedIssues';
 import { fetchSessionKnowledgeSummary, type SessionKnowledgeSummary } from '@/lib/sessionKnowledgeApi';
+import { resolveProjectForSessionDirectory } from '@/lib/projectResolution';
+import { useProjectContextStore } from '@/stores/useProjectContextStore';
+import { useProjectsStore } from '@/stores/useProjectsStore';
+import { useAgentMemoryStore } from '@/stores/useAgentMemoryStore';
+import { useSessionUIStore } from '@/sync/session-ui-store';
 import { WorkStatusCollapsibleSection, WorkStatusRow, WorkStatusValue } from './WorkStatusPrimitives';
 import { useReportWorkStatusPresence } from './presenceContext';
 
@@ -52,13 +57,42 @@ export const WorkStatusContextSection: React.FC<Props> = ({ sessionId, directory
   const [knowledge, setKnowledge] = React.useState<SessionKnowledgeSummary>(
     { notes: [], plans: [], memory: { global: 0, project: 0 } },
   );
+
+  // Re-read whenever the stores that own pins or memory change, not only when
+  // the directory does. Unpinning is a write those stores make, and a panel
+  // that keeps listing what was just unpinned tells the user it is still going
+  // to the agent when it is not.
+  const contextEntries = useProjectContextStore((state) => state.entries);
+  const memoryProject = useAgentMemoryStore((state) => state.project);
+  const memoryGlobal = useAgentMemoryStore((state) => state.global);
+
   React.useEffect(() => {
     let cancelled = false;
     void fetchSessionKnowledgeSummary(directory).then((summary) => {
       if (!cancelled) setKnowledge(summary);
     });
     return () => { cancelled = true; };
-  }, [directory]);
+  }, [directory, contextEntries, memoryProject, memoryGlobal]);
+
+  const projects = useProjectsStore((state) => state.projects);
+  const availableWorktreesByProject = useSessionUIStore((state) => state.availableWorktreesByProject);
+  const setNotePinned = useProjectContextStore((state) => state.setNotePinned);
+  const setPlanPinned = useProjectContextStore((state) => state.setPlanPinned);
+
+  const projectRef = React.useMemo(() => {
+    const resolved = resolveProjectForSessionDirectory(projects, availableWorktreesByProject, directory ?? '');
+    return resolved ? { id: resolved.id, path: resolved.path } : null;
+  }, [availableWorktreesByProject, directory, projects]);
+
+  // Unpinning from here, like the pinned-messages section: a panel that says
+  // what is attached should be able to detach it, or the user has to go find
+  // the surface that can.
+  const unpinNote = React.useCallback((noteId: string) => {
+    if (projectRef) void setNotePinned(projectRef, noteId, false);
+  }, [projectRef, setNotePinned]);
+  const unpinPlan = React.useCallback((planId: string) => {
+    if (projectRef) void setPlanPinned(projectRef, planId, false);
+  }, [projectRef, setPlanPinned]);
 
   const memoryCount = knowledge.memory.global + knowledge.memory.project;
   const pinnedCount = knowledge.notes.length + knowledge.plans.length;
@@ -154,8 +188,10 @@ export const WorkStatusContextSection: React.FC<Props> = ({ sessionId, directory
         <WorkStatusRow
           key={note.id}
           muted
-          leading={<Icon name="pushpin" className="size-4 shrink-0 text-muted-foreground" />}
+          leading={<Icon name="pushpin" className="size-4 shrink-0 text-primary" />}
           label={note.body.trim().split('\n')[0] || note.body.trim()}
+          onClick={projectRef ? () => unpinNote(note.id) : undefined}
+          ariaLabel={t('chat.workStatus.breakdown.unpin')}
           value={<WorkStatusValue tone="muted">{t('chat.workStatus.breakdown.pinnedNote')}</WorkStatusValue>}
         />
       ))}
@@ -163,8 +199,10 @@ export const WorkStatusContextSection: React.FC<Props> = ({ sessionId, directory
         <WorkStatusRow
           key={plan.id}
           muted
-          leading={<Icon name="pushpin" className="size-4 shrink-0 text-muted-foreground" />}
+          leading={<Icon name="pushpin" className="size-4 shrink-0 text-primary" />}
           label={plan.title}
+          onClick={projectRef ? () => unpinPlan(plan.id) : undefined}
+          ariaLabel={t('chat.workStatus.breakdown.unpin')}
           value={<WorkStatusValue tone="muted">{t('chat.workStatus.breakdown.pinnedPlan')}</WorkStatusValue>}
         />
       ))}

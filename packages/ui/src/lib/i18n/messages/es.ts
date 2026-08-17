@@ -3071,6 +3071,7 @@ export const dict: Record<I18nKey, string> = {
   'chat.workStatus.section.contextBreakdown': 'Fuentes de contexto',
   'chat.workStatus.breakdown.skills': 'Habilidades',
   'chat.workStatus.breakdown.pinnedNote': 'nota',
+  'chat.workStatus.breakdown.unpin': 'Dejar de fijar al contexto',
   'chat.workStatus.breakdown.pinnedPlan': 'plan',
   'chat.workStatus.breakdown.memory': 'Memoria del agente',
   'chat.workStatus.breakdown.pinnedKnowledgeSingle': '{count} fijado',

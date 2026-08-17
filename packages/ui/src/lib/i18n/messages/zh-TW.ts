@@ -3070,6 +3070,7 @@ export const dict: Record<I18nKey, string> = {
   'chat.workStatus.section.contextBreakdown': '上下文來源',
   'chat.workStatus.breakdown.skills': '技能',
   'chat.workStatus.breakdown.pinnedNote': '筆記',
+  'chat.workStatus.breakdown.unpin': '從脈絡取消釘選',
   'chat.workStatus.breakdown.pinnedPlan': '計畫',
   'chat.workStatus.breakdown.memory': '代理記憶',
   'chat.workStatus.breakdown.pinnedKnowledgeSingle': '已釘選 {count}',
