@@ -1338,6 +1338,7 @@ export const dict = {
   'rightSidebar.contextNotesTodo.memory.scope.global': 'À votre sujet',
   'rightSidebar.contextNotesTodo.memory.type.fact': 'fait',
   'rightSidebar.contextNotesTodo.memory.badge.new': 'nouveau',
+  'rightSidebar.contextNotesTodo.memory.flagged': 'Retenu — se lit comme une instruction',
   'rightSidebar.contextNotesTodo.memory.badge.changed': 'modifié',
   'rightSidebar.contextNotesTodo.memory.type.preference': 'préférence',
   'rightSidebar.contextNotesTodo.memory.type.reference': 'référence',

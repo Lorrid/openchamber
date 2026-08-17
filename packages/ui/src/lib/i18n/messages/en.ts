@@ -1573,6 +1573,7 @@ export const dict = {
   'rightSidebar.contextNotesTodo.memory.scope.global': 'About you',
   'rightSidebar.contextNotesTodo.memory.type.fact': 'fact',
   'rightSidebar.contextNotesTodo.memory.badge.new': 'new',
+  'rightSidebar.contextNotesTodo.memory.flagged': 'Withheld from the agent — reads as an instruction',
   'rightSidebar.contextNotesTodo.memory.badge.changed': 'changed',
   'rightSidebar.contextNotesTodo.memory.type.preference': 'preference',
   'rightSidebar.contextNotesTodo.memory.type.reference': 'reference',

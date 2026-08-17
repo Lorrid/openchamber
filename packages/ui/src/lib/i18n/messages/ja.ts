@@ -1569,6 +1569,7 @@ export const dict: Record<I18nKey, string> = {
   'rightSidebar.contextNotesTodo.memory.scope.global': 'あなたについて',
   'rightSidebar.contextNotesTodo.memory.type.fact': '事実',
   'rightSidebar.contextNotesTodo.memory.badge.new': '新規',
+  'rightSidebar.contextNotesTodo.memory.flagged': 'エージェントには渡されません — 指示のように読めます',
   'rightSidebar.contextNotesTodo.memory.badge.changed': '変更',
   'rightSidebar.contextNotesTodo.memory.type.preference': '設定',
   'rightSidebar.contextNotesTodo.memory.type.reference': '参照',

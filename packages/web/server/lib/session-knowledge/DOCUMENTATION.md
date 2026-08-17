@@ -53,3 +53,19 @@ already has.
 Delivery is recorded only after the send is accepted. Recording it when the text
 is handed over would leave a failed send believing the agent had context it never
 received.
+
+## Entries that read as instructions
+
+Memory is the one place where text from outside can settle permanently. The
+agent reads a page, decides a line is worth keeping, saves it — and from then on
+it rides into every session in every project. An injection anywhere else lives
+for one conversation.
+
+`agent-memory/threat-patterns` scans on write and again on every read, so an
+entry written before a pattern existed, or edited on disk since, is judged now.
+A match never deletes: the entry is stored, flagged, kept out of what sessions
+are told, and shown in the panel with a warning. Silently dropping it would hide
+the attempt from the only person able to judge it.
+
+Patterns, not a model — this runs on every index build. That buys the blunt
+cases only, which is the honest expectation.

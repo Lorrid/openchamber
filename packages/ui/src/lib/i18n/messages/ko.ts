@@ -1575,6 +1575,7 @@ export const dict: Record<I18nKey, string> = {
   'rightSidebar.contextNotesTodo.memory.scope.global': '사용자 정보',
   'rightSidebar.contextNotesTodo.memory.type.fact': '사실',
   'rightSidebar.contextNotesTodo.memory.badge.new': '신규',
+  'rightSidebar.contextNotesTodo.memory.flagged': '에이전트에 전달되지 않음 — 지시문처럼 읽힘',
   'rightSidebar.contextNotesTodo.memory.badge.changed': '변경',
   'rightSidebar.contextNotesTodo.memory.type.preference': '선호',
   'rightSidebar.contextNotesTodo.memory.type.reference': '참조',

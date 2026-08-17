@@ -132,7 +132,7 @@ describe('create', () => {
   test('clamps oversized fields', async () => {
     const { entry } = await runtime.create(GLOBAL, { title: 'x'.repeat(300), body: 'y'.repeat(5000) });
 
-    expect(entry.title).toHaveLength(120);
+    expect(entry.title).toHaveLength(60);
     expect(entry.body).toHaveLength(2000);
   });
 
@@ -162,7 +162,7 @@ describe('create', () => {
     await writeJson(globalPath(), { version: 1, entries });
 
     await expect(runtime.create(GLOBAL, { title: 'One more', body: 'x' }))
-      .rejects.toThrow('global memory holds at most 60 entries');
+      .rejects.toThrow('global memory is full');
   });
 
   test('project memory refuses to grow past its own limit', async () => {
@@ -172,7 +172,7 @@ describe('create', () => {
     await writeJson(projectPath(), { version: 1, entries });
 
     await expect(runtime.create(PROJECT, { title: 'One more', body: 'x' }))
-      .rejects.toThrow('project memory holds at most 200 entries');
+      .rejects.toThrow('project memory is full');
   });
 
   test('concurrent creates all survive', async () => {
@@ -294,7 +294,7 @@ describe('restated duplicates', () => {
       await runtime.create(GLOBAL, { title: `Entry ${index}`, body: `Body number ${index}.` });
     }
     await expect(runtime.create(GLOBAL, { title: 'One more', body: 'Overflows the store.' }))
-      .rejects.toThrow('at most 60 entries');
+      .rejects.toThrow('memory is full');
 
     const result = await runtime.create(GLOBAL, { title: 'Entry 7', body: 'Corrected body.' });
 

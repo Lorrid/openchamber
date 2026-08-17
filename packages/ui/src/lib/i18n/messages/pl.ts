@@ -2654,6 +2654,7 @@ export const dict: Record<I18nKey, string> = {
   'rightSidebar.contextNotesTodo.memory.scope.global': 'O Tobie',
   'rightSidebar.contextNotesTodo.memory.type.fact': 'fakt',
   'rightSidebar.contextNotesTodo.memory.badge.new': 'nowe',
+  'rightSidebar.contextNotesTodo.memory.flagged': 'Wstrzymane — czyta się jak instrukcja',
   'rightSidebar.contextNotesTodo.memory.badge.changed': 'zmienione',
   'rightSidebar.contextNotesTodo.memory.type.preference': 'preferencja',
   'rightSidebar.contextNotesTodo.memory.type.reference': 'odnośnik',

@@ -32,7 +32,12 @@
 
 const MEMORY_VERSION = 1;
 
-const MEMORY_TITLE_MAX_LENGTH = 120;
+/**
+ * Titles are what every session carries, so their combined length is the
+ * standing cost of memory. Short enough to keep a full store's index modest,
+ * long enough to say what an entry is about.
+ */
+const MEMORY_TITLE_MAX_LENGTH = 60;
 const MEMORY_BODY_MAX_LENGTH = 2000;
 
 /** Global memory stays small on purpose: it is the highest-blast-radius store. */
@@ -45,6 +50,8 @@ const PROJECT_MEMORY_MAX_ITEMS = 200;
  * `reference` — a pointer to a resource that is hard to rediscover.
  */
 const MEMORY_TYPES = new Set(['fact', 'preference', 'reference']);
+
+import { findThreatPattern } from './threat-patterns.js';
 
 const PROJECT_ID_PATTERN = /^[a-zA-Z0-9._:-]+$/;
 
@@ -160,6 +167,9 @@ const sanitizeEntries = (value, now, scope) => {
       type: MEMORY_TYPES.has(entry.type) ? entry.type : 'fact',
       createdAt,
       updatedAt: Number.isFinite(entry.updatedAt) && entry.updatedAt >= 0 ? entry.updatedAt : createdAt,
+      // Re-checked on every read, not trusted from the file: an entry written
+      // before a pattern existed, or edited on disk since, is judged now.
+      ...(findThreatPattern(`${title}\n${body}`) ? { flagged: true } : {}),
       ...(sessionId ? { sessionId } : {}),
     });
   }
@@ -307,7 +317,17 @@ export const createAgentMemoryRuntime = (deps) => {
 
       const limit = limitForScope(resolved.scope);
       if (current.entries.length >= limit) {
-        throw new Error(`${resolved.scope} memory holds at most ${limit} entries`);
+        // Handed its own titles and told what to do with them. A bare "full"
+        // leaves the agent with a dead end, when the useful move — merge the
+        // overlapping entries, drop the stale ones, then retry — is something
+        // only it can judge.
+        const titles = current.entries.map((entry) => `- ${entry.title}`).join('\n');
+        throw new Error(
+          `${resolved.scope} memory is full (${current.entries.length}/${limit} entries). `
+          + 'Consolidate before saving anything else: merge overlapping entries by saving one '
+          + 'under an existing title, and delete what is stale or wrong. Then retry this save, '
+          + `all in this turn. Current entries:\n${titles}`,
+        );
       }
 
       const sessionId = asNonEmptyString(value?.sessionId);
@@ -318,6 +338,7 @@ export const createAgentMemoryRuntime = (deps) => {
         type: MEMORY_TYPES.has(value?.type) ? value.type : 'fact',
         createdAt: now,
         updatedAt: now,
+        ...(findThreatPattern(`${title}\n${body}`) ? { flagged: true } : {}),
         ...(sessionId ? { sessionId } : {}),
       };
       const entries = [entry, ...current.entries];

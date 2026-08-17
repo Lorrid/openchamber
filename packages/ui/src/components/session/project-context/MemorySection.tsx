@@ -70,7 +70,19 @@ const MemoryRow: React.FC<{
         onToggleExpanded();
       }}
       expandLabel={entry.title}
-      footer={<span className="typography-micro text-muted-foreground">{typeLabel}</span>}
+      footer={(
+        <span className="flex flex-wrap items-center gap-x-2 typography-micro text-muted-foreground">
+          {typeLabel}
+          {entry.flagged ? (
+            // Shown rather than hidden: an entry withheld from the agent is
+            // exactly the one the user needs to look at.
+            <span className="flex items-center gap-1 text-[var(--status-error)]">
+              <Icon name="error-warning" className="h-3 w-3 flex-shrink-0" />
+              {t('rightSidebar.contextNotesTodo.memory.flagged')}
+            </span>
+          ) : null}
+        </span>
+      )}
       header={badge ? (
         <span
           className={cn(

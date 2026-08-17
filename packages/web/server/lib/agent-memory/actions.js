@@ -175,11 +175,18 @@ export const createAgentMemoryActions = (dependencies) => {
       sessionId: asNonEmptyString(input.sessionId),
     });
     announce(target.scope, target.projectId);
+    // Deliberately does not echo the text back. Handing the model what it just
+    // wrote invites it to find something to improve and re-save, and the store
+    // is not the place to discover that a save worked — the confirmation is.
     return {
-      memory: toFullEntry(result.entry, target.scope),
+      saved: true,
+      memory: toSummary(result.entry, target.scope),
       // Told plainly so the agent does not report storing a second memory when
       // it actually corrected one it had already written.
       replaced: result.replaced,
+      ...(result.entry.flagged
+        ? { warning: 'Stored, but held back from future sessions: this text reads as an instruction to the model rather than a fact. The user can see it in the Memory panel.' }
+        : {}),
     };
   };
 

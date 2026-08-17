@@ -1551,6 +1551,7 @@ export const dict: Record<I18nKey, string> = {
   "rightSidebar.contextNotesTodo.memory.scope.global": "Sobre ti",
   "rightSidebar.contextNotesTodo.memory.type.fact": "hecho",
   "rightSidebar.contextNotesTodo.memory.badge.new": "nuevo",
+  "rightSidebar.contextNotesTodo.memory.flagged": "Retenido del agente: parece una instrucción",
   "rightSidebar.contextNotesTodo.memory.badge.changed": "cambiado",
   "rightSidebar.contextNotesTodo.memory.type.preference": "preferencia",
   "rightSidebar.contextNotesTodo.memory.type.reference": "referencia",

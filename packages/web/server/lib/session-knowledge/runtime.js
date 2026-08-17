@@ -152,9 +152,14 @@ export const createSessionKnowledgeRuntime = (dependencies) => {
         const stored = await agentMemoryRuntime.readAll(projectId || null);
         // A scope that failed to load is left out entirely rather than indexed
         // as empty, which would teach the agent to store what it already has.
+        //
+        // Flagged entries are withheld from the model but left in the store, so
+        // the user can see what was caught. Dropping them would hide the
+        // attempt from the only person able to judge it.
+        const visible = (entries) => entries.filter((entry) => !entry.flagged);
         memory = {
-          global: stored.globalFailed ? [] : stored.global,
-          project: stored.projectFailed ? [] : stored.project,
+          global: stored.globalFailed ? [] : visible(stored.global),
+          project: stored.projectFailed ? [] : visible(stored.project),
         };
       } catch {
         memory = { global: [], project: [] };

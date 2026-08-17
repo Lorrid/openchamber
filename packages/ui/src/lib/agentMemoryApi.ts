@@ -26,6 +26,11 @@ export interface AgentMemoryEntry {
   type: AgentMemoryType;
   createdAt: number;
   updatedAt: number;
+  /**
+   * Reads as an instruction to the model rather than a fact. Kept in the store
+   * and shown here, but withheld from what sessions are told.
+   */
+  flagged?: boolean;
   /** The session this was learned in, when the agent recorded one. */
   sessionId?: string;
 }
@@ -115,6 +120,7 @@ const parseEntry = (value: unknown): AgentMemoryEntry | null => {
     type: record.type === 'preference' || record.type === 'reference' ? record.type : 'fact',
     createdAt: typeof record.createdAt === 'number' ? record.createdAt : 0,
     updatedAt: typeof record.updatedAt === 'number' ? record.updatedAt : 0,
+    ...(record.flagged === true ? { flagged: true } : {}),
     ...(typeof record.sessionId === 'string' ? { sessionId: record.sessionId } : {}),
   };
 };
