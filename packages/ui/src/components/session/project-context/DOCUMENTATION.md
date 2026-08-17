@@ -103,6 +103,12 @@ client through `resolveProjectForSessionDirectory`, the server through
 `agent-memory/project-resolution`. Keying by the session directory instead filed
 a worktree's memories under a project nothing reads.
 
+Turning the switch back on re-reads the store only after the setting has
+finished being written. The switch flips the client immediately, which makes the
+panel ask the server straight away — and mid-write the server truthfully answers
+"disabled", which used to latch the tab hidden until a restart. Loads are also
+sequenced, so that stale answer cannot land after the good one.
+
 `agentMemoryToolEnabled` is one switch for the whole feature: it removes the
 tool from the agent, this tab from the panel, and the index from new sessions.
 The tab also hides when the server reports the surface disabled, so a stale

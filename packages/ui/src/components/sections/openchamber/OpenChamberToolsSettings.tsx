@@ -7,6 +7,7 @@ import {
 } from '@/components/sections/shared/SettingsSection';
 import { recordDeferredOpenCodeRestart } from '@/lib/opencode/deferredRestart';
 import { updateDesktopSettings } from '@/lib/persistence';
+import { useAgentMemoryStore } from '@/stores/useAgentMemoryStore';
 import { useUIStore } from '@/stores/useUIStore';
 import { useI18n } from '@/lib/i18n';
 
@@ -47,7 +48,16 @@ export const OpenChamberToolsSettings: React.FC = () => {
   // what is stored would be pointless once the agent can no longer manage it.
   const handleAgentMemoryToolChange = React.useCallback((enabled: boolean) => {
     setAgentMemoryToolEnabled(enabled);
-    void updateDesktopSettings({ agentMemoryToolEnabled: enabled });
+    // Re-read after the write lands, not before. The switch flips the client
+    // immediately, which makes the panel ask the server straight away — and
+    // while the setting is still being written the server truthfully answers
+    // "disabled", which used to leave the tab hidden until a restart.
+    void updateDesktopSettings({ agentMemoryToolEnabled: enabled })
+      .finally(() => {
+        if (enabled) {
+          void useAgentMemoryStore.getState().refresh();
+        }
+      });
     recordDeferredOpenCodeRestart('cli', { id: 'agent-memory-tool' });
   }, [setAgentMemoryToolEnabled]);
 

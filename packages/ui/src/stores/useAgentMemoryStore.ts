@@ -36,6 +36,8 @@ interface AgentMemoryState {
   error: string | null;
 
   load: (projectPath: string | null) => Promise<void>;
+  /** Re-read the store the last load used. */
+  refresh: () => Promise<void>;
   saveEntry: (
     scope: AgentMemoryScope,
     memoryId: string,
@@ -57,6 +59,14 @@ const EMPTY_STATE = {
   projectFailed: false,
   error: null as string | null,
 };
+
+/**
+ * Only the newest load may write to the store. Turning the feature back on
+ * fires a load before the setting has finished being written, so an older
+ * "disabled" answer can arrive after a newer successful one and latch the
+ * feature off again.
+ */
+let loadSequence = 0;
 
 /** Serializes writes so a slow first request cannot overwrite a later one. */
 let writeChain: Promise<unknown> = Promise.resolve();
@@ -85,9 +95,11 @@ export const useAgentMemoryStore = create<AgentMemoryState>((set, get) => ({
   ...EMPTY_STATE,
 
   load: async (projectPath) => {
-    set({ loading: true });
+    const requestId = ++loadSequence;
+    set({ loading: true, projectPath });
     try {
       const snapshot = await fetchAgentMemory(projectPath);
+      if (requestId !== loadSequence) return;
       set({
         global: snapshot.global,
         project: snapshot.project,
@@ -100,16 +112,22 @@ export const useAgentMemoryStore = create<AgentMemoryState>((set, get) => ({
         error: null,
       });
     } catch (error) {
+      if (requestId !== loadSequence) return;
       if (error instanceof AgentMemoryDisabledError) {
         // Switched off is not a failure. Clearing the lists is right here and
         // only here: with the feature off there is nothing for the user to act
-        // on, and the tab that would show them is gone too.
-        set({ ...EMPTY_STATE, disabled: true, loaded: true });
+        // on, and the tab that would show them is gone too. The path is kept so
+        // a later refresh knows which store to re-read.
+        set({ ...EMPTY_STATE, projectPath, disabled: true, loaded: true });
         return;
       }
       // Whatever was loaded before stays. Only the error is new.
       set({ loading: false, error: errorMessage(error, 'Failed to load agent memory') });
     }
+  },
+
+  refresh: async () => {
+    await get().load(get().projectPath);
   },
 
   saveEntry: async (scope, memoryId, patch) => enqueueWrite(async () => {

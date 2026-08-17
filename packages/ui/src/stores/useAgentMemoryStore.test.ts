@@ -178,3 +178,55 @@ describe('user corrections', () => {
     expect(useAgentMemoryStore.getState().global[0].title).toBe('About user');
   });
 });
+
+describe('turning the feature off and on', () => {
+  test('a successful load clears the disabled flag', async () => {
+    readImpl = async () => { throw new AgentMemoryDisabledError(); };
+    await useAgentMemoryStore.getState().load('/tmp/project');
+    expect(useAgentMemoryStore.getState().disabled).toBe(true);
+
+    readImpl = async () => ({
+      global: [entry({ id: 'g1' })], project: [], globalFailed: false, projectFailed: false,
+    });
+    await useAgentMemoryStore.getState().load('/tmp/project');
+
+    expect(useAgentMemoryStore.getState().disabled).toBe(false);
+  });
+
+  test('refresh re-reads the store the last load used', async () => {
+    readImpl = async () => { throw new AgentMemoryDisabledError(); };
+    await useAgentMemoryStore.getState().load('/tmp/project');
+
+    let requestedPath: string | null = 'unset';
+    readImpl = async () => {
+      requestedPath = useAgentMemoryStore.getState().projectPath;
+      return { global: [], project: [], globalFailed: false, projectFailed: false };
+    };
+    await useAgentMemoryStore.getState().refresh();
+
+    // The disabled answer must not lose the path, or refresh reads the wrong store.
+    expect(requestedPath).toBe('/tmp/project');
+  });
+
+  test('a stale disabled answer cannot latch the feature off again', async () => {
+    // Re-enabling fires a load before the setting has finished being written,
+    // so the server truthfully answers "disabled" to a request that is already
+    // out of date by the time it lands.
+    const gate: { release?: () => void } = {};
+    readImpl = () => new Promise((_resolve, reject) => {
+      gate.release = () => reject(new AgentMemoryDisabledError());
+    });
+    const stale = useAgentMemoryStore.getState().load('/tmp/project');
+
+    readImpl = async () => ({
+      global: [entry({ id: 'g1' })], project: [], globalFailed: false, projectFailed: false,
+    });
+    await useAgentMemoryStore.getState().load('/tmp/project');
+
+    gate.release?.();
+    await stale;
+
+    expect(useAgentMemoryStore.getState().disabled).toBe(false);
+    expect(useAgentMemoryStore.getState().global).toHaveLength(1);
+  });
+});
