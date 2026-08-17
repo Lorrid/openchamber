@@ -108,23 +108,54 @@ export const createAgentMemoryActions = (dependencies) => {
    * Reading by title as well as by id is deliberate: the session index lists
    * titles only, so requiring an id would force a list call before every read
    * just to translate what the agent can already see.
+   *
+   * Scope is optional here. It decides everything for a write — a fact filed
+   * globally reaches every project — but for a read it is only which drawer to
+   * open, and demanding it turned a legible request into an error the model had
+   * to recover from. Omitted, both stores are searched.
    */
   const read = async (input, contextDirectory) => {
-    const target = await resolveTarget(input, contextDirectory);
     const memoryId = asNonEmptyString(input.memoryId);
     const title = asNonEmptyString(input.title);
     if (!memoryId && !title) {
       fail('memory.read requires memoryId or title', 400);
     }
 
-    const { entries } = await agentMemoryRuntime.read(target);
-    const found = memoryId
-      ? entries.find((entry) => entry.id === memoryId)
-      : entries.find((entry) => entry.title.toLowerCase() === title.toLowerCase());
-    if (!found) {
-      fail('No memory matches that id or title in this scope', 404);
+    const matches = (entry) => (memoryId
+      ? entry.id === memoryId
+      : entry.title.toLowerCase() === title.toLowerCase());
+
+    const requestedScope = asNonEmptyString(input.scope);
+    if (requestedScope === 'global' || requestedScope === 'project') {
+      const target = await resolveTarget(input, contextDirectory);
+      const { entries } = await agentMemoryRuntime.read(target);
+      const found = entries.find(matches);
+      if (!found) {
+        fail('No memory matches that id or title in this scope', 404);
+      }
+      return { memory: toFullEntry(found, target.scope) };
     }
-    return { memory: toFullEntry(found, target.scope) };
+
+    const directory = asNonEmptyString(contextDirectory);
+    const projectId = directory ? await resolveProjectIdForDirectory(directory) : null;
+    const result = await agentMemoryRuntime.readAll(projectId);
+
+    const projectMatch = result.project.find(matches);
+    if (projectMatch) {
+      // Project first: when both stores hold the same title, the one about this
+      // codebase is the one being asked about.
+      return { memory: toFullEntry(projectMatch, 'project') };
+    }
+    const globalMatch = result.global.find(matches);
+    if (globalMatch) {
+      return { memory: toFullEntry(globalMatch, 'global') };
+    }
+    if (result.globalFailed || result.projectFailed) {
+      // Never reported as "no such memory": a store that failed to load may well
+      // hold it, and the agent would go on to store it a second time.
+      fail('Stored memory could not be read; try again before assuming it is absent', 503);
+    }
+    fail('No memory matches that id or title', 404);
   };
 
   const save = async (input, contextDirectory) => {

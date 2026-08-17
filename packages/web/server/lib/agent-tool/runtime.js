@@ -35,6 +35,17 @@ const WEB_PARAMETER_NAMES = ['url', 'selector', 'text', 'value', 'submit', 'dire
 const MEMORY_ONLY_PARAMETER_NAMES = ['body', 'scope', 'memoryId', 'type'];
 const MEMORY_PARAMETER_NAMES = [...MEMORY_ONLY_PARAMETER_NAMES, 'title'];
 
+/**
+ * `title` is shared with the control tool, where it means a session title, so
+ * it carries no description in the shared map. Left undescribed for memory the
+ * model has nothing to go on and invents a name for it — `name` was sent
+ * repeatedly in practice — so memory states what its own `title` is.
+ */
+const MEMORY_PARAMETER_OVERRIDES = {
+  title: { type: 'string', description: "The memory's title, exactly as the session index lists it. Use this to read an entry you can already see; use memoryId only when a result gave you one" },
+  scope: { type: 'string', enum: ['global', 'project', 'both'], description: 'global is about the user and applies everywhere; project is about this codebase. Required for memory.save and memory.delete. Optional for memory.read and memory.list, which search both stores when it is omitted' },
+};
+
 const ALL_PARAMETER_PROPERTIES = {
   projectId: { type: 'string', description: 'Configured project ID; do not combine with directory' },
   directory: { type: 'string', description: 'Absolute checkout or session directory; defaults to the current session directory' },
@@ -92,7 +103,10 @@ const CONTROL_PARAMETER_PROPERTIES = pickParameters(
   )),
 );
 const WEB_PARAMETER_PROPERTIES = pickParameters(WEB_PARAMETER_NAMES);
-const MEMORY_PARAMETER_PROPERTIES = pickParameters(MEMORY_PARAMETER_NAMES);
+const MEMORY_PARAMETER_PROPERTIES = {
+  ...pickParameters(MEMORY_PARAMETER_NAMES),
+  ...MEMORY_PARAMETER_OVERRIDES,
+};
 
 const CONTROL_TOOL_DESCRIPTION = "Control OpenChamber projects, sessions, and scheduled tasks on the user's behalf. Sessions and scheduled tasks you create are for the user to follow and interact with; never use this tool to delegate parts of your own current task. Use one action per call. Scope with projectId or directory; omit both to use the current session directory. Session dispatches return immediately by default and you receive no notification when a dispatched session finishes, so never promise to report back on it; the user follows it in OpenChamber; a dispatched session needs no follow-up from you. If the user later asks how it went, use session.messages (add wait to block until it is idle, lastAssistant for just the final answer) — session.send always sends a NEW prompt and never just waits. Set wait only when the user asks or the next step requires the completed result. Session and worktree deletion are unavailable.";
 

@@ -192,6 +192,45 @@ describe('read', () => {
       .rejects.toThrow('No memory matches');
   });
 
+  test('finds a memory without being told which store holds it', async () => {
+    // Scope decides everything for a write, but for a read it is only which
+    // drawer to open — demanding it turned a legible request into an error.
+    await actions.execute('memory.save', { scope: 'global', title: 'About user', body: 'Global text.' }, DIRECTORY);
+
+    const result = await actions.execute('memory.read', { title: 'About user' }, DIRECTORY);
+
+    expect(result.memory.body).toBe('Global text.');
+    expect(result.memory.scope).toBe('global');
+  });
+
+  test('prefers the project store when both hold the same title', async () => {
+    await actions.execute('memory.save', { scope: 'global', title: 'Shared', body: 'Global text.' }, DIRECTORY);
+    await actions.execute('memory.save', { scope: 'project', title: 'Shared', body: 'Project text.' }, DIRECTORY);
+
+    const result = await actions.execute('memory.read', { title: 'Shared' }, DIRECTORY);
+
+    expect(result.memory.scope).toBe('project');
+  });
+
+  test('an unscoped miss is still reported', async () => {
+    await expect(actions.execute('memory.read', { title: 'absent' }, DIRECTORY))
+      .rejects.toThrow('No memory matches');
+  });
+
+  test('a store that failed to load is not reported as an absent memory', async () => {
+    const failing = createAgentMemoryActions({
+      agentMemoryRuntime: {
+        readAll: async () => ({ global: [], project: [], globalFailed: true, projectFailed: false }),
+      },
+      createError: (message, status) => new TestError(message, status),
+      resolveProjectId: async (directory) => createProjectIdFromPath(directory),
+    });
+
+    // Answering "no such memory" would send the agent off to store it again.
+    await expect(failing.execute('memory.read', { title: 'anything' }, DIRECTORY))
+      .rejects.toThrow('could not be read');
+  });
+
   test('does not reach across scopes', async () => {
     await actions.execute('memory.save', { scope: 'project', title: 'Uses bun', body: 'x' }, DIRECTORY);
 
