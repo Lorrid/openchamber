@@ -5,6 +5,7 @@ import {
   OPENCHAMBER_AGENT_TOOL_ACTIONS,
   OPENCHAMBER_MEMORY_ACTION_DEFINITIONS,
   OPENCHAMBER_MEMORY_ACTIONS,
+  resolveAgentToolAction,
   OPENCHAMBER_WEB_ACTION_DEFINITIONS,
   OPENCHAMBER_WEB_ACTIONS,
 } from '../openchamber-control/actions.js';
@@ -172,7 +173,7 @@ const createToolEntry = ({ name, description, actions, definitions, parameters }
               authorization: "Bearer " + token,
               "content-type": "application/json",
             },
-            body: JSON.stringify({ input: args, contextDirectory: context.directory }),
+            body: JSON.stringify({ input: args, contextDirectory: context.directory, tool: ${JSON.stringify(name)} }),
             signal: context.abort,
           })
           const output = await response.text()
@@ -297,15 +298,23 @@ export const createAgentToolRuntime = (dependencies) => {
   };
 
   const execute = async (payload = {}, options = {}) => {
-    const action = asNonEmptyString(payload.input?.action);
-    if (!action || !ACTIONS.has(action)) {
-      return createResult({ ok: false, action, error: { message: `Unsupported OpenChamber action: ${action || 'missing'}`, kind: 'usage' } });
+    const requested = asNonEmptyString(payload.input?.action);
+    // Resolved against the calling tool's own actions: models drop the
+    // namespace that the tool's name already implies, and answering "read" with
+    // a bare "unsupported" leaves them to guess a second wrong name.
+    const resolution = resolveAgentToolAction(requested, asNonEmptyString(payload.tool));
+    if (resolution.error) {
+      return createResult({ ok: false, action: requested, error: { message: resolution.error, kind: 'usage' } });
+    }
+    const action = resolution.action;
+    if (!ACTIONS.has(action)) {
+      return createResult({ ok: false, action, error: { message: `Unsupported OpenChamber action: ${action}`, kind: 'usage' } });
     }
     if (typeof executeAction !== 'function') {
       return createResult({ ok: false, action, error: { message: 'OpenChamber control service is unavailable', kind: 'runtime' } });
     }
     try {
-      const data = await executeAction(action, payload.input, payload.contextDirectory, options);
+      const data = await executeAction(action, { ...payload.input, action }, payload.contextDirectory, options);
       return createResult({ ok: true, action, data });
     } catch (error) {
       return createResult({

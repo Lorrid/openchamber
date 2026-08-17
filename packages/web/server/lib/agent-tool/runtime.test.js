@@ -235,6 +235,54 @@ describe('managed agent tool runtime', () => {
     expect(failed).toBe(true);
   });
 
+  it('accepts the bare action a tool name already qualifies', async () => {
+    // Observed: the model called `read` on openchamber_memory, having taken the
+    // tool's own name for the namespace.
+    const executeAction = vi.fn(async () => ({ memory: {} }));
+    const { runtime } = await createRuntime({ executeAction });
+
+    const result = await runtime.execute({
+      input: { action: 'read', title: 'Uses bun' },
+      contextDirectory: '/work/project',
+      tool: 'openchamber_memory',
+    });
+
+    expect(result.ok).toBe(true);
+    expect(result.action).toBe('memory.read');
+    expect(executeAction).toHaveBeenCalledWith(
+      'memory.read',
+      { action: 'memory.read', title: 'Uses bun' },
+      '/work/project',
+      {},
+    );
+  });
+
+  it('tells an unresolvable action what the calling tool can do', async () => {
+    const { runtime } = await createRuntime();
+
+    const result = await runtime.execute({
+      input: { action: 'get' },
+      tool: 'openchamber_memory',
+    });
+
+    expect(result.ok).toBe(false);
+    expect(result.error.message).toContain('memory.read');
+    expect(result.error.message).not.toContain('browser.open');
+  });
+
+  it('does not let one tool reach another tool\'s actions', async () => {
+    const executeAction = vi.fn(async () => ({}));
+    const { runtime } = await createRuntime({ executeAction });
+
+    const result = await runtime.execute({
+      input: { action: 'open', url: 'https://example.test' },
+      tool: 'openchamber_memory',
+    });
+
+    expect(result.ok).toBe(false);
+    expect(executeAction).not.toHaveBeenCalled();
+  });
+
   it('executes actions through the shared control service', async () => {
     const executeAction = vi.fn(async () => ({ projects: [] }));
     const { runtime } = await createRuntime({ executeAction });

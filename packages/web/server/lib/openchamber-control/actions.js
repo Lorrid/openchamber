@@ -75,6 +75,61 @@ export const OPENCHAMBER_MEMORY_ACTIONS = Object.freeze(
   OPENCHAMBER_MEMORY_ACTION_DEFINITIONS.map(({ action }) => action),
 );
 
+/**
+ * Which actions each managed tool may ask for.
+ *
+ * The callback needs this because models routinely drop the namespace: asked
+ * for `memory.read` from a tool already called `openchamber_memory`, they send
+ * `read`, since the tool's own name appears to have said "memory" already. The
+ * name is unambiguous inside one tool's action set even when it is not across
+ * all of them (`delete` belongs to both schedule and memory), so resolution
+ * starts from the tool that asked.
+ */
+const ACTIONS_BY_TOOL = Object.freeze({
+  openchamber: OPENCHAMBER_AGENT_TOOL_ACTIONS,
+  openchamber_web: OPENCHAMBER_WEB_ACTIONS,
+  openchamber_memory: OPENCHAMBER_MEMORY_ACTIONS,
+});
+
+const bareName = (action) => {
+  const separator = action.indexOf('.');
+  return separator === -1 ? action : action.slice(separator + 1);
+};
+
+const uniqueMatch = (candidates, requested) => {
+  const matches = candidates.filter((candidate) => bareName(candidate) === requested);
+  return matches.length === 1 ? matches[0] : null;
+};
+
+/**
+ * The canonical action for what a tool asked, or the reason it could not be
+ * resolved. The reason lists what the tool can actually do: an error that only
+ * says "unsupported" leaves the model to guess again, which is how one wrong
+ * name becomes three.
+ */
+export const resolveAgentToolAction = (requested, toolName) => {
+  const value = typeof requested === 'string' ? requested.trim() : '';
+  const scoped = ACTIONS_BY_TOOL[toolName] ?? null;
+  const known = scoped ?? OPENCHAMBER_ALL_ACTIONS;
+
+  if (value && known.includes(value)) {
+    return { action: value };
+  }
+  if (value) {
+    const resolved = uniqueMatch(known, value)
+      // A tool that did not identify itself still gets the benefit when the
+      // bare name means only one thing across every action.
+      ?? (scoped ? null : uniqueMatch(OPENCHAMBER_ALL_ACTIONS, value));
+    if (resolved) {
+      return { action: resolved };
+    }
+  }
+
+  return {
+    error: `Unsupported OpenChamber action: ${value || 'missing'}. Use one of: ${known.join(', ')}`,
+  };
+};
+
 /** Everything the callback route will dispatch, whichever tool asked. */
 export const OPENCHAMBER_ALL_ACTIONS = Object.freeze([
   ...OPENCHAMBER_CONTROL_ACTIONS,
