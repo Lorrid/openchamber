@@ -1334,6 +1334,7 @@ const openChamberControlService = createOpenChamberControlService({
     agentMemoryRuntime,
     createError: (message, status) => new OpenChamberControlError(message, status),
     onMemoryChanged: emitAgentMemoryChangedEvent,
+    isAgentMemoryEnabled,
     resolveProjectId: resolveMemoryProjectId,
   }),
 });

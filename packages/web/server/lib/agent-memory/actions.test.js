@@ -294,3 +294,50 @@ describe('delete', () => {
       .rejects.toThrow('No memory has that id');
   });
 });
+
+describe('when the user switches memory off', () => {
+  const disabled = () => createAgentMemoryActions({
+    agentMemoryRuntime: runtime,
+    createError: (message, status) => new TestError(message, status),
+    resolveProjectId: async (directory) => createProjectIdFromPath(directory),
+    isAgentMemoryEnabled: async () => false,
+  });
+
+  test('refuses to write, so nothing accumulates unseen', async () => {
+    // The tool lives in the OpenCode child until it restarts, so the agent can
+    // still call this after the switch goes off. Those writes would land on
+    // disk while the panel showing them is hidden.
+    await expect(disabled().execute('memory.save', { scope: 'global', title: 'T', body: 'b' }, DIRECTORY))
+      .rejects.toThrow('switched off');
+    expect((await runtime.read({ scope: 'global' })).entries).toHaveLength(0);
+  });
+
+  test('refuses to read as well', async () => {
+    await expect(disabled().execute('memory.list', {}, DIRECTORY)).rejects.toThrow('switched off');
+    await expect(disabled().execute('memory.read', { title: 'x' }, DIRECTORY)).rejects.toThrow('switched off');
+  });
+
+  test('an unreadable setting closes the surface rather than opening it', async () => {
+    const unknown = createAgentMemoryActions({
+      agentMemoryRuntime: runtime,
+      createError: (message, status) => new TestError(message, status),
+      resolveProjectId: async (directory) => createProjectIdFromPath(directory),
+      isAgentMemoryEnabled: async () => { throw new Error('settings unreadable'); },
+    });
+
+    await expect(unknown.execute('memory.save', { scope: 'global', title: 'T', body: 'b' }, DIRECTORY))
+      .rejects.toThrow('switched off');
+  });
+
+  test('works normally while it is on', async () => {
+    const on = createAgentMemoryActions({
+      agentMemoryRuntime: runtime,
+      createError: (message, status) => new TestError(message, status),
+      resolveProjectId: async (directory) => createProjectIdFromPath(directory),
+      isAgentMemoryEnabled: async () => true,
+    });
+
+    const result = await on.execute('memory.save', { scope: 'global', title: 'T', body: 'b' }, DIRECTORY);
+    expect(result.saved).toBe(true);
+  });
+});

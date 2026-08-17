@@ -36,7 +36,13 @@ const toSummary = (entry, scope) => ({
 const toFullEntry = (entry, scope) => ({ ...toSummary(entry, scope), body: entry.body });
 
 export const createAgentMemoryActions = (dependencies) => {
-  const { agentMemoryRuntime, createError, onMemoryChanged, resolveProjectId: resolveProjectIdForDirectory } = dependencies;
+  const {
+    agentMemoryRuntime,
+    createError,
+    onMemoryChanged,
+    resolveProjectId: resolveProjectIdForDirectory,
+    isAgentMemoryEnabled,
+  } = dependencies;
 
   /**
    * Announce a write so an open panel shows it without being reopened. The
@@ -204,6 +210,26 @@ export const createAgentMemoryActions = (dependencies) => {
   };
 
   const execute = async (action, input = {}, contextDirectory) => {
+    /**
+     * The tool lives in the managed OpenCode child and only disappears when
+     * that child restarts, so between switching memory off and restarting it
+     * the agent can still call this. Ungated, those writes would land on disk
+     * while the panel that shows them is hidden and the index that carries
+     * them is suppressed — memory accumulating where nobody can see it.
+     */
+    if (typeof isAgentMemoryEnabled === 'function') {
+      let enabled = false;
+      try {
+        enabled = await isAgentMemoryEnabled();
+      } catch {
+        // An unreadable setting closes the surface rather than opening it.
+        enabled = false;
+      }
+      if (!enabled) {
+        return fail('Agent memory is switched off in OpenChamber settings', 403);
+      }
+    }
+
     switch (action) {
       case 'memory.list': return list(input, contextDirectory);
       case 'memory.read': return read(input, contextDirectory);
