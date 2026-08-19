@@ -34,6 +34,15 @@ const getBoundedTextTail = (value, maxBytes) => {
 const sanitizeDiagnosticText = (value) => String(value ?? '')
   .replace(/(https?:\/\/)[^/\s:@]+:[^/\s@]+@/gi, '$1[redacted]@')
   .replace(/\b(Bearer)\s+[^\s,;]+/gi, '$1 [redacted]')
+  // Unquoted `Authorization: <scheme> <credential>` values must be handled
+  // before the generic key/value rule below: that rule stops at whitespace, so
+  // it would redact only the scheme word and leave the credential intact.
+  // Scoped to authorization-style keys so ordinary prose using "basic" or
+  // "token" is not mangled.
+  .replace(
+    /(^|[\s,{\[])((?:"|')?[a-z0-9_.-]{0,80}authorization[a-z0-9_.-]{0,80}(?:"|')?\s*[:=]\s*(?:"|')?(?:basic|bearer|token)\s+)[^\s,;"']+/gim,
+    '$1$2[redacted]',
+  )
   .replace(/([?&][^=&#\s]*(?:token|api[_-]?key|password|secret|authorization|credential|private[_-]?key)[^=&#\s]*=)[^&#\s]+/gi, '$1[redacted]')
   .replace(
     /(^|[\s,{\[])((?:"|')?[a-z0-9_.-]{0,80}(?:token|api[_-]?key|password|secret|authorization|credential|private[_-]?key)[a-z0-9_.-]{0,80}(?:"|')?\s*[:=]\s*)("[^"]*"|'[^']*'|[^\s,;]+)/gim,

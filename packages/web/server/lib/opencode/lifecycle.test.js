@@ -443,6 +443,61 @@ describe('OpenCode lifecycle', () => {
     warn.mockRestore();
   });
 
+  it('redacts Authorization scheme credentials from stderr diagnostics', async () => {
+    const firstChild = createMockChild();
+    const replacement = createMockChild();
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    globalThis.fetch = vi.fn(async () => ({
+      ok: false,
+      status: 503,
+      json: async () => null,
+    }));
+    spawnMock.mockImplementationOnce(() => {
+      queueMicrotask(() => {
+        firstChild.stdout.emit('data', 'opencode server listening on http://127.0.0.1:45678\n');
+      });
+      return firstChild;
+    });
+    spawnMock.mockImplementationOnce(() => {
+      queueMicrotask(() => {
+        replacement.stdout.emit('data', 'opencode server listening on http://127.0.0.1:45678\n');
+      });
+      return replacement;
+    });
+    const runtime = createRuntime();
+    const server = await runtime.startOpenCode();
+    runtime.testState.openCodeProcess = server;
+
+    firstChild.stderr.emit(
+      'data',
+      'request rejected: Authorization: Basic dXNlcjpwYXNz\n'
+      + 'authorization: basic bG93ZXI6Y2FzZQ==\n'
+      + 'Authorization: Bearer fake-bearer-token-value\n'
+      + 'falling back to basic health monitor\n'
+      + 'runtime worker failed after startup\n',
+    );
+    firstChild.exitCode = 7;
+    firstChild.emit('exit', 7, null);
+
+    expect(server.stderrTail).not.toContain('dXNlcjpwYXNz');
+    expect(server.stderrTail).not.toContain('bG93ZXI6Y2FzZQ');
+    expect(server.stderrTail).not.toContain('fake-bearer-token-value');
+    expect(server.stderrTail).toContain('falling back to basic health monitor');
+    expect(server.stderrTail).toContain('runtime worker failed after startup');
+
+    await runtime.triggerHealthCheck();
+
+    const diagnosticsTail = runtime.testState.lastOpenCodeRestartDiagnostics.process.stderrTail;
+    expect(diagnosticsTail).not.toContain('dXNlcjpwYXNz');
+    expect(diagnosticsTail).not.toContain('bG93ZXI6Y2FzZQ');
+    expect(diagnosticsTail).not.toContain('fake-bearer-token-value');
+    expect(diagnosticsTail).toContain('falling back to basic health monitor');
+    expect(diagnosticsTail).toContain('runtime worker failed after startup');
+
+    await runtime.testState.openCodeProcess.close();
+    warn.mockRestore();
+  });
+
   it('does not call onOpenCodeRestarted when a managed restart fails', async () => {
     const close = vi.fn(async () => {});
     const onOpenCodeRestarted = vi.fn();
