@@ -13,7 +13,7 @@
     "electron-updater": "^6.8.3"
   },
   "devDependencies": {
-    "@openchamber/opencode-container-workspace": "github:openchamber/opencode-container-workspace#0e20307d45db3c9a2faf2a0be8d8f535484449f5",
+    "@openchamber/opencode-container-workspace": "github:openchamber/opencode-container-workspace#b1c4682d5c1509c86fa5ce7f4e7170fa4ba13466",
     "@electron/rebuild": "^4.2.0",
     "electron": "^43.3.0",
     "electron-builder": "^26.0.0",
