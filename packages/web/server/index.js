@@ -291,6 +291,11 @@ const getCachedZenModels = (...args) => notificationTemplateRuntime.getCachedZen
 const OPENCHAMBER_DATA_DIR = process.env.OPENCHAMBER_DATA_DIR
   ? path.resolve(process.env.OPENCHAMBER_DATA_DIR)
   : path.join(os.homedir(), '.config', 'openchamber');
+if (process.env.OPENCHAMBER_DATA_DIR && !process.env.OPENCHAMBER_WORKSPACE_STATE_DIR) {
+  // Plugin workers may reconstruct their launch environment, so keep their state root
+  // on the explicit profile environment as well as in managed-child launch options.
+  process.env.OPENCHAMBER_WORKSPACE_STATE_DIR = path.join(OPENCHAMBER_DATA_DIR, 'workspace-plugin-v1');
+}
 const SETTINGS_FILE_PATH = path.join(OPENCHAMBER_DATA_DIR, 'settings.json');
 const PUSH_SUBSCRIPTIONS_FILE_PATH = path.join(OPENCHAMBER_DATA_DIR, 'push-subscriptions.json');
 const APNS_TOKENS_FILE_PATH = path.join(OPENCHAMBER_DATA_DIR, 'apns-tokens.json');
@@ -1107,6 +1112,7 @@ const openCodeLifecycleRuntime = createOpenCodeLifecycleRuntime({
     const isolatedProfileEnv = process.env.OPENCHAMBER_DATA_DIR
       ? {
           XDG_DATA_HOME: process.env.XDG_DATA_HOME || path.join(OPENCHAMBER_DATA_DIR, 'opencode-data'),
+          OPENCHAMBER_WORKSPACE_STATE_DIR: process.env.OPENCHAMBER_WORKSPACE_STATE_DIR || path.join(OPENCHAMBER_DATA_DIR, 'workspace-plugin-v1'),
         }
       : {};
     // Each capability is its own tool and its own switch; the plugin is only

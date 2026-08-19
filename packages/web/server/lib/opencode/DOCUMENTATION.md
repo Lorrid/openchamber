@@ -144,9 +144,10 @@ spawn so zsh-backed OpenCode tools do not rewrite child argv[0] to the AppImage
 path (#2588).
 
 When `OPENCHAMBER_DATA_DIR` is supplied, the managed OpenCode child receives a
-profile-local `XDG_DATA_HOME` unless explicitly set by the caller. This keeps
-disposable OpenChamber profiles independent from global OpenCode sessions while
-retaining the shared OpenCode configuration that owns plugin setup.
+profile-local `XDG_DATA_HOME` and the plugin receives a profile-local
+`OPENCHAMBER_WORKSPACE_STATE_DIR` unless explicitly set by the caller. This
+keeps disposable OpenChamber profiles independent from global OpenCode sessions
+and prevents workspace state from falling back into the user's home directory.
 
 Before spawn, `applyProviderEnvAliases` fills unset Google credential aliases
 from any present sibling (`GOOGLE_GENERATIVE_AI_API_KEY`, `GOOGLE_API_KEY`,
