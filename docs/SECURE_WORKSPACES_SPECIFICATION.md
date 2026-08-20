@@ -1,7 +1,7 @@
 ﻿# Secure Workspaces Production Specification
 
 Status: authoritative implementation and release specification
-Last audited: 2026-08-13
+Last audited: 2026-08-20
 
 ## 1. Purpose
 
@@ -129,7 +129,8 @@ OpenChamber owns:
 OpenChamber MUST NOT:
 
 - duplicate OpenCode workspace or session lifecycle state as an independent source of truth;
-- implement its own session-to-workspace router;
+- treat a compatibility session-route index as an independent workspace control
+  plane or trust it without revalidating the referenced OpenCode workspace;
 - execute Docker, kubectl, or Apple Container export commands directly in web route modules;
 - accept a browser-supplied patch for host apply;
 - trust `workspace.extra` as proof of resource ownership;
@@ -178,17 +179,33 @@ OpenChamber and the plugin MUST use public OpenCode SDK/plugin contracts where t
 
 ## 5. Current Implementation And Release Status
 
-This section records the audited state of the current candidate. Evidence is identity-bound and must be rerun after any code, dependency, plugin pin, image, package, or workflow change.
+Candidate identity and live evidence change more frequently than this normative
+contract. The current identity, matrix, and colleague handoff live in
+`SECURE_WORKSPACES_HANDOFF.md`; operational procedures live in
+`SECURE_WORKSPACES.md`; the compact current execution record lives in
+`.agents/secure-workspaces-validation-status.md`. Evidence is identity-bound and
+must be rerun after any code, dependency, plugin pin, image, package, or workflow
+change.
 
 ### 5.1 Current Candidate Identity
 
-- OpenChamber pins `@opencode-ai/sdk@1.18.12`.
-- Web and Electron pin `@openchamber/opencode-container-workspace` to immutable plugin commit `69c125d024583696ff096f6e5b84416cdefbabab`. It carries everything the previous pin `5dc9ef84de826e4404cfe610aa8460834dcfb8d3` carried, plus structured Docker resource-absence classification that recognizes the `No such network` diagnostic emitted by Docker 20.10 without treating timeouts, spawn/decode failures, unrelated daemon errors, or truncated output as absence.
-- That plugin payload is version `0.1.1` and compiles against `@opencode-ai/plugin@1.18.12`. The plugin API and the host SDK are held at one version deliberately: two copies of the same SDK in one dependency tree stop the Electron package from building.
-- The `v0.1.1` images published on 2026-08-07 are the first carrying OpenCode `1.18.12`, closing the earlier gap where a workspace ran a `1.18.4` CLI against a `1.18.12` host SDK. The version was confirmed by running the published runtime digest rather than trusting the build that produced it.
+- OpenChamber package manifests currently pin `@opencode-ai/sdk@1.18.18`.
+- Web and Electron currently pin `@openchamber/opencode-container-workspace` to
+  immutable plugin commit `b1c4682d5c1509c86fa5ce7f4e7170fa4ba13466`.
+- The installed and staged plugin payload is package `0.1.1` and declares
+  `@opencode-ai/plugin@1.18.12`. The host SDK/CLI and plugin API are therefore not
+  currently on one OpenCode version. This mixed combination has Windows Docker
+  live evidence but remains a compatibility and release gate until explicitly
+  aligned or certified.
+- The published runtime digest was last verified with OpenCode `1.18.12`; it must
+  be reverified whenever the version matrix or image digest changes.
 - Electron stages and verifies the exact installed plugin payload and bundles an OpenCode CLI matching the OpenChamber SDK version.
 - The runtime and gateway defaults in `packages/web/server/lib/workspaces/policy.js` are the signed `v0.1.1` multi-architecture manifest digests. Startup reconciliation converges an already-written plugin registration to these defaults, so a repin reaches existing installations without a settings re-save.
-- Live Windows Docker and Kubernetes evidence at the current pin was collected on 2026-08-08. Live Linux ARM64 native-AppImage and Docker evidence at the same pin and exact image digests was collected on 2026-08-11, with authoritative cleanup completed on 2026-08-13. The tested AppImage was 216,626,530 bytes with SHA-256 `782420f9a3d4756d6fdd2a3b06ea861359005ff722f88881bc7cb7277cc6932b`; its packaged OpenCode CLI was `1.18.12`, its staged plugin payload contained 33 files, and its Electron executable and native modules passed ARM64 ELF verification. Linux Kubernetes remains open because disposable `kind` could not start on that shared Raspberry Pi host without a cgroup v2 memory controller; boot-parameter changes and reboot were deliberately not performed. Apple Container is out of the milestone by decision, not by omission (section 3.1).
+- Current-candidate Windows packaged Docker evidence is complete. Windows
+  Kubernetes, Debian Docker/Kubernetes, hosted web, physical mobile, and current
+  VS Code unsupported-behavior confirmation remain open. Prior Windows Kubernetes
+  and Linux ARM64 AppImage/Docker runs are historical evidence only. Apple
+  Container remains non-certifying by product decision (section 3.1).
 
 ### 5.2 Implemented Security And Correctness Invariants
 
@@ -207,7 +224,12 @@ contract and changes only when the contract does.
 
 ### 6.1 Audit Baseline
 
-The last fully certified upstream baseline was OpenCode/SDK/plugin `1.18.4`, reviewed from `anomalyco/opencode` dev commit `5f241f1cc1fc0c266044b64bf9e860d4e37c9c1f`. The current candidate is intentionally newer and not yet fully certified: OpenChamber SDK `1.18.12`, plugin API/runtime OpenCode `1.18.12`, and the current plugin commit.
+The last fully certified upstream baseline was OpenCode/SDK/plugin `1.18.4`,
+reviewed from `anomalyco/opencode` dev commit
+`5f241f1cc1fc0c266044b64bf9e860d4e37c9c1f`. The current candidate is
+intentionally newer and not yet fully certified: OpenChamber SDK/bundled CLI target
+`1.18.18`, installed/staged plugin API and last-verified runtime OpenCode `1.18.12`,
+and the plugin commit recorded in `SECURE_WORKSPACES_HANDOFF.md`.
 
 The workspace HTTP surface and generated SDK calls must be audited against this exact current combination. A dependency upgrade MUST still follow normal OpenChamber dependency, lockfile, bundled CLI, plugin staging, routing, transport, and live compatibility validation.
 

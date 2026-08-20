@@ -1,6 +1,7 @@
 import crypto from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
+import { pathToFileURL } from 'node:url';
 import { createOpencodeClient } from '@opencode-ai/sdk/v2';
 import { WORKSPACE_PLUGIN_PACKAGE } from './plugin-identity.js';
 
@@ -13,9 +14,13 @@ import { WORKSPACE_PLUGIN_PACKAGE } from './plugin-identity.js';
 
 export const SECURE_WORKSPACE_PROVIDERS = new Set(['docker', 'kubernetes', 'apple-container']);
 
-export async function loadWorkspaceOperationsFactory() {
+export async function loadWorkspaceOperationsFactory(pluginSpec) {
   try {
-    const operationsSpecifier = `${WORKSPACE_PLUGIN_PACKAGE}/operations`;
+    // The managed OpenCode registration can use Electron's unpacked plugin resource.
+    // Load operations beside that exact plugin so creation and export share one policy parser.
+    const operationsSpecifier = pluginSpec
+      ? pathToFileURL(path.join(path.dirname(pluginSpec), 'operations.js')).href
+      : `${WORKSPACE_PLUGIN_PACKAGE}/operations`;
     const module = await import(/* @vite-ignore */ operationsSpecifier);
     if (typeof module.createWorkspaceProviderOperations !== 'function') throw new Error('operations factory is missing');
     return module.createWorkspaceProviderOperations;

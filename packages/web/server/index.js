@@ -924,6 +924,9 @@ const serverUtilsRuntime = createServerUtilsRuntime({
   clearLastOpenCodeError: () => {
     lastOpenCodeError = null;
   },
+  getUiAuthController: () => uiAuthController,
+  getTunnelAuthController: () => tunnelAuthController,
+  openchamberDataDir: OPENCHAMBER_DATA_DIR,
   getLoginShellPath: () => {
     const snapshot = getLoginShellEnvSnapshot();
     if (!snapshot || typeof snapshot.PATH !== 'string' || snapshot.PATH.length === 0) {

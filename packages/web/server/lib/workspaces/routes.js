@@ -139,7 +139,7 @@ export function registerWorkspaceRoutes(app, dependencies) {
   }
 
   async function operationsFor(context) {
-    const factory = createWorkspaceProviderOperations ?? await workspaceOperationsLoader();
+    const factory = createWorkspaceProviderOperations ?? await workspaceOperationsLoader(resolvedWorkspacePluginSpec());
     return factory({ policy: buildPluginOptions(context.settings, { requireComplete: true }), sourceDirectory: context.directory });
   }
 

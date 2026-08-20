@@ -24,6 +24,7 @@ export const createServerUtilsRuntime = (dependencies) => {
     getLoginShellPath,
     getUiAuthController,
     getTunnelAuthController,
+    openchamberDataDir,
   } = dependencies;
 
   const setOpenCodePort = (port) => {
@@ -217,10 +218,11 @@ export const createServerUtilsRuntime = (dependencies) => {
       getOpenCodeAuthHeaders,
       buildOpenCodeUrl,
       ensureOpenCodeApiPrefix,
-      uiAuthController: getUiAuthController?.(),
-      tunnelAuthController: getTunnelAuthController?.(),
+      getUiAuthController,
+      getTunnelAuthController,
       getSseUpstreamStallTimeoutMs: getUpstreamStallTimeoutMs,
       getUiNotificationClients,
+      openchamberDataDir,
     });
   };
 

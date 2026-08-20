@@ -13,6 +13,8 @@ describe('WorkspaceSessionRouteStore', () => {
     await routes.record({ sessionID: 'ses_1234', workspaceID: 'wrk_5678', projectDirectory: 'C:/projects/app' });
     const read = await routes.routes();
     expect(read).toEqual([expect.objectContaining({ sessionID: 'ses_1234', workspaceID: 'wrk_5678', projectDirectory: 'C:/projects/app' })]);
+    expect(await routes.route('ses_1234')).toEqual(expect.objectContaining({ workspaceID: 'wrk_5678', projectDirectory: 'C:/projects/app' }));
+    expect(await routes.route('ses_missing')).toBeNull();
   });
 
   it('rejects malformed identifiers before touching storage', async () => {

@@ -48,7 +48,7 @@ This module provides OpenCode server integration utilities for the web server ru
 - `packages/web/server/lib/opencode/settings-normalization-runtime.js`: path/settings/tunnel normalization and sanitization helpers runtime used by settings/routes/config wiring.
 - `packages/web/server/lib/opencode/theme-runtime.js`: custom theme JSON validation and theme directory loading runtime for settings utility routes.
 - `packages/web/server/lib/opencode/proxy.js`: OpenCode API/SSE forwarding and readiness-gate route registration.
-  - Before generic forwarding, workspace-routed client calls require `workspace.use`; existing session routes resolve authoritative upstream `Session.workspaceID`, and direct workspace lifecycle mutation is denied.
+  - Before generic forwarding, workspace-routed client calls require `workspace.use`, and direct workspace lifecycle mutation is denied. OpenCode `/file` list/content requests resolve durable session routes when supplied, validate the workspace against the authoritative OpenCode list, canonicalize accepted routing aliases to OpenCode's `workspace` selector, and fail closed on missing, conflicting, or stale authority instead of reading host files. OpenChamber's Files surface remains intentionally host-project scoped for export/review/apply isolation.
   - OpenChamber remains the browser-facing CORS authority. Forwarded OpenCode responses drop upstream `Access-Control-*` headers so remote workspace origins cannot override the packaged/web renderer policy.
 - `packages/web/server/lib/opencode/session-runtime.js`: session status/attention/activity runtime for OpenCode SSE events.
 - `packages/web/server/lib/opencode/watcher.js`: global SSE watcher runtime for push/session event fanout.
@@ -326,7 +326,7 @@ Transport-triggered health checks share the periodic monitor's failure accountin
   - `fetchAgentsSnapshot()`
   - `fetchProvidersSnapshot()`
   - `fetchModelsSnapshot()`
-  - `setupProxy(app)`
+  - `setupProxy(app)` resolves UI and tunnel auth controllers lazily so proxy registration before controller initialization cannot bypass workspace authorization or file-route rewriting.
 
 ## Public exports (shutdown-runtime.js)
 - `createGracefulShutdownRuntime(dependencies)`: creates graceful shutdown runtime for managed OpenCode and web server teardown sequencing.

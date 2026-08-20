@@ -4,8 +4,8 @@ import path from 'node:path';
 
 /**
  * How many session routes are kept. Old entries are dropped least-recently-recorded
- * first; a stale route is harmless (the sidebar only consults routes for sessions that
- * still exist), so the bound only stops unbounded growth.
+ * first. Consumers verify the referenced workspace before use, so the bound only stops
+ * unbounded growth; a stale route never grants authority or falls back to the host.
  */
 const MAX_ROUTES = 500;
 
@@ -22,8 +22,8 @@ const WORKSPACE_ID_PATTERN = /^[A-Za-z0-9_-]{4,128}$/;
  * prompt or transcript text.
  *
  * Writes are serialized and atomic: same-directory temporary file, fsync, rename. A
- * missing or corrupt file reads as empty rather than failing the caller — losing a
- * route degrades sidebar grouping, which must never block session creation itself.
+ * missing or corrupt file reads as empty rather than failing session creation. Consumers
+ * that require workspace routing treat a missing route as unavailable and fail closed.
  */
 export class WorkspaceSessionRouteStore {
   constructor({ rootDirectory, maxRoutes = MAX_ROUTES }) {
@@ -95,5 +95,12 @@ export class WorkspaceSessionRouteStore {
     const run = this.queue.then(() => this.#readUnlocked());
     this.queue = run.catch(() => {});
     return run;
+  }
+
+  /** Returns one recorded route, or null when no durable authority exists. */
+  async route(sessionID) {
+    if (!SESSION_ID_PATTERN.test(sessionID ?? '')) return null;
+    const routes = await this.routes();
+    return routes.find((route) => route.sessionID === sessionID) ?? null;
   }
 }

@@ -692,6 +692,184 @@ describe('OpenCode proxy SSE forwarding', () => {
     expect(mutationCalls).toBe(2);
   });
 
+  it('routes a recorded workspace file request through the canonical workspace selector', async () => {
+    let hostFileCalls = 0;
+    let workspaceFileCalls = 0;
+    const upstreamQueries = [];
+    const upstream = express();
+    upstream.get('/experimental/workspace', (_req, res) => res.json([{ id: 'workspace-1' }]));
+    upstream.get('/file', (req, res) => {
+      upstreamQueries.push({ ...req.query });
+      if (req.query.workspace === 'workspace-1') {
+        workspaceFileCalls += 1;
+        return res.json([{ name: 'workspace-fixture.txt' }]);
+      }
+      hostFileCalls += 1;
+      return res.json([{ name: 'host-baseline.txt' }]);
+    });
+    upstream.get('/file/content', (req, res) => {
+      upstreamQueries.push({ ...req.query });
+      if (req.query.workspace === 'workspace-1') {
+        workspaceFileCalls += 1;
+        return res.send('workspace content');
+      }
+      hostFileCalls += 1;
+      return res.send('host content');
+    });
+    upstreamServer = await listen(upstream);
+    const upstreamPort = upstreamServer.address().port;
+    const app = express();
+    registerOpenCodeProxy(app, {
+      fs: {}, os: {}, path, OPEN_CODE_READY_GRACE_MS: 0,
+      getRuntime: () => ({ openCodePort: upstreamPort, isOpenCodeReady: true, openCodeNotReadySince: 0, isRestartingOpenCode: false }),
+      getOpenCodeAuthHeaders: () => ({}),
+      buildOpenCodeUrl: (requestPath) => `http://127.0.0.1:${upstreamPort}${requestPath}`,
+      ensureOpenCodeApiPrefix: () => {},
+      uiAuthController: { resolveAuthContext: async () => ({ type: 'client', client: { capabilities: ['workspace.use'] } }) },
+      tunnelAuthController: { classifyRequestScope: () => 'local' },
+      workspaceSessionRouteStore: {
+        route: async (sessionID) => sessionID === 'session-1'
+          ? { sessionID, workspaceID: 'workspace-1', projectDirectory: '/host/project' }
+          : null,
+      },
+    });
+    proxyServer = await listen(app);
+
+    const response = await fetch(`http://127.0.0.1:${proxyServer.address().port}/api/file?path=.&sessionID=session-1&workspaceID=workspace-1&directory=%2Fhost%2Fproject`);
+
+    expect(response.status).toBe(200);
+    await expect(response.json()).resolves.toEqual([{ name: 'workspace-fixture.txt' }]);
+    const contentResponse = await fetch(`http://127.0.0.1:${proxyServer.address().port}/api/file/content?path=workspace-fixture.txt&sessionID=session-1&directory=%2Fhost%2Fproject`);
+    expect(contentResponse.status).toBe(200);
+    await expect(contentResponse.text()).resolves.toBe('workspace content');
+    expect(upstreamQueries).toEqual([
+      { path: '.', directory: '/host/project', workspace: 'workspace-1' },
+      { path: 'workspace-fixture.txt', directory: '/host/project', workspace: 'workspace-1' },
+    ]);
+    expect(workspaceFileCalls).toBe(2);
+    expect(hostFileCalls).toBe(0);
+  });
+
+  it('fails a workspace file request closed when explicit selectors conflict', async () => {
+    let fileCalls = 0;
+    const upstream = express();
+    upstream.get('/file', (_req, res) => {
+      fileCalls += 1;
+      res.json([{ name: 'host-baseline.txt' }]);
+    });
+    upstreamServer = await listen(upstream);
+    const upstreamPort = upstreamServer.address().port;
+    const app = express();
+    registerOpenCodeProxy(app, {
+      fs: {}, os: {}, path, OPEN_CODE_READY_GRACE_MS: 0,
+      getRuntime: () => ({ openCodePort: upstreamPort, isOpenCodeReady: true, openCodeNotReadySince: 0, isRestartingOpenCode: false }),
+      getOpenCodeAuthHeaders: () => ({}),
+      buildOpenCodeUrl: (requestPath) => `http://127.0.0.1:${upstreamPort}${requestPath}`,
+      ensureOpenCodeApiPrefix: () => {},
+      uiAuthController: { resolveAuthContext: async () => ({ type: 'client', client: { capabilities: ['workspace.use'] } }) },
+      tunnelAuthController: { classifyRequestScope: () => 'local' },
+    });
+    proxyServer = await listen(app);
+
+    const response = await fetch(`http://127.0.0.1:${proxyServer.address().port}/api/file?path=.&workspace=workspace-1&workspaceID=workspace-2&directory=%2Fhost%2Fproject`);
+
+    expect(response.status).toBe(409);
+    await expect(response.json()).resolves.toMatchObject({ error: expect.stringContaining('conflict') });
+    expect(fileCalls).toBe(0);
+  });
+
+  it('resolves workspace file authorization from controllers attached after proxy setup', async () => {
+    let fileCalls = 0;
+    let uiAuthController = null;
+    const upstream = express();
+    upstream.get('/file', (_req, res) => {
+      fileCalls += 1;
+      res.json([{ name: 'host-baseline.txt' }]);
+    });
+    upstreamServer = await listen(upstream);
+    const upstreamPort = upstreamServer.address().port;
+    const app = express();
+    registerOpenCodeProxy(app, {
+      fs: {}, os: {}, path, OPEN_CODE_READY_GRACE_MS: 0,
+      getRuntime: () => ({ openCodePort: upstreamPort, isOpenCodeReady: true, openCodeNotReadySince: 0, isRestartingOpenCode: false }),
+      getOpenCodeAuthHeaders: () => ({}),
+      buildOpenCodeUrl: (requestPath) => `http://127.0.0.1:${upstreamPort}${requestPath}`,
+      ensureOpenCodeApiPrefix: () => {},
+      getUiAuthController: () => uiAuthController,
+      getTunnelAuthController: () => ({ classifyRequestScope: () => 'local' }),
+    });
+    uiAuthController = { resolveAuthContext: async () => ({ type: 'session' }) };
+    proxyServer = await listen(app);
+
+    const response = await fetch(`http://127.0.0.1:${proxyServer.address().port}/api/file?path=.&workspace=workspace-1&workspaceID=workspace-2&directory=%2Fhost%2Fproject`);
+
+    expect(response.status).toBe(409);
+    await expect(response.json()).resolves.toMatchObject({ error: expect.stringContaining('conflict') });
+    expect(fileCalls).toBe(0);
+  });
+
+  it('fails a workspace file request closed when its recorded session route is missing', async () => {
+    let hostFileCalls = 0;
+    const upstream = express();
+    upstream.get('/session/session-missing', (_req, res) => res.json({ id: 'session-missing' }));
+    upstream.get('/file', (_req, res) => {
+      hostFileCalls += 1;
+      res.json([{ name: 'host-baseline.txt' }]);
+    });
+    upstreamServer = await listen(upstream);
+    const upstreamPort = upstreamServer.address().port;
+    const app = express();
+    registerOpenCodeProxy(app, {
+      fs: {}, os: {}, path, OPEN_CODE_READY_GRACE_MS: 0,
+      getRuntime: () => ({ openCodePort: upstreamPort, isOpenCodeReady: true, openCodeNotReadySince: 0, isRestartingOpenCode: false }),
+      getOpenCodeAuthHeaders: () => ({}),
+      buildOpenCodeUrl: (requestPath) => `http://127.0.0.1:${upstreamPort}${requestPath}`,
+      ensureOpenCodeApiPrefix: () => {},
+      uiAuthController: { resolveAuthContext: async () => ({ type: 'client', client: { capabilities: ['workspace.use'] } }) },
+      tunnelAuthController: { classifyRequestScope: () => 'local' },
+      workspaceSessionRouteStore: { route: async () => null },
+    });
+    proxyServer = await listen(app);
+
+    const response = await fetch(`http://127.0.0.1:${proxyServer.address().port}/api/file?path=.&sessionID=session-missing&directory=%2Fhost%2Fproject`);
+
+    expect(response.status).toBe(409);
+    await expect(response.json()).resolves.toMatchObject({ error: expect.stringContaining('route') });
+    expect(hostFileCalls).toBe(0);
+  });
+
+  it('fails a workspace file request closed when its recorded workspace is stale', async () => {
+    let hostFileCalls = 0;
+    const upstream = express();
+    upstream.get('/experimental/workspace', (_req, res) => res.json([{ id: 'workspace-current' }]));
+    upstream.get('/file', (_req, res) => {
+      hostFileCalls += 1;
+      res.json([{ name: 'host-baseline.txt' }]);
+    });
+    upstreamServer = await listen(upstream);
+    const upstreamPort = upstreamServer.address().port;
+    const app = express();
+    registerOpenCodeProxy(app, {
+      fs: {}, os: {}, path, OPEN_CODE_READY_GRACE_MS: 0,
+      getRuntime: () => ({ openCodePort: upstreamPort, isOpenCodeReady: true, openCodeNotReadySince: 0, isRestartingOpenCode: false }),
+      getOpenCodeAuthHeaders: () => ({}),
+      buildOpenCodeUrl: (requestPath) => `http://127.0.0.1:${upstreamPort}${requestPath}`,
+      ensureOpenCodeApiPrefix: () => {},
+      uiAuthController: { resolveAuthContext: async () => ({ type: 'client', client: { capabilities: ['workspace.use'] } }) },
+      tunnelAuthController: { classifyRequestScope: () => 'local' },
+      workspaceSessionRouteStore: {
+        route: async () => ({ sessionID: 'session-stale', workspaceID: 'workspace-stale', projectDirectory: '/host/project' }),
+      },
+    });
+    proxyServer = await listen(app);
+
+    const response = await fetch(`http://127.0.0.1:${proxyServer.address().port}/api/file/content?path=fixture.txt&sessionID=session-stale&directory=%2Fhost%2Fproject`);
+
+    expect(response.status).toBe(409);
+    await expect(response.json()).resolves.toMatchObject({ error: expect.stringContaining('stale') });
+    expect(hostFileCalls).toBe(0);
+  });
+
   it('exempts interactive provider OAuth callbacks from the request deadline', async () => {
     const upstream = express();
     // Stands in for upstream blocking until the user finishes signing in.

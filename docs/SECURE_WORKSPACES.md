@@ -3,7 +3,8 @@
 One document for what this feature is, how far it has got, and how to test it on a
 platform that has not been tested yet. The security and provider contract it must satisfy
 lives in `SECURE_WORKSPACES_SPECIFICATION.md`; the working rules for anyone editing the
-code live in `.agents/skills/secure-workspaces/SKILL.md`. This file is the operational one.
+code live in `.agents/skills/secure-workspaces/SKILL.md`. The colleague handoff and
+continuation order live in `SECURE_WORKSPACES_HANDOFF.md`. This file is the operational one.
 
 ## What it is
 
@@ -29,17 +30,19 @@ old workspace after an app restart is best-effort, never something a flow depend
 
 | Thing | Value |
 | --- | --- |
-| Plugin pin (`packages/web/package.json`, `packages/electron/package.json`, `bun.lock`) | `69c125d024583696ff096f6e5b84416cdefbabab` |
+| OpenChamber package | `1.18.4` |
+| Host SDK / bundled CLI target | `1.18.18` |
+| Plugin pin (`packages/web/package.json`, `packages/electron/package.json`, `bun.lock`) | `b1c4682d5c1509c86fa5ce7f4e7170fa4ba13466` |
+| Installed/staged plugin package / API | `0.1.1` / `1.18.12` |
 | Runtime image | `ghcr.io/openchamber/opencode-workspace@sha256:40266ce54560149396cdc89395fa26df08f8924e4f377acbf12a88da08b2c141` |
 | Gateway image | `ghcr.io/openchamber/workspace-egress-gateway@sha256:37c1452849212c5e9b2b62257792ca092c44c5ebba6d165667f235164e571555` |
-| OpenCode / SDK / plugin API | `1.18.12` |
 
 Images publish from a `v*` tag only, never from a merge to the plugin's default branch.
-`v0.1.1` is the first release whose runtime carries OpenCode `1.18.12`; before it every
-workspace ran `1.18.4` against a `1.18.12` host, unnoticed because nothing reports the
-version. After any plugin merge: repin all three files plus this table, run `bun install`,
-and confirm the runtime version by running the published digest rather than trusting the
-build that produced it.
+The host SDK/CLI and plugin API are currently mixed (`1.18.18` / `1.18.12`). The
+Windows Docker lifecycle is live-proven for this exact candidate, but the combination
+still needs an explicit compatibility decision before release. After any plugin merge:
+repin all three files plus this table, run `bun install`, and confirm the runtime version
+by running the published digest rather than trusting the build that produced it.
 
 A repin only reaches an installation that already saved settings because startup
 reconciliation rewrites the OpenCode plugin registration when its options no longer match
@@ -48,65 +51,42 @@ built from the superseded image.
 
 ## Where it has been proven
 
-**Windows 11, packaged app, Docker Desktop and `kind` — passed end to end on 2026-08-08.**
-Create, session routed into the workspace, file tree and terminal scoped to the host
-project, agent message under the model-auth policy, isolation (container changes stay out
-of the host tree), export → review → apply landing the file on the host, application
-restart preserving sidebar grouping, full Kubernetes cycle, and four first-try deletions
-including one workspace whose sync connection was dead. Namespace, containers, workspace
-rows, artifact cache, and apply journals were empty afterwards.
+**Windows 11 packaged app with Docker Desktop — current candidate passed on
+2026-08-20.** Create/connected, durable routed file authority, host isolation,
+internal networking, blocked direct egress, unauthenticated runtime rejection,
+export/review, dry-run, confirmed apply with exact bytes, artifact consumption,
+restart association recovery, cleanup, idempotent cleanup, and zero final resources
+were verified. The normal Files and Terminal surfaces remained host-project scoped.
 
-**Linux ARM64, native AppImage and Docker Engine — passed end to end on 2026-08-11.**
-The host was a Raspberry Pi 4 running Debian 12 `aarch64`, kernel
-`6.12.34+rpt-rpi-v8`, and stock Docker `20.10.24`. The native ARM64 AppImage was
-216,626,530 bytes with SHA-256
-`782420f9a3d4756d6fdd2a3b06ea861359005ff722f88881bc7cb7277cc6932b`; its packaged
-OpenCode CLI was `1.18.12`, its staged plugin payload contained 33 files, and final ELF
-verification covered the Electron executable and native modules. Clean Docker creation
-reached `Ready` in about 35 seconds. The runtime and gateway resolved to the exact digests
-in the identity table; the runtime had only its internal network, the access target was
-loopback-only, unauthenticated health returned `401`, authenticated health and SSE returned
-`200`, direct TCP was blocked, an allowed CONNECT returned `200`, and a denied domain
-returned `403`.
+**Windows Kubernetes — historical pass, current replay pending.** The 2026-08-08
+`kind` lifecycle remains useful historical evidence, but it predates the current SDK,
+plugin pin, routing changes, and packaged candidate. It does not complete the current row.
 
-Interactive export → review → apply created the selected 49-byte host file with the exact
-reviewed bytes while leaving the immutable baseline unchanged; the artifact was consumed
-and locks/journals were empty. Packaged restart rewrote the stale AppImage plugin path
-before OpenCode launch, recovered `Starting → Ready`, and preserved the routed session.
-Delete succeeded on the first attempt in 5.5 seconds and left no managed container,
-volume, network, or control-plane row. Final cleanup on 2026-08-13 removed only disposable
-validation tooling, profiles, projects, provider data, and configuration; Homebridge
-remained active and enabled.
+**Linux ARM64 AppImage and Docker — historical pass, current replay pending.** The
+2026-08-11 run used a Raspberry Pi 4 with Debian 12, native ARM64 AppImage, Docker
+20.10.24, and the exact runtime/gateway digests current at that time. It covered
+isolation, transport auth, egress decisions, interactive apply, packaged restart, and
+cleanup. That evidence belongs to an older candidate identity. The current Debian host
+is unreachable, so no current AppImage/Docker claim is made.
 
-**Linux Kubernetes — deferred on this host, not failed provider evidence.** Disposable
-`kind` could not start its control plane because the host kernel does not expose the
-cgroup v2 memory controller (`memory.oom.group can't be set: controller "memory" not
-available`). Changing boot parameters and rebooting a shared Homebridge host was outside
-the validation boundary. Kubernetes remains covered by the current Windows live run and
-must be rerun on a Linux host whose kernel exposes the required controller before Linux
-Kubernetes is claimed.
+**Linux Kubernetes — pending on a suitable host.** The historical Raspberry Pi host
+lacked the cgroup v2 memory controller required by disposable `kind`. Changing boot
+parameters on the shared Homebridge host was outside the validation boundary.
 
-**Automated.** 129 focused workspace server tests; UI tests for session routing, sidebar
-ownership, and locale parity; Electron packaging/architecture/updater tests; the plugin's
-own suite (159 tests, green on Windows). In `packages/web` on Windows, 14 test files fail
-— every one of them also fails on a clean `origin/main` worktree, and two files that fail
-on `origin/main` pass here. Compare against a baseline worktree before treating any
-failure as this branch's.
+**Current focused automation.** The proxy/workspace/server-runtime suite passes
+`93/93` locally and on Windows. Web type-check, Web lint, JavaScript syntax checks,
+packaged plugin verification, and the packaged Windows build pass. Broad oxlint still
+reports pre-existing findings in touched server files; no new finding was identified on
+the authored paths. Historical suite counts are not current-candidate evidence.
 
-**Not proven yet:** Linux Kubernetes and physical iOS/Android. Linux Docker is proven at
-the current plugin pin, exact image digests, and native AppImage identity above.
+**Not proven for the current candidate:** Windows Kubernetes, Debian Docker and
+Kubernetes, hosted web, physical iOS/Android, and current VS Code unsupported behavior.
 
 **Apple Container is implemented, offered, and deliberately not certified.** Managed
 egress needs a network primitive the current CLI does not provide, so creation fails
-closed unless an external proxy is configured — meaning it delivers *less* isolation than
-Docker on the same machine, and the product's central promise cannot be kept there. Its
-audience is one intersection: macOS where Docker Desktop is not permitted and a corporate
-proxy already exists. It stays visible in settings, described requirement-first, because
-hiding it would leave that person with no path at all; it carries no release gate and no
-live-evidence obligation until Apple ships the primitive. Everything on it that does not
-need the internet — create, files, terminal, snapshot, export/review/apply, ownership,
-`container system stop/start` recovery, cleanup — is worth testing and does work; the model
-simply will not answer without a real proxy.
+closed unless an external proxy is configured. Historical local runs covered create,
+files, terminal, snapshot, export/review/apply, ownership, system restart recovery, and
+cleanup. That evidence is non-certifying and is not asserted for the current candidate.
 
 ## Testing a platform that has not been tested
 
@@ -222,9 +202,14 @@ steps with their status.
    `packaged-smoke.test.mjs`, `packaged-workspace-smoke.test.mjs`, and
    `scripts/verify-workspace-plugin.test.mjs` appear in no script and no workflow. Wire them
    into `test:architecture` or delete them; an unrun test reads as coverage it does not give.
-5. **Live recertification** at the current pin and images for Linux Kubernetes and physical mobile.
-   Linux Docker is complete; Linux Kubernetes and physical mobile remain. Apple Container
-   is out of this list on purpose — see the note above.
+5. **Reserved plugin conflict hardening.** Refuse before provider creation when a
+   project or ancestor OpenCode config registers the reserved workspace plugin with
+   options that conflict with persisted OpenChamber policy.
+6. **OpenCode version matrix.** Align or explicitly certify host SDK/bundled CLI
+   `1.18.18` against plugin API and runtime `1.18.12`.
+7. **Live recertification** for Windows Kubernetes, Debian Docker/Kubernetes, hosted
+   web, physical mobile, and current VS Code unsupported behavior. Apple Container is
+   non-certifying by decision — see the note above.
 
 ### Filed upstream (anomalyco/opencode)
 
@@ -234,7 +219,8 @@ steps with their status.
 - **#41317** — there is no control-plane way to start sync for one existing workspace: the
   `workspace` query parameter on `sync/start` routes the call *into* the workspace, and the
   directory-only form is conditional on recent session activity.
-- **Already fixed upstream** (post-`1.18.12`, arrives with the next pin): `Session.workspaceID`
-  is serialized on session reads and the workspace list filter works. Until then the
-  server-side session-route record is what makes a workspace session findable; afterwards it
-  stays harmless.
+- **Fixed upstream after `1.18.12`; current behavior must be re-audited:**
+  `Session.workspaceID` serialization and workspace list filtering changed upstream.
+  The current host SDK/CLI target is `1.18.18`, but the compatibility index remains until
+  the generated API and live reads are verified together; it remains fail-closed and
+  harmless when upstream supplies complete authority.

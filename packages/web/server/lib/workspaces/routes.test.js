@@ -381,12 +381,15 @@ describe('workspace provider operation routes', () => {
 
   it('returns an explicit unavailable result for an incompatible pinned package', async () => {
     const registry = routeRegistry();
-    const deps = dependencies({ dependencies: { createWorkspaceProviderOperations: undefined, workspaceOperationsLoader: vi.fn(async () => { throw Object.assign(new Error('missing operations export'), { statusCode: 503 }); }) } });
+    const pluginSpec = '/unpacked/opencode-container-workspace/src/plugin.js';
+    const workspaceOperationsLoader = vi.fn(async () => { throw Object.assign(new Error('missing operations export'), { statusCode: 503 }); });
+    const deps = dependencies({ dependencies: { workspacePluginSpec: pluginSpec, createWorkspaceProviderOperations: undefined, workspaceOperationsLoader } });
     registerWorkspaceRoutes(registry.app, deps);
     const res = response();
     await registry.route('POST', '/api/workspaces/providers/validate')({ method: 'POST', body: { provider: 'docker' }, query: {} }, res);
     expect(res.statusCode).toBe(503);
     expect(res.body.error).toContain('missing operations export');
+    expect(workspaceOperationsLoader).toHaveBeenCalledWith(pluginSpec);
   });
 
   it('passes the generated provisional ID unchanged and waits for connected status', async () => {
