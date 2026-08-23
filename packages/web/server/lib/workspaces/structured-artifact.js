@@ -31,7 +31,7 @@ function safeRelativePath(value) {
     fail('Workspace export contains an unsafe path');
   }
   const normalized = path.posix.normalize(value);
-  if (normalized !== value || normalized === '..' || normalized.startsWith('../')) fail('Workspace export contains an unsafe path');
+  if (normalized !== value || normalized === '.' || normalized === '..' || normalized.startsWith('../')) fail('Workspace export contains an unsafe path');
   return value;
 }
 

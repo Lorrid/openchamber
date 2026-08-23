@@ -81,6 +81,12 @@ function parse(value, directory) {
 }
 
 describe('structured workspace artifacts', () => {
+  it('rejects an operation that addresses the project root', () => {
+    const data = fixture();
+    const change = operation('delete', directoryEntry('.'), null);
+    expect(() => parse(artifact([change], [], { targetDirectory: data.directory }), data.directory)).toThrow(/unsafe path/);
+  });
+
   it('treats a change already present on the host as applied instead of a conflict', async () => {
     const data = fixture();
     const content = Buffer.from('hello from secure workspace\n');

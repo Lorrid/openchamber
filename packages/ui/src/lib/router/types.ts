@@ -8,7 +8,7 @@ import type { MainTab } from '@/stores/useUIStore';
 export interface RouteState {
   /** Session ID to navigate to */
   sessionId: string | null;
-  /** Main tab to display (chat, git, diff, terminal, files) */
+  /** View selected through the legacy `tab` URL parameter. */
   tab: MainTab | null;
   /** Settings section - when non-null, settings dialog should be open */
   settingsPath: string | null;
@@ -17,7 +17,7 @@ export interface RouteState {
 }
 
 /**
- * Valid main tab values for URL routing.
+ * Valid values for the legacy `tab` URL parameter.
  */
 export const VALID_TABS: readonly MainTab[] = ['chat', 'git', 'diff', 'terminal', 'files', 'diagram', 'workspaces'] as const;
 

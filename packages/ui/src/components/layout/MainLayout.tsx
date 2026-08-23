@@ -46,6 +46,7 @@ const SettingsWindow = lazyWithChunkRecovery(() => import('@/components/views/Se
 
 export const MainLayout: React.FC = () => {
     const isSidebarOpen = useUIStore((state) => state.isSidebarOpen);
+    const activeSurface = useUIStore((state) => state.activeSurface);
     const activeMainTab = useUIStore((state) => state.activeMainTab);
     const setIsMobile = useUIStore((state) => state.setIsMobile);
     const isSessionSwitcherOpen = useUIStore((state) => state.isSessionSwitcherOpen);
@@ -84,7 +85,7 @@ export const MainLayout: React.FC = () => {
             if (sessionSelected || draftOpened) closeSurfacePages();
         });
         const unsubscribeTab = useUIStore.subscribe((state, prev) => {
-            if (state.activeMainTab !== prev.activeMainTab) closeSurfacePages();
+            if (state.activeSurface !== prev.activeSurface) closeSurfacePages();
         });
         return () => {
             unsubscribeSession();
@@ -196,7 +197,7 @@ export const MainLayout: React.FC = () => {
     }, [isMobile, setMobileSessionPanelOpen]);
 
     useEffect(() => {
-        if (!isMobile || activeMainTab !== 'chat' || mobileLeftDrawerOpen || mobileRightSidebarOpen || isSettingsDialogOpen) {
+        if (!isMobile || activeSurface !== 'chat' || mobileLeftDrawerOpen || mobileRightSidebarOpen || isSettingsDialogOpen) {
             return;
         }
 
@@ -232,7 +233,7 @@ export const MainLayout: React.FC = () => {
                 window.clearTimeout(timeoutId);
             }
         };
-    }, [activeMainTab, isMobile, isSettingsDialogOpen, mobileLeftDrawerOpen, mobileRightSidebarOpen]);
+    }, [activeSurface, isMobile, isSettingsDialogOpen, mobileLeftDrawerOpen, mobileRightSidebarOpen]);
 
     // Ensure mobile drawers are closed when opening full-screen settings
     useEffect(() => {
@@ -289,7 +290,7 @@ export const MainLayout: React.FC = () => {
         }
     }, [activeMainTab, isMobile, mobileRightSidebarOpen]);
 
-    const isChatActive = activeMainTab === 'chat';
+    const isChatActive = activeSurface === 'chat';
 
     return (
         <DiffWorkerProvider>

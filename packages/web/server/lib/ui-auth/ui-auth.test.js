@@ -86,6 +86,35 @@ describe('ui auth client credential seam', () => {
     auth.dispose();
   });
 
+  it('does not let forwarded IP headers bypass the reauthentication rate limit', async () => {
+    const createUiAuth = await loadCreateUiAuth();
+    const auth = createUiAuth({ password: 'secret' });
+    const peer = { remoteAddress: '198.51.100.24' };
+    const loginRes = createResponse();
+    await auth.handleSessionCreate({ method: 'POST', headers: {}, socket: peer, body: { password: 'secret' } }, loginRes);
+    const cookie = String(loginRes.getHeader('set-cookie')).split(';', 1)[0];
+    const binding = { operation: 'workspace.configure', project: 'host', bodyHash: 'f'.repeat(64), nonce: 'nonce-1234567890abcdef' };
+
+    for (let attempt = 0; attempt < 10; attempt += 1) {
+      const res = createResponse();
+      await auth.handleReauthProof({
+        headers: { cookie, 'x-forwarded-for': `203.0.113.${attempt + 1}` },
+        socket: peer,
+        body: { ...binding, password: 'wrong' },
+      }, res);
+      expect(res.statusCode).toBe(401);
+    }
+
+    const blocked = createResponse();
+    await auth.handleReauthProof({
+      headers: { cookie, 'x-forwarded-for': '203.0.113.250' },
+      socket: peer,
+      body: { ...binding, password: 'wrong' },
+    }, blocked);
+    expect(blocked.statusCode).toBe(429);
+    auth.dispose();
+  });
+
   it('opens a step-up window after a password ceremony and mints adjacent proofs silently', async () => {
     const createUiAuth = await loadCreateUiAuth();
     const auth = createUiAuth({ password: 'secret' });

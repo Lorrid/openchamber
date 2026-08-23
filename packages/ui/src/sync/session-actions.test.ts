@@ -128,6 +128,7 @@ mock.module("@/lib/opencode/client", () => ({
       return mockScopedClient
     },
     getDirectory: () => "/test/project",
+    getFilesystemHome: mock(async () => "/home/test"),
     getSdkClient: () => mockSdk,
     createSession: mock((params: Record<string, unknown>, directory?: string | null) => {
       replyCalls.push({ method: "session.create", params: { ...params, directory } })

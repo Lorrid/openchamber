@@ -1,13 +1,15 @@
 import { create } from 'zustand';
 import type { OpencodeClient, Session } from '@opencode-ai/sdk/v2';
 import { opencodeClient } from '@/lib/opencode/client';
-import { listGlobalSessionPages, splitGlobalSessionsByArchived } from '@/stores/globalSessions';
+import { filterManagedChatsForRuntime, listGlobalSessionPages, splitGlobalSessionsByArchived } from '@/stores/globalSessions';
 import { getReviewTransferDirection, type ReviewTransferDirection } from '@/lib/reviewFlow';
 import { getOriginalSessionID, getReviewSessionID } from '@/lib/sessionReviewMetadata';
 import { normalizePath } from '@/lib/pathNormalization';
 import { raiseSessionOrderingBaselines } from '@/sync/session-ordering';
 import { resolveSessionDirectoryKey } from '@/sync/session-directory';
 import { mapWithConcurrency } from '@/lib/concurrency';
+import { persistManagedChatSessions, readManagedChatSessions } from '@/sync/persist-cache';
+import { isVSCodeRuntime } from '@/lib/desktop';
 
 type GlobalSessionsStatus = 'idle' | 'loading' | 'ready' | 'error';
 
@@ -421,6 +423,10 @@ const applySnapshot = (
   archivedSessions: Session[],
   status: GlobalSessionsStatus,
 ): Partial<GlobalSessionsState> | GlobalSessionsState => {
+  if (isVSCodeRuntime()) {
+    activeSessions = filterManagedChatsForRuntime(activeSessions, true);
+    archivedSessions = filterManagedChatsForRuntime(archivedSessions, true);
+  }
   const routedActiveSessions = restoreConfirmedWorkspaceRoutes(activeSessions);
   const routedArchivedSessions = restoreConfirmedWorkspaceRoutes(archivedSessions);
   const nextActiveSessions = sameSessionList(state.activeSessions, routedActiveSessions)
@@ -490,6 +496,10 @@ const mutationRevisionPatch = (state: GlobalSessionsState, ids: Iterable<string>
 };
 
 const applySessionUpserts = (state: GlobalSessionsState, sessions: Session[]): Partial<GlobalSessionsState> => {
+  if (isVSCodeRuntime()) {
+    sessions = filterManagedChatsForRuntime(sessions, true);
+    if (sessions.length === 0) return state;
+  }
   const revisionPatch = mutationRevisionPatch(state, sessions.map((session) => session.id));
   let nextActiveSessions = state.activeSessions;
   let nextArchivedSessions = state.archivedSessions;
@@ -543,11 +553,13 @@ const buildReviewTransferMap = (sessions: Session[]): Map<string, ReviewTransfer
   return next
 }
 
+const initialManagedChatSessions = readManagedChatSessions();
+
 export const useGlobalSessionsStore = create<GlobalSessionsState>((set, get) => ({
-  activeSessions: [],
+  activeSessions: initialManagedChatSessions,
   archivedSessions: [],
-  sessionsByDirectory: new Map(),
-  reviewTransferBySessionId: new Map(),
+  sessionsByDirectory: buildSessionsByDirectory(initialManagedChatSessions),
+  reviewTransferBySessionId: buildReviewTransferMap(initialManagedChatSessions),
   mutationRevision: 0,
   mutationRevisionBySessionId: new Map(),
   hasLoaded: false,
@@ -565,11 +577,12 @@ export const useGlobalSessionsStore = create<GlobalSessionsState>((set, get) => 
     loadGeneration += 1;
     inflightLoad = null;
     confirmedWorkspaceRouteBySessionId.clear();
+    const managedChatSessions = readManagedChatSessions();
     set({
-      activeSessions: [],
+      activeSessions: managedChatSessions,
       archivedSessions: [],
-      sessionsByDirectory: new Map(),
-      reviewTransferBySessionId: new Map(),
+      sessionsByDirectory: buildSessionsByDirectory(managedChatSessions),
+      reviewTransferBySessionId: buildReviewTransferMap(managedChatSessions),
       mutationRevision: 0,
       mutationRevisionBySessionId: new Map(),
       hasLoaded: false,
@@ -783,6 +796,15 @@ export const useGlobalSessionsStore = create<GlobalSessionsState>((set, get) => 
     });
   },
 }));
+
+useGlobalSessionsStore.subscribe((state, previous) => {
+  if (
+    state.activeSessions !== previous.activeSessions
+    && (state.status !== 'idle' || state.activeSessions.length > 0)
+  ) {
+    persistManagedChatSessions(state.activeSessions);
+  }
+});
 
 export const ensureGlobalSessionsLoaded = async (fallbackActive?: Session[]): Promise<LoadResult> => {
   const state = useGlobalSessionsStore.getState();

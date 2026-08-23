@@ -477,21 +477,20 @@ export function registerWorkspaceRoutes(app, dependencies) {
     if (!workspaceID) return next();
     const directorySource = typeof req.query?.directory === 'string' ? req.query.directory : req.body?.directory;
     const directory = typeof directorySource === 'string' ? directorySource.trim() : '';
+    if (!directory) return res.status(400).json({ error: 'Project directory is required for workspace session routing' });
     const authorization = await authorizeCapabilityRequest(req, res, 'workspace.use');
     if (!authorization) return;
     try {
-      const client = await sdkClient(directory || undefined);
+      const client = await sdkClient(directory);
       const body = req.body && typeof req.body === 'object' && !Array.isArray(req.body) ? req.body : {};
-      const created = await client.session.create({ ...body, ...(directory ? { directory } : {}), workspace: workspaceID });
+      const created = await client.session.create({ ...body, directory, workspace: workspaceID });
       if (created?.error || !created?.data?.id) {
         const status = created?.response?.status && created.response.status >= 400 ? created.response.status : 502;
         return res.status(status).json(created?.error ?? { error: 'Failed to create workspace session' });
       }
-      if (directory) {
-        await sessionRouteStore.record({ sessionID: created.data.id, workspaceID, projectDirectory: directory }).catch((error) => {
-          console.warn(`[Secure Workspaces] Session route for ${created.data.id} could not be recorded: ${safeErrorMessage(error, 'unknown failure')}`);
-        });
-      }
+      await sessionRouteStore.record({ sessionID: created.data.id, workspaceID, projectDirectory: directory }).catch((error) => {
+        console.warn(`[Secure Workspaces] Session route for ${created.data.id} could not be recorded: ${safeErrorMessage(error, 'unknown failure')}`);
+      });
       return res.status(created.response?.status === 201 ? 201 : 200).json(created.data);
     } catch (error) {
       return res.status(error?.statusCode || 502).json({ error: safeErrorMessage(error, 'Failed to create workspace session') });

@@ -554,6 +554,19 @@ describe('workspace provider operation routes', () => {
     expect(routesRes.body.routes).toEqual([expect.objectContaining({ sessionID: 'ses_routed00000001', workspaceID: 'workspace-1', projectDirectory: deps.directory })]);
   });
 
+  it('refuses a workspace-routed session create without durable project authority', async () => {
+    const registry = routeRegistry();
+    const deps = dependencies();
+    registerWorkspaceRoutes(registry.app, deps);
+
+    const res = response();
+    await registry.route('POST', '/api/session')({ query: { workspace: 'workspace-1' }, body: { title: 'Routed' } }, res, () => { throw new Error('must not fall through when workspace is explicit'); });
+
+    expect(res.statusCode).toBe(400);
+    expect(res.body).toEqual({ error: 'Project directory is required for workspace session routing' });
+    expect(deps.sessionCreate).not.toHaveBeenCalled();
+  });
+
   it('leaves an ordinary session create to the generic proxy untouched', async () => {
     const registry = routeRegistry();
     const deps = dependencies();
