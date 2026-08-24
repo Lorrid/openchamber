@@ -35,6 +35,7 @@ import { CSS } from '@dnd-kit/utilities';
 import { DirectoryExplorerDialog } from '@/components/session/DirectoryExplorerDialog';
 import { Icon } from '@/components/icon/Icon';
 import { NewWorktreeDialog } from '@/components/session/NewWorktreeDialog';
+import { LinearCreateSessionButton } from '@/components/session/LinearCreateSessionButton';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { ScrollShadow } from '@/components/ui/ScrollShadow';
@@ -1430,6 +1431,11 @@ export const MobileSessionsSheet: React.FC<MobileSessionsSheetProps> = ({ open, 
       </Button>
     ) : null;
 
+  const newLinearSessionButton =
+    !editingOrder && projectsMeta.length > 0 ? (
+      <LinearCreateSessionButton placement="mobile" />
+    ) : null;
+
   const addProjectButton = !editingOrder ? (
     <Button
       type="button"
@@ -1445,8 +1451,9 @@ export const MobileSessionsSheet: React.FC<MobileSessionsSheetProps> = ({ open, 
   ) : null;
 
   const trailingActions =
-    newChatButton || addProjectButton || editToggle ? (
+    newChatButton || newLinearSessionButton || addProjectButton || editToggle ? (
       <>
+        {newLinearSessionButton}
         {newChatButton}
         {addProjectButton}
         {editToggle}

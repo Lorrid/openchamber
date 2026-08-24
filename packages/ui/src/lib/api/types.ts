@@ -1132,6 +1132,130 @@ export type GitHubDeviceFlowComplete =
   | { connected: true; user: GitHubUserSummary; scope?: string }
   | { connected: false; status?: string; error?: string };
 
+export type LinearUserSummary = {
+  id: string;
+  name: string | null;
+  displayName: string | null;
+  email: string | null;
+  avatarUrl: string | null;
+};
+
+export type LinearOrganizationSummary = {
+  id: string;
+  name: string;
+  urlKey: string | null;
+};
+
+export type LinearAuthStatus = {
+  connected: boolean;
+  user?: LinearUserSummary | null;
+  organization?: LinearOrganizationSummary | null;
+  scope?: string;
+};
+
+export type LinearAuthStart = {
+  authorizationUrl: string;
+  expiresIn: number;
+  scope: string;
+};
+
+export type LinearAuthOrigin = 'desktop' | 'web';
+
+export type LinearIssueState = {
+  name: string | null;
+  type: string | null;
+};
+
+export type LinearIssueAssignee = {
+  name: string | null;
+  displayName: string | null;
+  avatarUrl: string | null;
+};
+
+export type LinearIssueTeam = {
+  id: string;
+  key: string;
+  name: string;
+};
+
+export type LinearIssueSummary = {
+  id: string;
+  identifier: string;
+  title: string;
+  url: string;
+  state?: LinearIssueState | null;
+  assignee?: LinearIssueAssignee | null;
+  team?: LinearIssueTeam | null;
+};
+
+export type LinearIssueComment = {
+  id: string;
+  body: string;
+  createdAt: string | null;
+  user?: { name: string | null; displayName: string | null } | null;
+};
+
+export type LinearIssue = LinearIssueSummary & {
+  description?: string | null;
+  comments?: LinearIssueComment[];
+};
+
+export type LinearIssuesListResult = {
+  connected: boolean;
+  issues?: LinearIssueSummary[];
+  cursor?: string | null;
+  hasMore?: boolean;
+};
+
+export type LinearIssueGetResult = {
+  connected: boolean;
+  issue?: LinearIssue | null;
+};
+
+export type LinearTeamMapping = {
+  id: string;
+  key: string;
+  name: string;
+  projectPath: string | null;
+};
+
+export type LinearMappingResult = {
+  connected: boolean;
+  defaultProjectPath?: string | null;
+  teams?: LinearTeamMapping[];
+};
+
+export type LinearMappingWrite = {
+  defaultProjectPath: string | null;
+  teamProjectPaths: { [teamId: string]: string };
+};
+
+export type LinearSessionStatusKind = 'started' | 'completed' | 'failure';
+
+export type LinearSessionStatusPostInput = {
+  kind: LinearSessionStatusKind;
+  sessionId: string;
+  issueIdentifier?: string;
+  sessionOrigin?: string;
+  sessionTitle?: string;
+};
+
+export type LinearSessionStatusPostResult =
+  | { connected: false }
+  | { connected: true; posted: true; commentId: string | null }
+  | { connected: true; posted: false; skipped: 'already-posted' | 'issue-not-found' | 'not-started' };
+
+export interface LinearAPI {
+  authStatus(): Promise<LinearAuthStatus>;
+  authStart(origin?: LinearAuthOrigin): Promise<LinearAuthStart>;
+  authDisconnect(): Promise<{ removed: boolean }>;
+  issuesList(options?: { query?: string; cursor?: string }): Promise<LinearIssuesListResult>;
+  issueGet(id: string): Promise<LinearIssueGetResult>;
+  mappingGet(): Promise<LinearMappingResult>;
+  mappingSet(mapping: LinearMappingWrite): Promise<LinearMappingResult>;
+  sessionStatusPost(input: LinearSessionStatusPostInput): Promise<LinearSessionStatusPostResult>;
+}
+
 export interface GitHubAPI {
   authStatus(): Promise<GitHubAuthStatus>;
   authStart(): Promise<GitHubDeviceFlowStart>;
@@ -1256,6 +1380,7 @@ export interface RuntimeAPIs {
   permissions: PermissionsAPI;
   notifications: NotificationsAPI;
   github?: GitHubAPI;
+  linear?: LinearAPI;
   push?: PushAPI;
   diagnostics?: DiagnosticsAPI;
   clientAuth?: ClientAuthAPI;

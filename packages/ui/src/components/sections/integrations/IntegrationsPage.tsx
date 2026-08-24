@@ -3,6 +3,8 @@ import { Icon } from '@/components/icon/Icon';
 import { SettingsPageLayout } from '@/components/sections/shared/SettingsPageLayout';
 import { SETTINGS_DESCRIPTION_CLASS } from '@/components/sections/shared/SettingsSection';
 import { useI18n } from '@/lib/i18n';
+import { getRegisteredRuntimeAPIs } from '@/contexts/runtimeAPIRegistry';
+import { LinearSettings } from './LinearSettings';
 import { ThirdPartyIntegrationsSection } from './ThirdPartyIntegrationsSection';
 
 interface IntegrationsPageProps {
@@ -15,6 +17,7 @@ export const IntegrationsPage: React.FC<IntegrationsPageProps> = ({
   onOpenPluginManager,
 }) => {
   const { t } = useI18n();
+  const hasLinear = Boolean(getRegisteredRuntimeAPIs()?.linear);
 
   return (
     <SettingsPageLayout
@@ -30,10 +33,11 @@ export const IntegrationsPage: React.FC<IntegrationsPageProps> = ({
           </div>
         </div>
       )}
-      showSaveStatus={false}
+      showSaveStatus
     >
+      {hasLinear ? <LinearSettings /> : null}
       <ThirdPartyIntegrationsSection
-        divider={false}
+        divider={hasLinear}
         onOpenProviderSetup={onOpenProviderSetup}
         onOpenPluginManager={onOpenPluginManager}
       />

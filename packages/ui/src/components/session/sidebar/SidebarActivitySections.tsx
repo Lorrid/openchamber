@@ -11,6 +11,7 @@ import {
 } from './sessionNodeItemUtils';
 import type { SessionNodeRenderExtras } from './sessionNodeItemUtils';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
+import { LinearCreateSessionButton } from '@/components/session/LinearCreateSessionButton';
 
 export type ActivityItem = {
   node: SessionNode;
@@ -200,7 +201,7 @@ export function SidebarActivitySections(props: Props): React.ReactNode {
                 onClick={() => toggleSection(section.key)}
                 className={cn(
                   'group flex w-full items-center gap-1.5 py-1 pl-4 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50',
-                  section.key === 'chats' && props.onNewChat ? 'pr-10' : 'pr-3.5',
+                  section.key === 'chats' && props.onNewChat ? 'pr-16' : 'pr-3.5',
                 )}
                 aria-expanded={!isCollapsed}
               >
@@ -213,7 +214,15 @@ export function SidebarActivitySections(props: Props): React.ReactNode {
                 <span className="text-[14px] font-semibold lowercase text-foreground">{section.title}</span>
               </button>
               {section.key === 'chats' && props.onNewChat ? (
-                <div className="absolute right-0.5 top-1/2 z-10 -translate-y-1/2">
+                <div
+                  className={cn(
+                    'absolute right-0.5 top-1/2 z-10 flex -translate-y-1/2 items-center gap-0.5 transition-opacity',
+                    props.alwaysShowActions
+                      ? 'opacity-100'
+                      : 'opacity-0 pointer-events-none group-hover/chats:opacity-100 group-hover/chats:pointer-events-auto group-focus-within/chats:opacity-100 group-focus-within/chats:pointer-events-auto',
+                  )}
+                >
+                  <LinearCreateSessionButton placement="sidebar" />
                   <Tooltip delayDuration={500}>
                     <TooltipTrigger asChild>
                       <button
@@ -222,12 +231,7 @@ export function SidebarActivitySections(props: Props): React.ReactNode {
                           event.stopPropagation();
                           props.onNewChat?.();
                         }}
-                        className={cn(
-                          'inline-flex h-6 w-6 items-center justify-center rounded-md text-muted-foreground hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50 transition-opacity',
-                          props.alwaysShowActions
-                            ? 'opacity-100'
-                            : 'opacity-0 pointer-events-none group-hover/chats:opacity-100 group-hover/chats:pointer-events-auto group-focus-within/chats:opacity-100 group-focus-within/chats:pointer-events-auto',
-                        )}
+                        className="inline-flex h-6 w-6 items-center justify-center rounded-md text-muted-foreground hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50"
                         aria-label={t('sessions.sidebar.header.actions.newSession')}
                       >
                         <Icon name="add" className="h-4 w-4" />

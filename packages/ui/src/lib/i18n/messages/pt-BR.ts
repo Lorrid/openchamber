@@ -1,8 +1,10 @@
 import type { I18nKey } from './en';
 import { settingsDict } from './pt-BR.settings';
+import { linearIssuePickerI18n } from './linear-issue-picker.i18n';
 
 export const dict: Record<I18nKey, string> = {
   ...settingsDict,
+  ...linearIssuePickerI18n['pt-BR'],
   'terminalView.actions.attachSelection': 'Anexar saída selecionada',
   'terminalView.actions.restart': 'Reiniciar terminal',
   'chat.message.terminalContext': '{terminal}, linhas {start}-{end}',

@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'bun:test';
 import type { Session } from '@opencode-ai/sdk/v2';
-import { buildLinkedIssue, buildLinkedIssueId, getLinkedIssues, withLinkedIssue, type LinkedIssue } from './linkedIssues';
+import { buildLinkedIssue, buildLinkedIssueId, buildLinkedLinearIssue, getLinkedIssues, withLinkedIssue, type LinkedIssue } from './linkedIssues';
 
 const issue = (overrides: Partial<LinkedIssue> = {}): LinkedIssue => ({
   id: 'owner/repo#12',
@@ -76,6 +76,28 @@ describe('buildLinkedIssue', () => {
   });
 });
 
+describe('buildLinkedLinearIssue', () => {
+  test('stores the Linear identifier without inventing a GitHub number', () => {
+    const built = buildLinkedLinearIssue({
+      identifier: 'ENG-12',
+      title: 'Broken login',
+      url: 'https://linear.app/openchamber/issue/ENG-12',
+      author: { login: 'Ada', avatarUrl: 'https://avatars/1' },
+      linkedAt: 5,
+    });
+    expect(built).toEqual({
+      id: 'linear:ENG-12',
+      identifier: 'ENG-12',
+      title: 'Broken login',
+      url: 'https://linear.app/openchamber/issue/ENG-12',
+      kind: 'linear',
+      author: 'Ada',
+      authorAvatarUrl: 'https://avatars/1',
+      linkedAt: 5,
+    });
+  });
+});
+
 describe('getLinkedIssues', () => {
   test('returns an empty list for a session with no metadata', () => {
     expect(getLinkedIssues(undefined)).toEqual([]);
@@ -93,6 +115,17 @@ describe('getLinkedIssues', () => {
       'string',
     ]);
     expect(getLinkedIssues(session)).toEqual([good]);
+  });
+
+  test('keeps Linear entries next to GitHub ones', () => {
+    const github = issue();
+    const linear = buildLinkedLinearIssue({
+      identifier: 'ENG-12',
+      title: 'Broken login',
+      url: 'https://linear.app/openchamber/issue/ENG-12',
+      linkedAt: 2,
+    });
+    expect(getLinkedIssues(sessionWith([github, linear]))).toEqual([github, linear]);
   });
 
   test('survives a non-array payload', () => {

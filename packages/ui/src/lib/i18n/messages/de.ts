@@ -1,7 +1,9 @@
 import { settingsDict } from './de.settings';
+import { linearIssuePickerI18n } from './linear-issue-picker.i18n';
 
 export const dict = {
   ...settingsDict,
+  ...linearIssuePickerI18n.de,
   'common.language.german': 'Deutsch',
   'common.loading': 'Wird geladen...',
   'common.unavailable': 'Nicht verfügbar',

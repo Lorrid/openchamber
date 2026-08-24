@@ -4,6 +4,12 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+- **Settings/Integrations:** connect Linear with one button. The login lives on this OpenChamber server, so web, desktop, and a phone paired to it share the same account. After connecting, map the workspace default and each Linear team to an OpenChamber project.
+- Chat: attach a Linear issue from the composer attach menu. It rides the next send as context and stays on the work-status card. Exclusive with a linked GitHub issue or PR. Hidden in VS Code.
+- Chat: next to New Chat, a Linear button starts a session from an issue. It appears with the same hover behavior as New Chat, only while Linear is connected, and is hidden in VS Code.
+- Git: when creating a worktree, start from a Linear issue the same way you already can from a GitHub issue. It stays in the current project, names the branch from the issue, and seeds the new session. Hidden in VS Code.
+- Linear: sessions started from an issue post started, completed, and failed comments on that issue, named like `OpenChamber session started: Session title`, each a link that opens the session.
+- Settings: Linear issue review has its own Magic Prompts templates, separate from GitHub issue review.
 - **Chat context attachments:** everything you attach to a message — diff/file/plan comments, terminal selections, browser annotations, PR comments and failed checks, linked issues and PRs — now shows up in the conversation as a compact context card: a header naming the source, the captured content behind an expander, and your comment below it. Previously most of these arrived as a wall of raw text inside your message.
 - **Chat: comment on a reply.** Select text in a chat message and choose Comment to attach that quote with your note to the next message. The selection stays highlighted while you type, and the selection menu itself was restyled — Add to chat is now Add to input.
 - **Diff: comment like a review.** Hovering a line shows a + button in the gutter; clicking it, clicking a line, or dragging across lines opens the comment editor for that line or range. The comment editor and saved-comment cards now match the chat's comment style.
