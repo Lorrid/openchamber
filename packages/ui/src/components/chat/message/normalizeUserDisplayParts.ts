@@ -13,6 +13,14 @@ type GitHubIssueContextPayload = {
     };
 };
 
+type GitHubPrContextPayload = {
+    pr?: {
+        number?: unknown;
+        title?: unknown;
+        url?: unknown;
+    };
+};
+
 type LinearIssueContextPayload = {
     issue?: {
         identifier?: unknown;

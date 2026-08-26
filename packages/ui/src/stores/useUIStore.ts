@@ -424,7 +424,9 @@ const touchContextPanelState = (prev?: ContextPanelDirectoryState): ContextPanel
 const upsertContextPanelTab = (
   current: ContextPanelDirectoryState,
   descriptor: ContextPanelTabDescriptor,
+  options?: { reveal?: boolean },
 ): ContextPanelDirectoryState => {
+  const reveal = options?.reveal !== false;
   const nextTab = createContextPanelTab(descriptor);
   // A real file tab replaces the empty editor placeholder ('file' with no
   // target) that the rail can open before any file is picked.
@@ -449,12 +451,18 @@ const upsertContextPanelTab = (
         }
       : tab));
 
-  const activeTabId = nextTab.id;
+  // A background upsert (an agent working a page) keeps the panel exactly as
+  // the user left it: closed stays closed, and whatever tab they were on
+  // stays active. The tab still exists — panes are kept mounted regardless of
+  // visibility — so agent control and a later manual open both find it.
+  const activeTabId = reveal
+    ? nextTab.id
+    : current.activeTabId ?? nextTab.id;
   const clampedTabs = clampContextPanelTabs(tabs, CONTEXT_PANEL_MAX_TABS, activeTabId);
 
   return {
     ...current,
-    isOpen: true,
+    isOpen: reveal ? true : current.isOpen,
     tabs: clampedTabs,
     activeTabId: resolveActiveContextPanelTabID(clampedTabs, activeTabId),
     touchedAt: Date.now(),
@@ -638,6 +646,9 @@ interface UIStore {
   hasManuallyResizedLeftSidebar: boolean;
   contextPanelByDirectory: Record<string, ContextPanelDirectoryState>;
   contextRailOrder: string[];
+  /** Surface ids the user hid from the context rail; stored as the hidden set
+      so surfaces added later appear for everyone. */
+  contextRailHiddenSurfaces: string[];
   contextEditorTreeVisible: boolean;
   contextEditorTreeWidth: number;
   notesPanelHeight: number;
@@ -705,6 +716,7 @@ interface UIStore {
   eventStreamStatus: EventStreamStatus;
   eventStreamHint: string | null;
   showReasoningTraces: boolean;
+  streamingAutoFollowEnabled: boolean;
   sessionRecapEnabled: boolean;
   sessionSuggestionEnabled: boolean;
   sessionGoalEnabled: boolean;
@@ -839,14 +851,13 @@ interface UIStore {
   toggleContextEditorTree: () => void;
   setContextEditorTreeWidth: (width: number) => void;
   openContextSurface: (directory: string, mode: ContextPanelMode) => void;
-  openContextPanelTab: (directory: string, tab: ContextPanelTabDescriptor) => void;
+  openContextPanelTab: (directory: string, tab: ContextPanelTabDescriptor, options?: { reveal?: boolean }) => void;
   openContextDiff: (directory: string, filePath: string, staged?: boolean, scope?: PendingDiffScope | null) => void;
   openContextFile: (directory: string, filePath: string) => void;
   openContextFileAtLine: (directory: string, filePath: string, line: number, column?: number) => void;
   openContextOverview: (directory: string) => void;
-  openContextPlan: (directory: string) => void;
   openContextPreview: (directory: string, url: string) => void;
-  openContextBrowser: (directory: string, url?: string) => void;
+  openContextBrowser: (directory: string, url?: string, options?: { reveal?: boolean }) => void;
   openNewContextBrowserTab: (directory: string) => void;
   setContextPanelTabTargetPath: (directory: string, tabID: string, targetPath: string) => void;
   setActiveContextPanelTab: (directory: string, tabID: string) => void;
@@ -864,6 +875,8 @@ interface UIStore {
   setWorkStatusOverlayOpen: (open: boolean) => void;
   setWorkStatusSectionVisible: (sectionId: string, visible: boolean) => void;
   setWorkStatusHiddenSections: (sectionIds: string[]) => void;
+  setContextRailSurfaceVisible: (surfaceId: string, visible: boolean) => void;
+  setContextRailHiddenSurfaces: (surfaceIds: string[]) => void;
   setSessionSwitcherOpen: (open: boolean) => void;
   setSessionDropdownOpen: (open: boolean) => void;
   setPendingDiffFile: (filePath: string | null, staged?: boolean, scope?: PendingDiffScope | null) => void;
@@ -896,6 +909,7 @@ interface UIStore {
   setSettingsRemoteInstancesSelectedId: (instanceId: string | null) => void;
   setEventStreamStatus: (status: EventStreamStatus, hint?: string | null) => void;
   setShowReasoningTraces: (value: boolean) => void;
+  setStreamingAutoFollowEnabled: (value: boolean) => void;
   setSessionRecapEnabled: (value: boolean) => void;
   setSessionSuggestionEnabled: (value: boolean) => void;
   setSessionGoalEnabled: (value: boolean) => void;
@@ -1030,6 +1044,7 @@ export const useUIStore = create<UIStore>()(
         hasManuallyResizedLeftSidebar: false,
         contextPanelByDirectory: {},
         contextRailOrder: [],
+        contextRailHiddenSurfaces: [],
         contextEditorTreeVisible: true,
         contextEditorTreeWidth: 240,
         notesPanelHeight: 112,
@@ -1069,6 +1084,7 @@ export const useUIStore = create<UIStore>()(
         eventStreamStatus: 'idle',
         eventStreamHint: null,
         showReasoningTraces: true,
+        streamingAutoFollowEnabled: true,
         sessionRecapEnabled: true,
         sessionSuggestionEnabled: true,
         sessionGoalEnabled: true,
@@ -1277,7 +1293,7 @@ export const useUIStore = create<UIStore>()(
           state.openContextPanelTab(normalizedDirectory, { mode });
         },
 
-        openContextPanelTab: (directory, tab) => {
+        openContextPanelTab: (directory, tab, options) => {
           const normalizedDirectory = normalizeDirectoryPath((directory || '').trim());
           if (!normalizedDirectory) {
             return;
@@ -1288,7 +1304,7 @@ export const useUIStore = create<UIStore>()(
             const current = touchContextPanelState(prev);
             const byDirectory = {
               ...state.contextPanelByDirectory,
-              [normalizedDirectory]: upsertContextPanelTab(current, tab),
+              [normalizedDirectory]: upsertContextPanelTab(current, tab, options),
             };
 
             return { contextPanelByDirectory: clampContextPanelRoots(byDirectory, 20) };
@@ -1351,15 +1367,6 @@ export const useUIStore = create<UIStore>()(
           get().openContextPanelTab(normalizedDirectory, { mode: 'context' });
         },
 
-        openContextPlan: (directory) => {
-          const normalizedDirectory = normalizeDirectoryPath((directory || '').trim());
-          if (!normalizedDirectory) {
-            return;
-          }
-
-          get().openContextPanelTab(normalizedDirectory, { mode: 'plan' });
-        },
-
         openContextPreview: (directory, url) => {
           const normalizedDirectory = normalizeDirectoryPath((directory || '').trim());
           const normalizedUrl = (url || '').trim();
@@ -1389,7 +1396,7 @@ export const useUIStore = create<UIStore>()(
             label: null,
           });
         },
-        openContextBrowser: (directory, url = '') => {
+        openContextBrowser: (directory, url = '', options) => {
           const normalizedDirectory = normalizeDirectoryPath((directory || '').trim());
           if (!normalizedDirectory || isVSCodeRuntime()) return;
           const targetUrl = typeof url === 'string' && url.trim().length > 0 ? url.trim() : '';
@@ -1398,7 +1405,7 @@ export const useUIStore = create<UIStore>()(
             targetPath: targetUrl,
             dedupeKey: targetUrl || 'browser',
             label: null,
-          });
+          }, options);
         },
 
         setContextPanelTabTargetPath: (directory, tabID, targetPath) => {
@@ -1643,6 +1650,23 @@ export const useUIStore = create<UIStore>()(
           set({ workStatusHiddenSections: [...new Set(sectionIds)] });
         },
 
+        setContextRailSurfaceVisible: (surfaceId, visible) => {
+          set((state) => {
+            const hidden = state.contextRailHiddenSurfaces;
+            const isHidden = hidden.includes(surfaceId);
+            if (visible === !isHidden) return state;
+            return {
+              contextRailHiddenSurfaces: visible
+                ? hidden.filter((entry) => entry !== surfaceId)
+                : [...hidden, surfaceId],
+            };
+          });
+        },
+
+        setContextRailHiddenSurfaces: (surfaceIds) => {
+          set({ contextRailHiddenSurfaces: [...new Set(surfaceIds)] });
+        },
+
 
         setSessionSwitcherOpen: (open) => {
           if (get().isSessionSwitcherOpen === open) {
@@ -1804,6 +1828,10 @@ export const useUIStore = create<UIStore>()(
 
         setShowReasoningTraces: (value) => {
           set({ showReasoningTraces: value });
+        },
+
+        setStreamingAutoFollowEnabled: (value) => {
+          set({ streamingAutoFollowEnabled: value });
         },
 
         setSessionRecapEnabled: (value) => {
@@ -2473,7 +2501,7 @@ export const useUIStore = create<UIStore>()(
       {
         name: 'ui-store',
         storage: createDeferredSafeJSONStorage(),
-        version: 17,
+        version: 18,
         migrate: (persistedState, version) => {
           if (!persistedState || typeof persistedState !== 'object') {
             return persistedState;
@@ -2492,6 +2520,15 @@ export const useUIStore = create<UIStore>()(
           // v16 -> v17: the editor toolbar is always docked; the preference is gone.
           if (version < 17) {
             delete state.expandedEditorToolbar;
+          }
+
+          // v17 -> v18: the default shortcut layout was redesigned around the
+          // mod+k leader and the held digit prefixes. Old overrides were
+          // recorded against the previous defaults (e.g. a bare 'mod' surface
+          // prefix now collides with session tabs), so custom bindings start
+          // fresh on the new system.
+          if (version < 18) {
+            delete state.shortcutOverrides;
           }
 
           // v13 -> v14: the separate 'preview' surface merged into 'browser'.
@@ -2684,6 +2721,9 @@ export const useUIStore = create<UIStore>()(
             state.autoSaveEnabled = true;
           }
 
+          state.contextRailHiddenSurfaces = Array.isArray(state.contextRailHiddenSurfaces)
+            ? (state.contextRailHiddenSurfaces as unknown[]).filter((id): id is string => typeof id === 'string' && id.trim() !== '')
+            : [];
           state.contextRailOrder = Array.isArray(state.contextRailOrder)
             ? (state.contextRailOrder as unknown[]).filter((id): id is string => typeof id === 'string' && id.trim() !== '')
             : [];
@@ -2696,6 +2736,7 @@ export const useUIStore = create<UIStore>()(
           sidebarWidth: state.sidebarWidth,
           contextPanelByDirectory: state.contextPanelByDirectory,
           contextRailOrder: state.contextRailOrder,
+          contextRailHiddenSurfaces: state.contextRailHiddenSurfaces,
           contextEditorTreeVisible: state.contextEditorTreeVisible,
           contextEditorTreeWidth: state.contextEditorTreeWidth,
           notesPanelHeight: state.notesPanelHeight,
@@ -2712,6 +2753,7 @@ export const useUIStore = create<UIStore>()(
           isSessionCreateDialogOpen: state.isSessionCreateDialogOpen,
           // Note: isSettingsDialogOpen intentionally NOT persisted
           showReasoningTraces: state.showReasoningTraces,
+          streamingAutoFollowEnabled: state.streamingAutoFollowEnabled,
           sessionRecapEnabled: state.sessionRecapEnabled,
           sessionSuggestionEnabled: state.sessionSuggestionEnabled,
           sessionGoalEnabled: state.sessionGoalEnabled,

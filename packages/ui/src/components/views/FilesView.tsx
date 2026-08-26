@@ -31,7 +31,9 @@ import { languageByExtension, loadLanguageByExtension } from '@/lib/codemirror/l
 import { createFlexokiCodeMirrorTheme } from '@/lib/codemirror/flexokiTheme';
 import { shikiHighlightExtension } from '@/lib/codemirror/shikiHighlight';
 import { getResolvedShikiTheme } from '@/lib/shiki/appThemeRegistry';
-import { File as PierreFile } from '@pierre/diffs/react';
+import { File as PierreFile, VirtualizerContext, WorkerPoolContext } from '@pierre/diffs/react';
+import { useWorkerPool } from '@/contexts/DiffWorkerProvider';
+import { useFileViewVirtualizer, type FileViewVirtualizer } from './useFileViewVirtualizer';
 import {
   Dialog,
   DialogContent,
@@ -43,7 +45,7 @@ import {
 import { useDebouncedValue } from '@/hooks/useDebouncedValue';
 import { useFileSearchStore } from '@/stores/useFileSearchStore';
 import { useDeviceInfo } from '@/lib/device';
-import { cn, getModifierLabel, getRevealLabelKey, hasModifier } from '@/lib/utils';
+import { cn, getRevealLabelKey } from '@/lib/utils';
 import { getLanguageFromExtension, getImageMimeType, isBinaryFile, isDrawioFile, isImageFile, isPdfFile, isSvgFile, looksLikeBinaryText } from '@/lib/toolHelpers';
 import { shouldAllowFileDraftSave, shouldScheduleFileAutosave } from '@/lib/fileEditorAutosave';
 import { getRuntimeUrlResolver } from '@/lib/runtime-url';
@@ -73,7 +75,8 @@ import { ensurePierreThemeRegistered } from '@/lib/shiki/appThemeRegistry';
 import { getDefaultTheme } from '@/lib/theme/themes';
 import { isBrowserClientRuntime, openDesktopFileInApp, openDesktopPath } from '@/lib/desktop';
 import { useOpenInAppsStore } from '@/stores/useOpenInAppsStore';
-import { eventMatchesShortcut, getEffectiveShortcutCombo } from '@/lib/shortcuts';
+import { useKeybind, useKeybinds } from '@/hooks/useKeybind';
+import { formatShortcutForDisplay, getEffectiveShortcutCombo } from '@/lib/shortcuts';
 import { useI18n } from '@/lib/i18n';
 import { sessionEvents } from '@/lib/sessionEvents';
 import { syncScheduledTaskLoops } from '@/lib/scheduledTasksApi';
@@ -310,6 +313,23 @@ const isFileMissingError = (error: unknown): boolean => {
 
 const MAX_VIEW_CHARS = 200_000;
 type FileLineEnding = '\n' | '\r\n';
+
+// Fast cache key for pierre's line/highlight caches: content-derived (not a
+// revision counter) so polling reloads and out-of-view changes can never hit
+// a stale entry. Mirrors the diff viewer's key scheme. Known residual: two
+// files identical in total length and in the first/last 200 characters can
+// collide and briefly show stale content; same profile as PierreDiffViewer.
+function makeContentCacheKey(contents: string): string {
+  const sample = contents.length > 400
+    ? `${contents.slice(0, 200)}${contents.slice(-200)}`
+    : contents;
+  let hash = 0x811c9dc5;
+  for (let i = 0; i < sample.length; i += 1) {
+    hash ^= sample.charCodeAt(i);
+    hash = (hash + ((hash << 1) + (hash << 4) + (hash << 7) + (hash << 8) + (hash << 24))) >>> 0;
+  }
+  return `${contents.length}:${hash.toString(16)}`;
+}
 
 const detectFileLineEnding = (content: string): FileLineEnding => {
   let crlf = 0;
@@ -1013,7 +1033,6 @@ export const FilesView: React.FC<FilesViewProps> = ({ mode = 'full' }) => {
   const setPendingFileNavigation = useUIStore((state) => state.setPendingFileNavigation);
   const pendingFileFocusPath = useUIStore((state) => state.pendingFileFocusPath);
   const setPendingFileFocusPath = useUIStore((state) => state.setPendingFileFocusPath);
-  const shortcutOverrides = useUIStore((state) => state.shortcutOverrides);
   const fileEditorKeymap = useUIStore((state) => state.fileEditorKeymap);
   const settingsDefaultFileViewerPreview = useConfigStore((state) => state.settingsDefaultFileViewerPreview);
   const showMessageTTSButtons = useConfigStore((state) => state.showMessageTTSButtons);
@@ -1740,35 +1759,28 @@ export const FilesView: React.FC<FilesViewProps> = ({ mode = 'full' }) => {
     setAutoSaveStatus('idle');
   }, [selectedFile?.path]);
 
-  React.useEffect(() => {
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if (!hasModifier(e)) {
-        return;
-      }
+  useKeybinds({
+    save_file: (event) => {
+      if (!(event.target instanceof Node) || !editorWrapperRef.current?.contains(event.target)) return false;
 
-      if (e.key.toLowerCase() === 's') {
-        e.preventDefault();
-        // Cancel pending auto-save; user wants immediate save
-        if (autoSaveTimerRef.current) {
-          clearTimeout(autoSaveTimerRef.current);
-          autoSaveTimerRef.current = null;
-        }
-        if (!isSaving) {
-          void saveDraft().then((saved) => {
-            if (!saved) return;
-            setAutoSaveStatus('saved');
-            setTimeout(() => setAutoSaveStatus('idle'), 2000);
-          });
-        }
-      } else if (e.key.toLowerCase() === 'f') {
-        e.preventDefault();
-        setIsSearchOpen(true);
+      // Cancel pending auto-save because the explicit save should run immediately.
+      if (autoSaveTimerRef.current) {
+        clearTimeout(autoSaveTimerRef.current);
+        autoSaveTimerRef.current = null;
       }
-    };
-
-    window.addEventListener('keydown', handleKeyDown);
-    return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [isSaving, saveDraft]);
+      if (!isSaving) {
+        void saveDraft().then((saved) => {
+          if (!saved) return;
+          setAutoSaveStatus('saved');
+          setTimeout(() => setAutoSaveStatus('idle'), 2000);
+        });
+      }
+    },
+    find_in_file: (event) => {
+      if (!(event.target instanceof Node) || !editorWrapperRef.current?.contains(event.target)) return false;
+      setIsSearchOpen(true);
+    },
+  });
 
   const loadSelectedFile = React.useCallback(async (node: FileNode) => {
     const loadId = activeFileLoadIdRef.current + 1;
@@ -2887,42 +2899,21 @@ export const FilesView: React.FC<FilesViewProps> = ({ mode = 'full' }) => {
     };
   }, [isMobile, nudgeEditorSelectionAboveKeyboard]);
 
-  React.useEffect(() => {
+  useKeybind('open_go_to_line', (event) => {
     if (!canEdit || textViewMode !== 'edit' || isMobile) {
-      return;
+      return false;
     }
 
-    const goToLineCombo = getEffectiveShortcutCombo('open_go_to_line', shortcutOverrides);
+    const target = event.target as Element | null;
+    if (target?.closest('[role="dialog"]')) return false;
+    if (!(target instanceof Node) || !editorWrapperRef.current?.contains(target)) return false;
 
-    const handleKeyDown = (event: KeyboardEvent) => {
-      const target = event.target as Element | null;
-      if (target?.closest('[role="dialog"]')) {
-        return;
-      }
+    const isEditorTarget = Boolean(target?.closest('.cm-editor'));
+    const isTypingTarget = Boolean(target?.closest('input, textarea, [contenteditable="true"], [role="textbox"]'));
+    if (isTypingTarget && !isEditorTarget) return false;
 
-      const isEditorTarget = Boolean(target?.closest('.cm-editor'));
-      const isTypingTarget = Boolean(
-        target?.closest('input, textarea, [contenteditable="true"], [role="textbox"]')
-      );
-      if (isTypingTarget && !isEditorTarget) {
-        return;
-      }
-
-      const activeElement = document.activeElement as Element | null;
-      const editorHasFocus = Boolean(activeElement?.closest('.cm-editor'));
-      if (!editorHasFocus) {
-        return;
-      }
-
-      if (eventMatchesShortcut(event, goToLineCombo)) {
-        event.preventDefault();
-        setIsGoToLineOpen(true);
-      }
-    };
-
-    window.addEventListener('keydown', handleKeyDown);
-    return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [canEdit, isMobile, shortcutOverrides, textViewMode]);
+    setIsGoToLineOpen(true);
+  });
 
   const editorFontSize = useUIStore((state) => state.editorFontSize);
 
@@ -3116,27 +3107,57 @@ export const FilesView: React.FC<FilesViewProps> = ({ mode = 'full' }) => {
     });
   }, [cancel, commentText, deleteDraft, editingDraftId, filesFileDrafts, handleSaveComment, isDragging, lineSelection, selectedFile?.path, setCommentText, startEdit]);
 
-  const renderShikiFileView = React.useCallback((file: FileNode, content: string) => {
+  const mainViewVirtualizer = useFileViewVirtualizer();
+  const fullscreenViewVirtualizer = useFileViewVirtualizer();
+  const shikiWorkerPool = useWorkerPool('unified');
+  // Files above the editable size cap are rendered as a read-only preview; give
+  // them the full file content plus pierre's viewport virtualization and the
+  // shared Shiki worker pool so large files stay responsive.
+  const isLargeFile = fileContent.length > MAX_VIEW_CHARS;
+  const largeFileCacheKey = React.useMemo(
+    () => (isLargeFile ? makeContentCacheKey(fileContent) : undefined),
+    [fileContent, isLargeFile],
+  );
+
+  const renderShikiFileView = React.useCallback((file: FileNode, content: string, virtualizer: FileViewVirtualizer) => {
+    const fileContents = {
+      name: file.name,
+      contents: content,
+      lang: getLanguageFromExtension(file.path) || undefined,
+    };
+    const pierreFile = (key: string) => (
+      <PierreFile
+        key={key}
+        file={isLargeFile && largeFileCacheKey ? { ...fileContents, cacheKey: `${file.path}:${largeFileCacheKey}` } : fileContents}
+        options={{
+          disableFileHeader: true,
+          overflow: wrapLines ? 'wrap' : 'scroll',
+          theme: pierreTheme,
+          themeType: currentTheme.metadata.variant === 'dark' ? 'dark' : 'light',
+        }}
+        className={isLargeFile ? 'block w-full' : 'block h-full w-full'}
+        style={isLargeFile ? undefined : { height: '100%' }}
+      />
+    );
+
+    if (!isLargeFile) {
+      return <div className="h-full">{pierreFile(file.path)}</div>;
+    }
+
+    // Large files render through pierre's Virtualizer (viewport-only DOM) and
+    // the shared Shiki worker pool. The pool is created lazily: until it is
+    // ready the key carries a 'pending' suffix so the file remounts with the
+    // worker-backed highlighter instead of silently staying on the main thread.
     return (
       <div className="h-full">
-        <PierreFile
-          file={{
-            name: file.name,
-            contents: content,
-            lang: getLanguageFromExtension(file.path) || undefined,
-          }}
-          options={{
-            disableFileHeader: true,
-            overflow: wrapLines ? 'wrap' : 'scroll',
-            theme: pierreTheme,
-            themeType: currentTheme.metadata.variant === 'dark' ? 'dark' : 'light',
-          }}
-          className="block h-full w-full"
-          style={{ height: '100%' }}
-        />
+        <VirtualizerContext.Provider value={virtualizer.virtualizer}>
+          <WorkerPoolContext.Provider value={shikiWorkerPool}>
+            {pierreFile(`${file.path}:${shikiWorkerPool ? 'pool' : 'pending'}`)}
+          </WorkerPoolContext.Provider>
+        </VirtualizerContext.Provider>
       </div>
     );
-  }, [currentTheme.metadata.variant, pierreTheme, wrapLines]);
+  }, [currentTheme.metadata.variant, isLargeFile, largeFileCacheKey, pierreTheme, shikiWorkerPool, wrapLines]);
 
   const renderFloatingFileControls = ({
     exitFullscreenOnly = false,
@@ -3147,6 +3168,7 @@ export const FilesView: React.FC<FilesViewProps> = ({ mode = 'full' }) => {
     }
 
     const docked = layout === 'docked';
+    const saveShortcut = formatShortcutForDisplay(getEffectiveShortcutCombo('save_file'));
     const wrapperCls = docked
       ? 'pointer-events-auto flex flex-wrap items-center gap-1'
       : 'pointer-events-auto flex items-center gap-1 rounded-lg border border-[var(--interactive-border)] bg-[var(--surface-elevated)] p-1 shadow-sm';
@@ -3176,14 +3198,14 @@ export const FilesView: React.FC<FilesViewProps> = ({ mode = 'full' }) => {
                 <Icon name="check" className="size-3.5" />
                 {t('filesView.editor.saved')}
               </span>
-            ) : isDirty ? withTooltip(t(autoSaveEnabled ? 'filesView.editor.saveNowTitle' : 'filesView.editor.saveNowManualTitle', { shortcut: `${getModifierLabel()}+S` }),
+            ) : isDirty ? withTooltip(t(autoSaveEnabled ? 'filesView.editor.saveNowTitle' : 'filesView.editor.saveNowManualTitle', { shortcut: saveShortcut }),
               <Button
                 variant="ghost"
                 size="sm"
                 onClick={() => void saveDraft()}
                 className="h-6 gap-1 px-1 text-muted-foreground opacity-80 hover:bg-transparent hover:opacity-100 focus-visible:bg-transparent active:bg-transparent"
-                title={t(autoSaveEnabled ? 'filesView.editor.saveNowTitle' : 'filesView.editor.saveNowManualTitle', { shortcut: `${getModifierLabel()}+S` })}
-                aria-label={t('filesView.editor.saveAria', { shortcut: `${getModifierLabel()}+S` })}
+                title={t(autoSaveEnabled ? 'filesView.editor.saveNowTitle' : 'filesView.editor.saveNowManualTitle', { shortcut: saveShortcut })}
+                aria-label={t('filesView.editor.saveAria', { shortcut: saveShortcut })}
               >
                 <Icon name="save-3" className="size-4" />
               </Button>
@@ -3743,7 +3765,7 @@ export const FilesView: React.FC<FilesViewProps> = ({ mode = 'full' }) => {
       </div>
 
       <div className="flex-1 min-h-0 min-w-0 relative">
-        <ScrollableOverlay outerClassName="h-full min-w-0" className="h-full min-w-0">
+        <ScrollableOverlay ref={mainViewVirtualizer.setScroller} outerClassName="h-full min-w-0" className={cn('h-full min-w-0', isLargeFile && '[overflow-anchor:none]')}>
           {!selectedFile ? (
             <div className="p-3 typography-ui text-muted-foreground">{t('filesView.editor.pickFileFromTree')}</div>
           ) : (fileLoading || isPdfAssetAuthLoading) ? (
@@ -3874,7 +3896,7 @@ export const FilesView: React.FC<FilesViewProps> = ({ mode = 'full' }) => {
             </div>
             )
           ) : selectedFile && canUseShikiFileView && textViewMode === 'view' ? (
-            renderShikiFileView(selectedFile, draftContent)
+            renderShikiFileView(selectedFile, isLargeFile ? fileContent : draftContent, mainViewVirtualizer)
           ) : (
             <div
               className={cn('relative h-full', shouldMaskEditorForPendingNavigation && 'overflow-hidden')}
@@ -4144,7 +4166,7 @@ export const FilesView: React.FC<FilesViewProps> = ({ mode = 'full' }) => {
         <div className="absolute right-4 top-4 z-30">
           {renderFloatingFileControls({ exitFullscreenOnly: true })}
         </div>
-        <ScrollableOverlay outerClassName="h-full min-w-0" className="h-full min-w-0">
+        <ScrollableOverlay ref={fullscreenViewVirtualizer.setScroller} outerClassName="h-full min-w-0" className={cn('h-full min-w-0', isLargeFile && '[overflow-anchor:none]')}>
           {(fileLoading || isPdfAssetAuthLoading) ? (
             suppressFileLoadingIndicator
               ? <div className="p-4" />
@@ -4223,7 +4245,7 @@ export const FilesView: React.FC<FilesViewProps> = ({ mode = 'full' }) => {
               </ErrorBoundary>
             </div>
           ) : canUseShikiFileView && textViewMode === 'view' ? (
-            renderShikiFileView(selectedFile, draftContent)
+            renderShikiFileView(selectedFile, isLargeFile ? fileContent : draftContent, fullscreenViewVirtualizer)
           ) : (
             <div className={cn('relative h-full', shouldMaskEditorForPendingNavigation && 'overflow-hidden')}>
               <div className={cn('h-full', shouldMaskEditorForPendingNavigation && 'invisible')}>

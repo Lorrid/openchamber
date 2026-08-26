@@ -62,6 +62,7 @@ import { useRuntimeAPIs } from '@/hooks/useRuntimeAPIs';
 import type { TerminalShellOption } from '@/lib/api/types';
 import { isTerminalShell } from '@/lib/terminalShell';
 import { subscribeRuntimeEndpointChanged } from '@/lib/runtime-switch';
+import { formatShortcutForDisplay } from '@/lib/shortcuts';
 
 interface Option<T extends string> {
     id: T;
@@ -302,6 +303,8 @@ export const OpenChamberVisualSettings: React.FC<OpenChamberVisualSettingsProps>
     const sessionGoalDefaultBudget = useUIStore(state => state.sessionGoalDefaultBudget);
     const setSessionGoalDefaultBudget = useUIStore(state => state.setSessionGoalDefaultBudget);
     const setShowReasoningTraces = useUIStore(state => state.setShowReasoningTraces);
+    const streamingAutoFollowEnabled = useUIStore(state => state.streamingAutoFollowEnabled);
+    const setStreamingAutoFollowEnabled = useUIStore(state => state.setStreamingAutoFollowEnabled);
     const collapsibleThinkingBlocks = useUIStore(state => state.collapsibleThinkingBlocks);
     const setCollapsibleThinkingBlocks = useUIStore(state => state.setCollapsibleThinkingBlocks);
 
@@ -1478,7 +1481,10 @@ export const OpenChamberVisualSettings: React.FC<OpenChamberVisualSettingsProps>
                                     label={t('settings.openchamber.visual.field.terminalQuickKeys')}
                                     ariaLabel={t('settings.openchamber.visual.field.terminalQuickKeysAria')}
                                     settingsItem="appearance.terminal-quick-keys"
-                                    info={t('settings.openchamber.visual.field.terminalQuickKeysTooltip')}
+                                    info={t('settings.openchamber.visual.field.terminalQuickKeysTooltip', {
+                                        control: formatShortcutForDisplay('ctrl'),
+                                        alt: formatShortcutForDisplay('alt'),
+                                    })}
                                 />
                             )}
                         </div>
@@ -1839,6 +1845,20 @@ export const OpenChamberVisualSettings: React.FC<OpenChamberVisualSettingsProps>
                                         )}
                                     </SettingsSection>
                                 )}
+                                <SettingsSection
+                                    title={t('settings.openchamber.visual.section.streaming')}
+                                    settingsItem="chat.streaming"
+                                    contentClassName={SETTINGS_OPTION_STACK_CLASS}
+                                >
+                                    <SettingsCheckboxRow
+                                        checked={streamingAutoFollowEnabled}
+                                        onChange={setStreamingAutoFollowEnabled}
+                                        label={t('settings.openchamber.visual.field.streamingAutoFollow')}
+                                        ariaLabel={t('settings.openchamber.visual.field.streamingAutoFollowAria')}
+                                        info={t('settings.openchamber.visual.field.streamingAutoFollowInfo')}
+                                        settingsItem="chat.streaming-auto-follow"
+                                    />
+                                </SettingsSection>
 
                                 {(shouldShow('collapsibleUserMessages') || shouldShow('stickyUserHeader') || (shouldShow('promptNavigatorEnabled') && !isVSCode) || shouldShow('wideChatLayout') || shouldShow('splitAssistantMessageActions') || shouldShow('codeBlockLineWrap')) && (
                                 <SettingsSection
