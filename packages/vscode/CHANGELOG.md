@@ -9,6 +9,7 @@
 - Search in dropdowns: searchable pickers (agents, models, providers, branches) now put the best matches first, match multi-word queries in any order, and ignore punctuation (so "gpt4o" finds "gpt-4o").
 - Chat: OpenCode notices now share one style.
 - The timeline dialog now fits small windows instead of squeezing the message list to a couple of rows (thanks to @gaojunran).
+- Settings: on Integrations, the experimental warning now sits under Third-party integrations.
 
 ## [1.20.0] - 2026-08-23
 

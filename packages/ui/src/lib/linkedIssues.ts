@@ -127,6 +127,18 @@ export const buildLinkedLinearIssue = (input: {
   linkedAt: input.linkedAt,
 });
 
+export const canOpenLinearIssueInContextPanel = (options: {
+  linearAvailable: boolean;
+  linearConnected: boolean;
+  inDedicatedMobileShell: boolean;
+  directory: string | null | undefined;
+}): boolean => (
+  options.linearAvailable
+  && options.linearConnected
+  && !options.inDedicatedMobileShell
+  && Boolean(options.directory?.trim())
+);
+
 export const getLinkedIssues = (session: Session | null | undefined): LinkedIssue[] => {
   const openchamber = getSessionMetadata(session).openchamber;
   if (!isRecord(openchamber) || !Array.isArray(openchamber.linked_issues)) return [];

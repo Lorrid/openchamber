@@ -201,6 +201,8 @@ type VisibleRailSurfacesOptions = {
   isVSCode: boolean;
   screenWidth: number;
   tabs: readonly { mode: ContextPanelMode }[];
+  /** Linear's rail icon stays off until a workspace is connected. */
+  linearConnected: boolean;
 };
 
 /**
@@ -227,6 +229,9 @@ export const getVisibleContextRailSurfaces = (options: VisibleRailSurfacesOption
     // not have. Offering the surface anyway would promise the panel people see
     // on the desktop.
     if (surface.id === 'browser' && options.isVSCode) {
+      return false;
+    }
+    if (surface.id === 'linear' && !options.linearConnected) {
       return false;
     }
     if (surface.availability === 'has-content') {

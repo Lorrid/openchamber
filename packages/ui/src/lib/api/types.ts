@@ -1239,7 +1239,7 @@ export type LinearIssue = LinearIssueSummary & {
   comments?: LinearIssueComment[];
 };
 
-export type LinearIssueListStatus = 'open' | 'completed' | 'all';
+export type LinearIssueListStatus = 'all' | 'backlog' | 'todo' | 'started' | 'inReview' | 'completed' | 'canceled' | 'duplicate';
 export type LinearIssueListAssignee = 'any' | 'me';
 export type LinearIssueListPriority = 'all' | 'none' | 'urgent' | 'high' | 'medium' | 'low';
 

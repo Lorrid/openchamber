@@ -27,6 +27,7 @@ import type {
   LinearIssue,
   LinearIssueLabel,
   LinearIssueListPriority,
+  LinearIssueListStatus,
   LinearIssueSummary,
   LinearTeamMapping,
   LinearWorkflowState,
@@ -53,12 +54,57 @@ const LINEAR_PRIORITY_KEYS = {
   4: 'contextPanel.linear.priority.low',
 } as const;
 
+const LINEAR_WORKFLOW_TYPE_RANK = {
+  triage: 0,
+  backlog: 1,
+  unstarted: 2,
+  started: 3,
+  completed: 4,
+  canceled: 5,
+} as const;
+
+const linearWorkflowTypeRank = (type: string | null): number => {
+  if (
+    type === 'triage'
+    || type === 'backlog'
+    || type === 'unstarted'
+    || type === 'started'
+    || type === 'completed'
+    || type === 'canceled'
+  ) {
+    return LINEAR_WORKFLOW_TYPE_RANK[type];
+  }
+  return 99;
+};
+
+const compareLinearWorkflowStates = (left: LinearWorkflowState, right: LinearWorkflowState): number => {
+  const typeDelta = linearWorkflowTypeRank(left.type) - linearWorkflowTypeRank(right.type);
+  if (typeDelta !== 0) return typeDelta;
+  if (left.position !== right.position) return left.position - right.position;
+  return left.name.localeCompare(right.name);
+};
+
 const linearPriorityMessageKey = (priority: number | null | undefined) => {
   if (priority !== 0 && priority !== 1 && priority !== 2 && priority !== 3 && priority !== 4) {
     return null;
   }
   return LINEAR_PRIORITY_KEYS[priority];
 };
+
+const STATUS_FILTER_ITEMS = [
+  { value: 'all', labelKey: 'contextPanel.linear.filter.status.all' },
+  { value: 'backlog', labelKey: 'contextPanel.linear.filter.status.backlog' },
+  { value: 'todo', labelKey: 'contextPanel.linear.filter.status.todo' },
+  { value: 'started', labelKey: 'contextPanel.linear.filter.status.started' },
+  { value: 'inReview', labelKey: 'contextPanel.linear.filter.status.inReview' },
+  { value: 'completed', labelKey: 'contextPanel.linear.filter.status.completed' },
+  { value: 'canceled', labelKey: 'contextPanel.linear.filter.status.canceled' },
+  { value: 'duplicate', labelKey: 'contextPanel.linear.filter.status.duplicate' },
+] as const;
+
+const isLinearIssueListStatus = (value: string): value is LinearIssueListStatus => (
+  STATUS_FILTER_ITEMS.some((item) => item.value === value)
+);
 
 const PRIORITY_FILTER_ITEMS = [
   { value: 'all', labelKey: 'contextPanel.linear.filter.priority.all' },
@@ -194,10 +240,12 @@ export const LinearIssuesView: React.FC = () => {
   const listAssignee = useUIStore((state) => state.linearIssueListAssignee);
   const listTeamId = useUIStore((state) => state.linearIssueListTeamId);
   const listPriority = useUIStore((state) => state.linearIssueListPriority);
+  const linearIssueFocus = useUIStore((state) => state.linearIssueFocus);
   const setListStatus = useUIStore((state) => state.setLinearIssueListStatus);
   const setListAssignee = useUIStore((state) => state.setLinearIssueListAssignee);
   const setListTeamId = useUIStore((state) => state.setLinearIssueListTeamId);
   const setListPriority = useUIStore((state) => state.setLinearIssueListPriority);
+  const setLinearIssueFocus = useUIStore((state) => state.setLinearIssueFocus);
 
   const [query, setQuery] = React.useState('');
   const [searchOpen, setSearchOpen] = React.useState(false);
@@ -410,6 +458,12 @@ export const LinearIssuesView: React.FC = () => {
     };
   }, [linear, selectedIssueId, t]);
 
+  React.useEffect(() => {
+    if (!linearIssueFocus) return;
+    setSelectedIssueId(linearIssueFocus);
+    setLinearIssueFocus(null);
+  }, [linearIssueFocus, setLinearIssueFocus]);
+
   const applyUpdatedIssue = React.useCallback((issue: LinearIssue) => {
     setSelectedIssue(issue);
     setIssues((prev) => patchIssueInList(prev, issue));
@@ -493,18 +547,18 @@ export const LinearIssuesView: React.FC = () => {
     const byId = new Map(workflowStates.map((state) => [state.id, state]));
     const currentId = selectedIssue?.state?.id;
     const currentName = selectedIssue?.state?.name;
-    if (currentId && currentName && !byId.has(currentId)) {
-      return [
+    const states = currentId && currentName && !byId.has(currentId)
+      ? [
         {
           id: currentId,
           name: currentName,
           type: selectedIssue.state?.type ?? null,
-          position: -1,
+          position: 0,
         },
         ...workflowStates,
-      ];
-    }
-    return workflowStates;
+      ]
+      : workflowStates;
+    return [...states].sort(compareLinearWorkflowStates);
   }, [selectedIssue, workflowStates]);
 
   const completedState = workflowStates.find((state) => state.type === 'completed');
@@ -512,7 +566,7 @@ export const LinearIssuesView: React.FC = () => {
   const showDisconnected = linearAuthChecked && connected === false;
   const runtimeMissing = !linear;
   const showingDetail = Boolean(selectedIssueId);
-  const usingDefaultFilters = listStatus === 'open' && listAssignee === 'any' && listTeamId === LINEAR_ISSUE_LIST_ALL_TEAMS && listPriority === 'all';
+  const usingDefaultFilters = listStatus === 'all' && listAssignee === 'any' && listTeamId === LINEAR_ISSUE_LIST_ALL_TEAMS && listPriority === 'all';
   const canUseListControls = Boolean(linear) && connected && !showDisconnected;
   const filtersDisabled = !canUseListControls || isSwitchingWorkspace;
   // Zero means the observer has not reported yet; assume there is room rather
@@ -528,7 +582,7 @@ export const LinearIssuesView: React.FC = () => {
 
   React.useEffect(() => {
     const element = listRootRef.current;
-    if (!element || typeof ResizeObserver === 'undefined') return;
+    if (!element || !globalThis.ResizeObserver) return;
     const observer = new ResizeObserver((entries) => {
       setPanelWidth(entries[0]?.contentRect.width ?? 0);
     });
@@ -845,23 +899,16 @@ export const LinearIssuesView: React.FC = () => {
               <>
             <LinearFilterMenu
               icon="task"
-              label={
-                listStatus === 'completed'
-                  ? t('contextPanel.linear.filter.status.completed')
-                  : listStatus === 'all'
-                    ? t('contextPanel.linear.filter.status.all')
-                    : t('contextPanel.linear.filter.status.open')
-              }
+              label={t((STATUS_FILTER_ITEMS.find((item) => item.value === listStatus) ?? STATUS_FILTER_ITEMS[0]).labelKey)}
               ariaLabel={t('contextPanel.linear.filter.statusAria')}
               value={listStatus}
               disabled={filtersDisabled}
-              items={[
-                { value: 'open', label: t('contextPanel.linear.filter.status.open') },
-                { value: 'completed', label: t('contextPanel.linear.filter.status.completed') },
-                { value: 'all', label: t('contextPanel.linear.filter.status.all') },
-              ]}
+              items={STATUS_FILTER_ITEMS.map((item) => ({
+                value: item.value,
+                label: t(item.labelKey),
+              }))}
               onValueChange={(value) => {
-                if (value === 'open' || value === 'completed' || value === 'all') {
+                if (isLinearIssueListStatus(value)) {
                   setListStatus(value);
                 }
               }}

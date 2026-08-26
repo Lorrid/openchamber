@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'bun:test';
 import type { Session } from '@opencode-ai/sdk/v2';
-import { buildLinkedIssue, buildLinkedIssueId, buildLinkedLinearIssue, getLinkedIssues, withLinkedIssue, type LinkedIssue } from './linkedIssues';
+import { buildLinkedIssue, buildLinkedIssueId, buildLinkedLinearIssue, canOpenLinearIssueInContextPanel, getLinkedIssues, withLinkedIssue, type LinkedIssue } from './linkedIssues';
 
 const issue = (overrides: Partial<LinkedIssue> = {}): LinkedIssue => ({
   id: 'owner/repo#12',
@@ -174,5 +174,43 @@ describe('withLinkedIssue', () => {
       true,
     );
     expect((next.openchamber as { linked_issues: LinkedIssue[] }).linked_issues).toEqual([issue()]);
+  });
+});
+
+describe('canOpenLinearIssueInContextPanel', () => {
+  test('opens the rail when Linear is connected, the shell has a context panel, and a directory is known', () => {
+    expect(canOpenLinearIssueInContextPanel({
+      linearAvailable: true,
+      linearConnected: true,
+      inDedicatedMobileShell: false,
+      directory: '/repo',
+    })).toBe(true);
+  });
+
+  test('falls back when Linear is missing, disconnected, the mobile shell is open, or the directory is blank', () => {
+    expect(canOpenLinearIssueInContextPanel({
+      linearAvailable: false,
+      linearConnected: true,
+      inDedicatedMobileShell: false,
+      directory: '/repo',
+    })).toBe(false);
+    expect(canOpenLinearIssueInContextPanel({
+      linearAvailable: true,
+      linearConnected: false,
+      inDedicatedMobileShell: false,
+      directory: '/repo',
+    })).toBe(false);
+    expect(canOpenLinearIssueInContextPanel({
+      linearAvailable: true,
+      linearConnected: true,
+      inDedicatedMobileShell: true,
+      directory: '/repo',
+    })).toBe(false);
+    expect(canOpenLinearIssueInContextPanel({
+      linearAvailable: true,
+      linearConnected: true,
+      inDedicatedMobileShell: false,
+      directory: '  ',
+    })).toBe(false);
   });
 });

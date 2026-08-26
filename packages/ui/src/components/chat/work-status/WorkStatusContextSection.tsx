@@ -4,7 +4,7 @@ import { Icon } from '@/components/icon/Icon';
 import { useSkillsStore } from '@/stores/useSkillsStore';
 import { useMcpStore } from '@/stores/useMcpStore';
 import { useSession } from '@/sync/sync-context';
-import { getLinkedIssues } from '@/lib/linkedIssues';
+import { getLinkedIssues, canOpenLinearIssueInContextPanel } from '@/lib/linkedIssues';
 import { fetchSessionKnowledgeSummary, setSessionProjectContextPin, type SessionKnowledgeSummary } from '@/lib/sessionKnowledgeApi';
 import { useProjectContextStore } from '@/stores/useProjectContextStore';
 import { useAgentMemoryStore } from '@/stores/useAgentMemoryStore';
@@ -12,6 +12,10 @@ import { useSessionUIStore } from '@/sync/session-ui-store';
 import { useProjectsStore } from '@/stores/useProjectsStore';
 import { resolveProjectForSessionDirectory } from '@/lib/projectResolution';
 import { resolveProjectContextId } from '@/lib/projectContextApi';
+import { useRuntimeAPIs } from '@/hooks/useRuntimeAPIs';
+import { useMobileAppActions } from '@/apps/mobileAppContext';
+import { useLinearAuthStore } from '@/stores/useLinearAuthStore';
+import { useUIStore } from '@/stores/useUIStore';
 import { WorkStatusCollapsibleSection, WorkStatusRow, WorkStatusValue } from './WorkStatusPrimitives';
 import { useReportWorkStatusPresence } from './presenceContext';
 import { resolveDraftPinnedKnowledge } from './draftKnowledge';
@@ -32,6 +36,11 @@ type Props = {
  */
 export const WorkStatusContextSection: React.FC<Props> = ({ sessionId, directory }) => {
   const { t } = useI18n();
+  const { linear } = useRuntimeAPIs();
+  const linearConnected = useLinearAuthStore((state) => state.status?.connected === true);
+  const mobileActions = useMobileAppActions();
+  const openContextPanelTab = useUIStore((state) => state.openContextPanelTab);
+  const setLinearIssueFocus = useUIStore((state) => state.setLinearIssueFocus);
 
   const session = useSession(sessionId ?? '', directory ?? undefined);
   const newSessionDraft = useSessionUIStore((state) => state.newSessionDraft);
@@ -138,6 +147,23 @@ export const WorkStatusContextSection: React.FC<Props> = ({ sessionId, directory
   const pinnedCount = visibleKnowledge.notes.length + visibleKnowledge.plans.length;
 
   const linked = React.useMemo(() => getLinkedIssues(session), [session]);
+  const openLinkedIssue = React.useCallback((entry: (typeof linked)[number]) => {
+    if (
+      entry.kind === 'linear'
+      && directory
+      && canOpenLinearIssueInContextPanel({
+        linearAvailable: Boolean(linear),
+        linearConnected,
+        inDedicatedMobileShell: mobileActions != null,
+        directory,
+      })
+    ) {
+      setLinearIssueFocus(entry.identifier);
+      openContextPanelTab(directory, { mode: 'linear' });
+      return;
+    }
+    window.open(entry.url, '_blank', 'noopener,noreferrer');
+  }, [directory, linear, linearConnected, mobileActions, openContextPanelTab, setLinearIssueFocus]);
   // Connected servers only. A disabled server contributes nothing to the
   // context, so counting it here contradicts the MCP section right above,
   // which shows the same servers switched off.
@@ -212,9 +238,9 @@ export const WorkStatusContextSection: React.FC<Props> = ({ sessionId, directory
           )}
           label={entry.title}
           muted
-          // The stored snapshot is enough to render; the live thread only ever
-          // exists on github.com or Linear.
-          onClick={() => window.open(entry.url, '_blank', 'noopener,noreferrer')}
+          // GitHub threads still live on github.com. A Linear issue opens in
+          // the right-hand panel when that rail exists; otherwise the Linear URL.
+          onClick={() => openLinkedIssue(entry)}
           ariaLabel={entry.kind === 'linear'
             ? t('chat.workStatus.linkedIssues.openLinear', { identifier: entry.identifier })
             : t('chat.workStatus.linkedIssues.open', { number: entry.number })}

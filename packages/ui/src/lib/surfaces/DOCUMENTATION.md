@@ -23,10 +23,10 @@ edge (`components/layout/ContextPanelRail.tsx`) and rendered by
 - `getVisibleContextRailSurfaces` is the single visibility filter shared by the
   rail and the global surface-switch shortcut (`switch_context_surface` in
   `lib/shortcuts.ts`): it drops the plan surface unless plan mode is enabled,
-  drops the walkthrough on VS Code and below `WALKTHROUGH_MIN_WIDTH`, and hides
-  `has-content` surfaces until a tab of their mode exists. Both consumers use
-  it so the digit shown on a rail badge always maps to the same surface the
-  shortcut opens.
+  drops the walkthrough on VS Code and below `WALKTHROUGH_MIN_WIDTH`, hides
+  Linear unless a workspace is connected, and hides `has-content` surfaces until
+  a tab of their mode exists. Both consumers use it so the digit shown on a
+  rail badge always maps to the same surface the shortcut opens.
 
 ## Adding a surface
 
@@ -56,9 +56,11 @@ the `openContext*` actions in `useUIStore`.
   mobile shell have their own layouts and do not consume this registry.
   Linear is a desktop/web singleton on this rail. VS Code and mobile omit it
   (no this registry, and VS Code has no `RuntimeAPIs.linear`). The Linear
-  surface lists issues with status, assignee, team, and priority filters, can switch
+  rail icon is hidden until a Linear workspace is connected. The surface lists
+  issues with status (All, Backlog, To Do, In Progress, In Review, Done, Canceled, Duplicate), assignee, team, and priority filters, can switch
   the current workspace, and keeps Start session in a footer on the issue card.
-  Those filters restore from `useUIStore` when the surface remounts. Below 520px
+  Those filters restore from `useUIStore` when the surface remounts. Work-status
+  Context sources can open a specific issue here through `linearIssueFocus`. Below 520px
   search and the filters other than status drop to icons; status keeps its label. The card
   shows priority and labels. Changing filters keeps the previous list
   until the next page arrives.

@@ -4,9 +4,20 @@ import { isPlainObject, isString, readFiniteNumber, readTrimmedString } from './
 
 const PAGE_SIZE = 50;
 
+const LIST_STATUS_STATE = {
+  open: { type: { nin: ['completed', 'canceled', 'duplicate'] } },
+  backlog: { type: { eq: 'backlog' } },
+  todo: { type: { eq: 'unstarted' } },
+  started: { type: { eq: 'started' }, name: { neqIgnoreCase: 'In Review' } },
+  inReview: { name: { eqIgnoreCase: 'In Review' } },
+  completed: { type: { eq: 'completed' } },
+  canceled: { type: { eq: 'canceled' }, name: { neqIgnoreCase: 'Duplicate' } },
+  duplicate: { or: [{ type: { eq: 'duplicate' } }, { name: { eqIgnoreCase: 'Duplicate' } }] },
+};
+
 function readListStatus(value) {
   const status = readTrimmedString(value);
-  if (status === 'completed' || status === 'all' || status === 'open') {
+  if (status === 'all' || Object.hasOwn(LIST_STATUS_STATE, status)) {
     return status;
   }
   return 'open';
@@ -42,10 +53,8 @@ function buildIssueListFilter({ status, assignee, teamId, priority } = {}) {
   const resolvedAssignee = readListAssignee(assignee);
   const resolvedPriority = readListPriority(priority);
   const team = readTrimmedString(teamId);
-  if (resolvedStatus === 'open') {
-    filter.state = { type: { nin: ['completed', 'canceled'] } };
-  } else if (resolvedStatus === 'completed') {
-    filter.state = { type: { eq: 'completed' } };
+  if (resolvedStatus !== 'all') {
+    filter.state = LIST_STATUS_STATE[resolvedStatus];
   }
   if (resolvedAssignee === 'me') {
     filter.assignee = { isMe: { eq: true } };
@@ -167,6 +176,29 @@ function readState(value) {
   return { id, name, type };
 }
 
+const WORKFLOW_TYPE_ORDER = {
+  triage: 0,
+  backlog: 1,
+  unstarted: 2,
+  started: 3,
+  completed: 4,
+  canceled: 5,
+};
+
+function workflowTypeRank(type) {
+  if (type === 'triage' || type === 'backlog' || type === 'unstarted' || type === 'started' || type === 'completed' || type === 'canceled') {
+    return WORKFLOW_TYPE_ORDER[type];
+  }
+  return 99;
+}
+
+function compareWorkflowStates(left, right) {
+  const typeDelta = workflowTypeRank(left.type) - workflowTypeRank(right.type);
+  if (typeDelta !== 0) return typeDelta;
+  if (left.position !== right.position) return left.position - right.position;
+  return left.name.localeCompare(right.name);
+}
+
 function readWorkflowState(value) {
   if (!isPlainObject(value)) return null;
   const id = readTrimmedString(value.id);
@@ -200,8 +232,7 @@ function readTeam(value) {
 }
 
 function readPriority(value) {
-  if (typeof value !== 'number' || !Number.isInteger(value)) return null;
-  if (value < 0 || value > 4) return null;
+  if (!Number.isInteger(value) || value < 0 || value > 4) return null;
   return value;
 }
 
@@ -407,7 +438,7 @@ export async function listLinearIssueStates(teamId) {
     const states = nodes
       .map(readWorkflowState)
       .filter(Boolean)
-      .sort((left, right) => left.position - right.position);
+      .sort(compareWorkflowStates);
     return { connected: true, states };
   });
 }

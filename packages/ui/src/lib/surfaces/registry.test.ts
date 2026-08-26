@@ -12,6 +12,7 @@ const baseOptions = {
   isVSCode: false,
   screenWidth: 1200,
   tabs: [],
+  linearConnected: true,
 } as const;
 
 describe('getVisibleContextRailSurfaces', () => {
@@ -70,5 +71,10 @@ describe('getVisibleContextRailSurfaces', () => {
     const linear = ids.indexOf('linear');
     expect(pr).toBeGreaterThanOrEqual(0);
     expect(linear).toBe(pr + 1);
+  });
+
+  test('hides Linear until a workspace is connected', () => {
+    expect(getVisibleContextRailSurfaces({ ...baseOptions, linearConnected: false }).some((s) => s.id === 'linear')).toBe(false);
+    expect(getVisibleContextRailSurfaces({ ...baseOptions, linearConnected: true }).some((s) => s.id === 'linear')).toBe(true);
   });
 });

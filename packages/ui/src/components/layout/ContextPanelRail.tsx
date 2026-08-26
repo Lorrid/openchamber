@@ -35,6 +35,7 @@ import {
 import { cn } from '@/lib/utils';
 import { useFeatureFlagsStore } from '@/stores/useFeatureFlagsStore';
 import { useGitStatus } from '@/stores/useGitStore';
+import { useLinearAuthStore } from '@/stores/useLinearAuthStore';
 import { normalizeContextPanelDirectoryKey, useUIStore } from '@/stores/useUIStore';
 
 const RAIL_TOOLTIP_DELAY_MS = 150;
@@ -163,8 +164,10 @@ export const ContextPanelRail: React.FC = () => {
   const contextRailOrder = useUIStore((state) => state.contextRailOrder);
   const setContextRailOrder = useUIStore((state) => state.setContextRailOrder);
   const openContextSurface = useUIStore((state) => state.openContextSurface);
+  const closeContextPanel = useUIStore((state) => state.closeContextPanel);
   const shortcutOverrides = useUIStore((state) => state.shortcutOverrides);
   const planModeEnabled = useFeatureFlagsStore((state) => state.planModeEnabled);
+  const linearConnected = useLinearAuthStore((state) => state.status?.connected === true);
   const { screenWidth } = useDeviceInfo();
   const gitStatus = useGitStatus(directoryKey || null);
 
@@ -260,8 +263,16 @@ export const ContextPanelRail: React.FC = () => {
       isVSCode: isVSCodeRuntime(),
       screenWidth,
       tabs,
+      linearConnected,
     });
-  }, [contextRailOrder, planModeEnabled, screenWidth, tabs]);
+  }, [contextRailOrder, linearConnected, planModeEnabled, screenWidth, tabs]);
+
+  React.useEffect(() => {
+    if (!directoryKey || linearConnected || activeMode !== 'linear') {
+      return;
+    }
+    closeContextPanel(directoryKey);
+  }, [activeMode, closeContextPanel, directoryKey, linearConnected]);
 
   const handleDragEnd = React.useCallback((event: DragEndEvent) => {
     const { active, over } = event;

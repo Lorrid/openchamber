@@ -64,6 +64,14 @@ function readErrorMessage(payload: LinearJson | null, fallback: string): string 
   return error || fallback;
 }
 
+function readFiniteNumber(value: number | null | undefined): number | null {
+  return Number.isFinite(value) ? (value ?? null) : null;
+}
+
+function readRawString(value: string | null | undefined): string | null {
+  return Object.prototype.toString.call(value) === '[object String]' ? `${value}` : null;
+}
+
 function parseUser(payload: LinearUserSummary | null | undefined): LinearUserSummary | null {
   const id = payload?.id?.trim();
   if (!id) return null;
@@ -97,7 +105,7 @@ function parseWorkspace(payload: LinearWorkspaceSummary | null | undefined): Lin
     urlKey: payload?.urlKey?.trim() || null,
     current: payload?.current === true,
     user: parseUser(payload?.user),
-    authorizedAt: typeof authorizedAt === 'number' && Number.isFinite(authorizedAt) ? authorizedAt : null,
+    authorizedAt: readFiniteNumber(authorizedAt),
   };
 }
 
@@ -144,7 +152,7 @@ function parseWorkflowState(payload: LinearWorkflowState | null | undefined): Li
     id,
     name,
     type: payload?.type?.trim() || null,
-    position: typeof position === 'number' && Number.isFinite(position) ? position : 0,
+    position: readFiniteNumber(position) ?? 0,
   };
 }
 
@@ -220,7 +228,7 @@ function parseComment(payload: LinearIssueComment | null | undefined): LinearIss
   const body = payload?.body;
   return {
     id,
-    body: typeof body === 'string' ? body : '',
+    body: readRawString(body) ?? '',
     createdAt: payload?.createdAt?.trim() || null,
     user: payload?.user
       ? {
@@ -240,7 +248,7 @@ function parseIssue(payload: LinearIssue | null | undefined): LinearIssue | null
   const description = payload?.description;
   return {
     ...summary,
-    description: typeof description === 'string' ? description : null,
+    description: readRawString(description),
     comments,
   };
 }

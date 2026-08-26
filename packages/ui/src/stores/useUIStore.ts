@@ -32,7 +32,16 @@ function normalizeFileEditorKeymap(value: unknown): FileEditorKeymap {
 export const LINEAR_ISSUE_LIST_ALL_TEAMS = 'all';
 
 function sanitizeLinearIssueListStatus(value: unknown): LinearIssueListStatus {
-  return value === 'completed' || value === 'all' || value === 'open' ? value : 'open';
+  return value === 'all'
+    || value === 'backlog'
+    || value === 'todo'
+    || value === 'started'
+    || value === 'inReview'
+    || value === 'completed'
+    || value === 'canceled'
+    || value === 'duplicate'
+    ? value
+    : 'all';
 }
 
 function sanitizeLinearIssueListAssignee(value: unknown): LinearIssueListAssignee {
@@ -747,6 +756,8 @@ interface UIStore {
   linearIssueListAssignee: LinearIssueListAssignee;
   linearIssueListTeamId: string;
   linearIssueListPriority: LinearIssueListPriority;
+  /** One-shot identifier for opening a Linear issue in the rail panel. Not persisted. */
+  linearIssueFocus: string | null;
   isTimelineDialogOpen: boolean;
   isPromptNavigatorPanelOpen: boolean;
   isImagePreviewOpen: boolean;
@@ -943,6 +954,7 @@ interface UIStore {
   setLinearIssueListAssignee: (assignee: LinearIssueListAssignee) => void;
   setLinearIssueListTeamId: (teamId: string) => void;
   setLinearIssueListPriority: (priority: LinearIssueListPriority) => void;
+  setLinearIssueFocus: (identifier: string | null) => void;
   setMultiRunLauncherOpen: (open: boolean) => void;
   setTimelineDialogOpen: (open: boolean) => void;
   setPromptNavigatorPanelOpen: (open: boolean) => void;
@@ -1097,10 +1109,11 @@ export const useUIStore = create<UIStore>()(
         diffWrapLines: false,
         walkthroughTocWidth: 224,
         gitChangesViewMode: 'flat',
-        linearIssueListStatus: 'open',
+        linearIssueListStatus: 'all',
         linearIssueListAssignee: 'any',
         linearIssueListTeamId: LINEAR_ISSUE_LIST_ALL_TEAMS,
         linearIssueListPriority: 'all',
+        linearIssueFocus: null,
         isTimelineDialogOpen: false,
         isPromptNavigatorPanelOpen: false,
         isImagePreviewOpen: false,
@@ -2010,7 +2023,12 @@ export const useUIStore = create<UIStore>()(
         setLinearIssueListPriority: (priority) => {
           set({ linearIssueListPriority: sanitizeLinearIssueListPriority(priority) });
         },
- 
+
+        setLinearIssueFocus: (identifier) => {
+          const trimmed = identifier?.trim() ?? '';
+          set({ linearIssueFocus: trimmed || null });
+        },
+
         setInputBarOffset: (offset) => {
           set({ inputBarOffset: offset });
         },

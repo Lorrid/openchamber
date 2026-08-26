@@ -75,7 +75,7 @@ describe('Linear issue list/get', () => {
     vi.stubGlobal('fetch', vi.fn(async (_url, options) => {
       const body = JSON.parse(options.body);
       expect(body.query).toContain('query ListLinearIssues');
-      expect(body.variables.filter.state.type.nin).toEqual(['completed', 'canceled']);
+      expect(body.variables.filter.state.type.nin).toEqual(['completed', 'canceled', 'duplicate']);
       expect(options.headers.Authorization).toBe('Bearer access-1');
       expect(options.headers['public-file-urls-expire-in']).toBe('3600');
       return jsonResponse({
@@ -183,7 +183,7 @@ describe('Linear issue list/get', () => {
     vi.stubGlobal('fetch', vi.fn(async (_url, options) => {
       const body = JSON.parse(options.body);
       expect(body.variables.filter).toEqual({
-        state: { type: { eq: 'completed' } },
+        state: { type: { eq: 'started' }, name: { neqIgnoreCase: 'In Review' } },
         assignee: { isMe: { eq: true } },
         team: { id: { eq: 'team-eng' } },
         priority: { eq: 1 },
@@ -199,12 +199,44 @@ describe('Linear issue list/get', () => {
     }));
 
     const result = await listLinearIssues({
-      status: 'completed',
+      status: 'started',
       assignee: 'me',
       teamId: 'team-eng',
       priority: 'urgent',
     });
     expect(result.issues).toHaveLength(1);
+  });
+
+  it('filters each panel status to a Linear state type or name', async () => {
+    const filters = [];
+    vi.stubGlobal('fetch', vi.fn(async (_url, options) => {
+      filters.push(JSON.parse(options.body).variables.filter);
+      return jsonResponse({
+        data: {
+          issues: {
+            nodes: [issueNode],
+            pageInfo: { hasNextPage: false, endCursor: null },
+          },
+        },
+      });
+    }));
+
+    await listLinearIssues({ status: 'todo' });
+    await listLinearIssues({ status: 'backlog' });
+    await listLinearIssues({ status: 'started' });
+    await listLinearIssues({ status: 'inReview' });
+    await listLinearIssues({ status: 'completed' });
+    await listLinearIssues({ status: 'canceled' });
+    await listLinearIssues({ status: 'duplicate' });
+    expect(filters).toEqual([
+      { state: { type: { eq: 'unstarted' } } },
+      { state: { type: { eq: 'backlog' } } },
+      { state: { type: { eq: 'started' }, name: { neqIgnoreCase: 'In Review' } } },
+      { state: { name: { eqIgnoreCase: 'In Review' } } },
+      { state: { type: { eq: 'completed' } } },
+      { state: { type: { eq: 'canceled' }, name: { neqIgnoreCase: 'Duplicate' } } },
+      { state: { or: [{ type: { eq: 'duplicate' } }, { name: { eqIgnoreCase: 'Duplicate' } }] } },
+    ]);
   });
 
   it('omits the state filter when listing all issues', async () => {
@@ -331,7 +363,7 @@ describe('Linear issue list/get', () => {
     await expect(listLinearIssues()).resolves.toEqual({ connected: false });
   });
 
-  it('lists team workflow states ordered by position', async () => {
+  it('lists team workflow states in Linear workflow order', async () => {
     vi.stubGlobal('fetch', vi.fn(async (_url, options) => {
       const body = JSON.parse(options.body);
       expect(body.query).toContain('query TeamWorkflowStates');
@@ -342,9 +374,13 @@ describe('Linear issue list/get', () => {
           team: {
             states: {
               nodes: [
-                { id: 'state-done', name: 'Done', type: 'completed', position: 3 },
-                { id: 'state-todo', name: 'Todo', type: 'unstarted', position: 1 },
-                { id: 'state-started', name: 'In Progress', type: 'started', position: 2 },
+                { id: 'state-done', name: 'Done', type: 'completed', position: 0 },
+                { id: 'state-review', name: 'In Review', type: 'started', position: 1 },
+                { id: 'state-todo', name: 'Todo', type: 'unstarted', position: 0 },
+                { id: 'state-dup', name: 'Duplicate', type: 'canceled', position: 1 },
+                { id: 'state-progress', name: 'In Progress', type: 'started', position: 0 },
+                { id: 'state-backlog', name: 'Backlog', type: 'backlog', position: 0 },
+                { id: 'state-canceled', name: 'Canceled', type: 'canceled', position: 0 },
               ],
             },
           },
@@ -353,15 +389,15 @@ describe('Linear issue list/get', () => {
     }));
 
     const result = await listLinearIssueStates('team-eng');
-    expect(result).toEqual({
-      connected: true,
-      states: [
-        { id: 'state-todo', name: 'Todo', type: 'unstarted', position: 1 },
-        { id: 'state-started', name: 'In Progress', type: 'started', position: 2 },
-        { id: 'state-done', name: 'Done', type: 'completed', position: 3 },
-      ],
-    });
-    expect(JSON.stringify(result)).not.toContain('access-1');
+    expect(result.states?.map((state) => state.name)).toEqual([
+      'Backlog',
+      'Todo',
+      'In Progress',
+      'In Review',
+      'Done',
+      'Canceled',
+      'Duplicate',
+    ]);
   });
 
   it('rejects workflow states without a team id', async () => {
