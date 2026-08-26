@@ -33,6 +33,8 @@ export {
 export {
   listLinearIssues,
   getLinearIssue,
+  listLinearIssueStates,
+  updateLinearIssue,
 } from './issues.js';
 
 export {

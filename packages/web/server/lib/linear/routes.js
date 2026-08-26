@@ -10,6 +10,10 @@ function queryValue(req, key) {
   return readTrimmedString(value);
 }
 
+function isLinearUserError(error) {
+  return error?.code === 'INVALID' || error?.userError === true;
+}
+
 function escapeHtml(value) {
   return String(value)
     .replace(/&/g, '&amp;')
@@ -184,6 +188,10 @@ export function registerLinearRoutes(app) {
       const result = await listLinearIssues({
         query: queryValue(req, 'query'),
         cursor: queryValue(req, 'cursor'),
+        status: queryValue(req, 'status'),
+        assignee: queryValue(req, 'assignee'),
+        teamId: queryValue(req, 'teamId'),
+        priority: queryValue(req, 'priority'),
       });
       return res.json(result);
     } catch (error) {
@@ -204,6 +212,41 @@ export function registerLinearRoutes(app) {
     } catch (error) {
       console.error('Failed to load Linear issue:', error);
       return res.status(500).json({ error: error.message || 'Failed to load Linear issue' });
+    }
+  });
+
+  app.get('/api/linear/issues/states', async (req, res) => {
+    try {
+      const teamId = queryValue(req, 'teamId');
+      if (!teamId) {
+        return res.status(400).json({ error: 'teamId is required' });
+      }
+      const { listLinearIssueStates } = await getLinearLibraries();
+      const result = await listLinearIssueStates(teamId);
+      return res.json(result);
+    } catch (error) {
+      if (isLinearUserError(error)) {
+        return res.status(400).json({ error: error.message });
+      }
+      console.error('Failed to load Linear workflow states:', error);
+      return res.status(500).json({ error: error.message || 'Failed to load Linear workflow states' });
+    }
+  });
+
+  app.post('/api/linear/issues/update', parseJsonBody, async (req, res) => {
+    try {
+      const { updateLinearIssue } = await getLinearLibraries();
+      const result = await updateLinearIssue({
+        id: req.body?.id,
+        stateId: req.body?.stateId,
+      });
+      return res.json(result);
+    } catch (error) {
+      if (isLinearUserError(error)) {
+        return res.status(400).json({ error: error.message });
+      }
+      console.error('Failed to update Linear issue:', error);
+      return res.status(500).json({ error: error.message || 'Failed to update Linear issue' });
     }
   });
 

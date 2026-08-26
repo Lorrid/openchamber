@@ -7,13 +7,13 @@ import type { ShortcutCombo } from '@/lib/shortcuts';
 import type { DraftStarterRef } from '@/lib/draftStarters';
 import { DEFAULT_MONO_FONT, DEFAULT_UI_FONT, type MonoFontOption, type UiFontOption } from '@/lib/fontOptions';
 import { getStoredMobileKeyboardMode, type MobileKeyboardMode } from '@/lib/mobileKeyboardMode';
-import type { TerminalShell } from '@/lib/api/types';
+import type { LinearIssueListAssignee, LinearIssueListPriority, LinearIssueListStatus, TerminalShell } from '@/lib/api/types';
 import { useFilesViewTabsStore } from './useFilesViewTabsStore';
 import { isWindowsArm64 } from '@/lib/platform';
 import { isVSCodeRuntime } from '@/lib/desktop';
 
 export type PendingDiffScope = 'working' | 'staged' | 'turn' | 'branch';
-export type ContextPanelMode = 'diff' | 'walkthrough' | 'file' | 'context' | 'plan' | 'chat' | 'browser' | 'git' | 'pr' | 'notes' | 'terminal';
+export type ContextPanelMode = 'diff' | 'walkthrough' | 'file' | 'context' | 'plan' | 'chat' | 'browser' | 'git' | 'pr' | 'linear' | 'notes' | 'terminal';
 export type MermaidRenderingMode = 'svg' | 'ascii';
 export type UserMessageRenderingMode = 'markdown' | 'plain';
 export type ChatRenderMode = 'sorted' | 'live';
@@ -27,6 +27,28 @@ export type FileEditorKeymap = 'default' | 'vim';
 
 function normalizeFileEditorKeymap(value: unknown): FileEditorKeymap {
   return value === 'vim' ? 'vim' : 'default';
+}
+
+export const LINEAR_ISSUE_LIST_ALL_TEAMS = 'all';
+
+function sanitizeLinearIssueListStatus(value: unknown): LinearIssueListStatus {
+  return value === 'completed' || value === 'all' || value === 'open' ? value : 'open';
+}
+
+function sanitizeLinearIssueListAssignee(value: unknown): LinearIssueListAssignee {
+  return value === 'me' || value === 'any' ? value : 'any';
+}
+
+function sanitizeLinearIssueListTeamId(value: unknown): string {
+  if (typeof value !== 'string') return LINEAR_ISSUE_LIST_ALL_TEAMS;
+  const teamId = value.trim();
+  return teamId || LINEAR_ISSUE_LIST_ALL_TEAMS;
+}
+
+function sanitizeLinearIssueListPriority(value: unknown): LinearIssueListPriority {
+  return value === 'none' || value === 'urgent' || value === 'high' || value === 'medium' || value === 'low' || value === 'all'
+    ? value
+    : 'all';
 }
 
 type ContextPanelTab = {
@@ -312,7 +334,7 @@ const sanitizeContextPanelTabs = (tabs: unknown): ContextPanelTab[] => {
     // Legacy 'preview' tabs are converted to 'browser' by the v14 migration;
     // anything still carrying an unknown mode here is discarded rather than
     // resurrected into a tab the panel cannot render.
-    if (candidate.mode !== 'diff' && candidate.mode !== 'walkthrough' && candidate.mode !== 'file' && candidate.mode !== 'context' && candidate.mode !== 'plan' && candidate.mode !== 'chat' && candidate.mode !== 'browser' && candidate.mode !== 'git' && candidate.mode !== 'pr' && candidate.mode !== 'notes' && candidate.mode !== 'terminal') {
+    if (candidate.mode !== 'diff' && candidate.mode !== 'walkthrough' && candidate.mode !== 'file' && candidate.mode !== 'context' && candidate.mode !== 'plan' && candidate.mode !== 'chat' && candidate.mode !== 'browser' && candidate.mode !== 'git' && candidate.mode !== 'pr' && candidate.mode !== 'linear' && candidate.mode !== 'notes' && candidate.mode !== 'terminal') {
       continue;
     }
 
@@ -556,7 +578,7 @@ const sanitizeContextPanelByDirectory = (
     if (candidate.widthByMode && typeof candidate.widthByMode === 'object') {
       for (const [mode, value] of Object.entries(candidate.widthByMode as Record<string, unknown>)) {
         if (
-          (mode === 'diff' || mode === 'file' || mode === 'context' || mode === 'plan' || mode === 'chat' || mode === 'browser' || mode === 'git' || mode === 'pr' || mode === 'notes' || mode === 'terminal')
+          (mode === 'diff' || mode === 'file' || mode === 'context' || mode === 'plan' || mode === 'chat' || mode === 'browser' || mode === 'git' || mode === 'pr' || mode === 'linear' || mode === 'notes' || mode === 'terminal')
           && typeof value === 'number'
           && Number.isFinite(value)
         ) {
@@ -721,6 +743,10 @@ interface UIStore {
   /** Width of the walkthrough table of contents, in pixels. */
   walkthroughTocWidth: number;
   gitChangesViewMode: 'flat' | 'tree';
+  linearIssueListStatus: LinearIssueListStatus;
+  linearIssueListAssignee: LinearIssueListAssignee;
+  linearIssueListTeamId: string;
+  linearIssueListPriority: LinearIssueListPriority;
   isTimelineDialogOpen: boolean;
   isPromptNavigatorPanelOpen: boolean;
   isImagePreviewOpen: boolean;
@@ -913,6 +939,10 @@ interface UIStore {
   setDiffWrapLines: (wrap: boolean) => void;
   setWalkthroughTocWidth: (width: number) => void;
   setGitChangesViewMode: (mode: 'flat' | 'tree') => void;
+  setLinearIssueListStatus: (status: LinearIssueListStatus) => void;
+  setLinearIssueListAssignee: (assignee: LinearIssueListAssignee) => void;
+  setLinearIssueListTeamId: (teamId: string) => void;
+  setLinearIssueListPriority: (priority: LinearIssueListPriority) => void;
   setMultiRunLauncherOpen: (open: boolean) => void;
   setTimelineDialogOpen: (open: boolean) => void;
   setPromptNavigatorPanelOpen: (open: boolean) => void;
@@ -1067,6 +1097,10 @@ export const useUIStore = create<UIStore>()(
         diffWrapLines: false,
         walkthroughTocWidth: 224,
         gitChangesViewMode: 'flat',
+        linearIssueListStatus: 'open',
+        linearIssueListAssignee: 'any',
+        linearIssueListTeamId: LINEAR_ISSUE_LIST_ALL_TEAMS,
+        linearIssueListPriority: 'all',
         isTimelineDialogOpen: false,
         isPromptNavigatorPanelOpen: false,
         isImagePreviewOpen: false,
@@ -1960,6 +1994,22 @@ export const useUIStore = create<UIStore>()(
         setGitChangesViewMode: (mode) => {
           set({ gitChangesViewMode: mode });
         },
+
+        setLinearIssueListStatus: (status) => {
+          set({ linearIssueListStatus: sanitizeLinearIssueListStatus(status) });
+        },
+
+        setLinearIssueListAssignee: (assignee) => {
+          set({ linearIssueListAssignee: sanitizeLinearIssueListAssignee(assignee) });
+        },
+
+        setLinearIssueListTeamId: (teamId) => {
+          set({ linearIssueListTeamId: sanitizeLinearIssueListTeamId(teamId) });
+        },
+
+        setLinearIssueListPriority: (priority) => {
+          set({ linearIssueListPriority: sanitizeLinearIssueListPriority(priority) });
+        },
  
         setInputBarOffset: (offset) => {
           set({ inputBarOffset: offset });
@@ -2605,6 +2655,11 @@ export const useUIStore = create<UIStore>()(
             }
           }
 
+          state.linearIssueListStatus = sanitizeLinearIssueListStatus(state.linearIssueListStatus);
+          state.linearIssueListAssignee = sanitizeLinearIssueListAssignee(state.linearIssueListAssignee);
+          state.linearIssueListTeamId = sanitizeLinearIssueListTeamId(state.linearIssueListTeamId);
+          state.linearIssueListPriority = sanitizeLinearIssueListPriority(state.linearIssueListPriority);
+
           state.fileEditorKeymap = normalizeFileEditorKeymap(state.fileEditorKeymap);
 
           if (typeof state.autoSaveEnabled !== 'boolean') {
@@ -2676,6 +2731,10 @@ export const useUIStore = create<UIStore>()(
           diffWrapLines: state.diffWrapLines,
           walkthroughTocWidth: state.walkthroughTocWidth,
           gitChangesViewMode: state.gitChangesViewMode,
+          linearIssueListStatus: state.linearIssueListStatus,
+          linearIssueListAssignee: state.linearIssueListAssignee,
+          linearIssueListTeamId: state.linearIssueListTeamId,
+          linearIssueListPriority: state.linearIssueListPriority,
           nativeNotificationsEnabled: state.nativeNotificationsEnabled,
           notificationMode: state.notificationMode,
           showTerminalQuickKeysOnDesktop: state.showTerminalQuickKeysOnDesktop,

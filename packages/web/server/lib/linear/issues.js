@@ -1,19 +1,74 @@
 import { clearLinearAuth, getLinearAuth, getLinearAuthByWorkspaceId } from './auth.js';
 import { fetchLinearGraphql, getValidLinearAccessToken } from './client.js';
-import { isPlainObject, isString, readTrimmedString } from './parse.js';
+import { isPlainObject, isString, readFiniteNumber, readTrimmedString } from './parse.js';
 
 const PAGE_SIZE = 50;
-const INCOMPLETE_ISSUE_FILTER = {
-  state: { type: { nin: ['completed', 'canceled'] } },
+
+function readListStatus(value) {
+  const status = readTrimmedString(value);
+  if (status === 'completed' || status === 'all' || status === 'open') {
+    return status;
+  }
+  return 'open';
+}
+
+function readListAssignee(value) {
+  const assignee = readTrimmedString(value);
+  if (assignee === 'me' || assignee === 'any') {
+    return assignee;
+  }
+  return 'any';
+}
+
+const LIST_PRIORITY_EQ = {
+  none: 0,
+  urgent: 1,
+  high: 2,
+  medium: 3,
+  low: 4,
 };
+
+function readListPriority(value) {
+  const priority = readTrimmedString(value);
+  if (priority === 'none' || priority === 'urgent' || priority === 'high' || priority === 'medium' || priority === 'low') {
+    return priority;
+  }
+  return 'all';
+}
+
+function buildIssueListFilter({ status, assignee, teamId, priority } = {}) {
+  const filter = {};
+  const resolvedStatus = readListStatus(status);
+  const resolvedAssignee = readListAssignee(assignee);
+  const resolvedPriority = readListPriority(priority);
+  const team = readTrimmedString(teamId);
+  if (resolvedStatus === 'open') {
+    filter.state = { type: { nin: ['completed', 'canceled'] } };
+  } else if (resolvedStatus === 'completed') {
+    filter.state = { type: { eq: 'completed' } };
+  }
+  if (resolvedAssignee === 'me') {
+    filter.assignee = { isMe: { eq: true } };
+  }
+  if (team) {
+    filter.team = { id: { eq: team } };
+  }
+  if (resolvedPriority !== 'all') {
+    filter.priority = { eq: LIST_PRIORITY_EQ[resolvedPriority] };
+  }
+  return Object.keys(filter).length > 0 ? filter : undefined;
+}
+
 const ISSUE_SUMMARY_FIELDS = `
   id
   identifier
   title
   url
-  state { name type }
+  priority
+  state { id name type }
   assignee { name displayName avatarUrl }
   team { id key name }
+  labels { nodes { id name color } }
 `;
 const LIST_QUERY = `
   query ListLinearIssues($first: Int!, $after: String, $filter: IssueFilter) {
@@ -55,6 +110,34 @@ const COMMENT_CREATE = `
     }
   }
 `;
+const STATES_QUERY = `
+  query TeamWorkflowStates($id: String!) {
+    team(id: $id) {
+      states(first: 50) {
+        nodes { id name type position }
+      }
+    }
+  }
+`;
+const ISSUE_UPDATE = `
+  mutation IssueUpdate($id: String!, $input: IssueUpdateInput!) {
+    issueUpdate(id: $id, input: $input) {
+      success
+      issue {
+        ${ISSUE_SUMMARY_FIELDS}
+        description
+        comments(first: 50) {
+          nodes {
+            id
+            body
+            createdAt
+            user { name displayName }
+          }
+        }
+      }
+    }
+  }
+`;
 const IDENTIFIER_RE = /^[A-Za-z][A-Za-z0-9]*-\d+$/;
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const URL_IDENTIFIER_RE = /linear\.app\/(?:[^/]+\/)?issue\/([A-Za-z][A-Za-z0-9]*-\d+)/i;
@@ -77,10 +160,25 @@ export function parseLinearIssueRef(value) {
 
 function readState(value) {
   if (!isPlainObject(value)) return null;
+  const id = readTrimmedString(value.id) || null;
   const name = readTrimmedString(value.name) || null;
   const type = readTrimmedString(value.type) || null;
-  if (!name && !type) return null;
-  return { name, type };
+  if (!id && !name && !type) return null;
+  return { id, name, type };
+}
+
+function readWorkflowState(value) {
+  if (!isPlainObject(value)) return null;
+  const id = readTrimmedString(value.id);
+  const name = readTrimmedString(value.name);
+  if (!id || !name) return null;
+  const position = readFiniteNumber(value.position);
+  return {
+    id,
+    name,
+    type: readTrimmedString(value.type) || null,
+    position: position ?? 0,
+  };
 }
 
 function readAssignee(value) {
@@ -101,6 +199,41 @@ function readTeam(value) {
   return { id, key, name };
 }
 
+function readPriority(value) {
+  if (typeof value !== 'number' || !Number.isInteger(value)) return null;
+  if (value < 0 || value > 4) return null;
+  return value;
+}
+
+function readLabelColor(value) {
+  const raw = readTrimmedString(value);
+  if (!raw) return null;
+  const hex = raw.startsWith('#') ? raw.slice(1) : raw;
+  if (!/^[0-9A-Fa-f]{6}$/.test(hex)) return null;
+  return `#${hex.toLowerCase()}`;
+}
+
+function readLabel(value) {
+  if (!isPlainObject(value)) return null;
+  const id = readTrimmedString(value.id);
+  const name = readTrimmedString(value.name);
+  if (!id || !name) return null;
+  return {
+    id,
+    name,
+    color: readLabelColor(value.color),
+  };
+}
+
+function readLabels(value) {
+  const nodes = isPlainObject(value) && Array.isArray(value.nodes)
+    ? value.nodes
+    : Array.isArray(value)
+      ? value
+      : [];
+  return nodes.map(readLabel).filter(Boolean);
+}
+
 function readIssueSummary(node) {
   if (!isPlainObject(node)) return null;
   const id = readTrimmedString(node.id);
@@ -116,6 +249,8 @@ function readIssueSummary(node) {
     state: readState(node.state),
     assignee: readAssignee(node.assignee),
     team: readTeam(node.team),
+    priority: readPriority(node.priority),
+    labels: readLabels(node.labels),
   };
 }
 
@@ -193,7 +328,7 @@ async function fetchIssueByRef(token, ref) {
   return readIssue(data.issue);
 }
 
-export async function listLinearIssues({ query, cursor } = {}) {
+export async function listLinearIssues({ query, cursor, status, assignee, teamId, priority } = {}) {
   return withLinearToken(async (token) => {
     const ref = parseLinearIssueRef(query);
     if (ref) {
@@ -208,10 +343,13 @@ export async function listLinearIssues({ query, cursor } = {}) {
 
     const after = readTrimmedString(cursor) || null;
     const term = readTrimmedString(query);
+    const filter = buildIssueListFilter({ status, assignee, teamId, priority });
     const variables = {
       first: PAGE_SIZE,
-      filter: INCOMPLETE_ISSUE_FILTER,
     };
+    if (filter) {
+      variables.filter = filter;
+    }
     if (after) {
       variables.after = after;
     }
@@ -249,6 +387,57 @@ export async function getLinearIssue(id) {
   return withLinearToken(async (token) => {
     const issue = await fetchIssueByRef(token, ref);
     return { connected: true, issue };
+  });
+}
+
+export async function listLinearIssueStates(teamId) {
+  const id = readTrimmedString(teamId);
+  if (!id) {
+    const error = new Error('teamId is required');
+    error.code = 'INVALID';
+    throw error;
+  }
+  return withLinearToken(async (token) => {
+    const data = await fetchLinearGraphql(token, STATES_QUERY, { id });
+    const team = isPlainObject(data.team) ? data.team : null;
+    const connection = isPlainObject(team) ? team.states : null;
+    const nodes = isPlainObject(connection) && Array.isArray(connection.nodes)
+      ? connection.nodes
+      : [];
+    const states = nodes
+      .map(readWorkflowState)
+      .filter(Boolean)
+      .sort((left, right) => left.position - right.position);
+    return { connected: true, states };
+  });
+}
+
+export async function updateLinearIssue({ id, stateId } = {}) {
+  const issueId = readTrimmedString(id);
+  const nextStateId = readTrimmedString(stateId);
+  if (!issueId || !nextStateId) {
+    const error = new Error('id and stateId are required');
+    error.code = 'INVALID';
+    throw error;
+  }
+  const ref = parseLinearIssueRef(issueId) || { kind: 'id', value: issueId };
+  return withLinearToken(async (token) => {
+    const resolved = ref.kind === 'identifier'
+      ? await fetchIssueByRef(token, ref)
+      : null;
+    const resolvedId = resolved?.id || (ref.kind === 'id' ? ref.value : '');
+    if (!resolvedId) {
+      return { connected: true, issue: null };
+    }
+    const data = await fetchLinearGraphql(token, ISSUE_UPDATE, {
+      id: resolvedId,
+      input: { stateId: nextStateId },
+    });
+    const payload = isPlainObject(data.issueUpdate) ? data.issueUpdate : null;
+    return {
+      connected: true,
+      issue: payload ? readIssue(payload.issue) : null,
+    };
   });
 }
 

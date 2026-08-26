@@ -63,4 +63,12 @@ describe('getVisibleContextRailSurfaces', () => {
     const surfaces = getVisibleContextRailSurfaces({ ...baseOptions, railOrder: ['git', 'context'] });
     expect(surfaces.slice(0, 2).map((surface) => surface.id)).toEqual(['git', 'context']);
   });
+
+  test('places Linear after Pull Request in the default order', () => {
+    const ids = getVisibleContextRailSurfaces(baseOptions).map((surface) => surface.id);
+    const pr = ids.indexOf('pr');
+    const linear = ids.indexOf('linear');
+    expect(pr).toBeGreaterThanOrEqual(0);
+    expect(linear).toBe(pr + 1);
+  });
 });

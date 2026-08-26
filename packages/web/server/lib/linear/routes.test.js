@@ -331,6 +331,166 @@ describe('Linear auth routes', () => {
     const got = await request(app).get('/api/linear/issues/get').query({ id: 'ENG-12' }).expect(200);
     expect(got.body.issue.identifier).toBe('ENG-12');
     expect(got.body.issue.description).toBe('Users cannot sign in.');
+    expect(got.body.issue.state).toEqual({ id: null, name: 'Todo', type: 'unstarted' });
+  });
+
+  it('passes list filters from query params to Linear', async () => {
+    setLinearAuth({
+      accessToken: 'access-1',
+      refreshToken: 'refresh-1',
+      tokenType: 'Bearer',
+      expiresAt: Date.now() + 86_400_000,
+      scope: 'read',
+    });
+    vi.stubGlobal('fetch', vi.fn(async (_url, options) => {
+      const body = JSON.parse(options.body);
+      expect(body.variables.filter).toEqual({
+        state: { type: { eq: 'completed' } },
+        assignee: { isMe: { eq: true } },
+        team: { id: { eq: 'team-eng' } },
+        priority: { eq: 1 },
+      });
+      return jsonResponse({
+        data: {
+          issues: {
+            nodes: [],
+            pageInfo: { hasNextPage: false, endCursor: null },
+          },
+        },
+      });
+    }));
+
+    const app = createApp();
+    const list = await request(app).get('/api/linear/issues/list').query({
+      status: 'completed',
+      assignee: 'me',
+      teamId: 'team-eng',
+      priority: 'urgent',
+    }).expect(200);
+    expect(list.body.connected).toBe(true);
+    expect(list.body.issues).toEqual([]);
+  });
+
+  it('lists workflow states and updates issue status without leaking tokens', async () => {
+    setLinearAuth({
+      accessToken: 'access-1',
+      refreshToken: 'refresh-1',
+      tokenType: 'Bearer',
+      expiresAt: Date.now() + 86_400_000,
+      scope: 'write',
+    });
+    vi.stubGlobal('fetch', vi.fn(async (_url, options) => {
+      const body = JSON.parse(options.body);
+      if (body.query.includes('TeamWorkflowStates')) {
+        expect(body.variables.id).toBe('team-eng');
+        expect(options.headers.Authorization).toBe('Bearer access-1');
+        return jsonResponse({
+          data: {
+            team: {
+              states: {
+                nodes: [
+                  { id: 'state-todo', name: 'Todo', type: 'unstarted', position: 1 },
+                  { id: 'state-done', name: 'Done', type: 'completed', position: 2 },
+                ],
+              },
+            },
+          },
+        });
+      }
+      expect(body.query).toContain('mutation IssueUpdate');
+      expect(body.variables).toEqual({
+        id: 'issue-uuid-1',
+        input: { stateId: 'state-done' },
+      });
+      return jsonResponse({
+        data: {
+          issueUpdate: {
+            success: true,
+            issue: {
+              id: 'issue-uuid-1',
+              identifier: 'ENG-12',
+              title: 'Broken login',
+              url: 'https://linear.app/openchamber/issue/ENG-12',
+              state: { id: 'state-done', name: 'Done', type: 'completed' },
+              assignee: null,
+              description: null,
+              comments: { nodes: [] },
+            },
+          },
+        },
+      });
+    }));
+
+    const app = createApp();
+    const missingTeam = await request(app).get('/api/linear/issues/states').expect(400);
+    expect(missingTeam.body.error).toBe('teamId is required');
+
+    const states = await request(app).get('/api/linear/issues/states').query({ teamId: 'team-eng' }).expect(200);
+    expect(states.body.connected).toBe(true);
+    expect(states.body.states).toEqual([
+      { id: 'state-todo', name: 'Todo', type: 'unstarted', position: 1 },
+      { id: 'state-done', name: 'Done', type: 'completed', position: 2 },
+    ]);
+    expect(JSON.stringify(states.body)).not.toContain('access-1');
+
+    const missingBody = await request(app).post('/api/linear/issues/update').send({}).expect(400);
+    expect(missingBody.body.error).toBe('id and stateId are required');
+
+    const updated = await request(app).post('/api/linear/issues/update').send({
+      id: 'issue-uuid-1',
+      stateId: 'state-done',
+    }).expect(200);
+    expect(updated.body.connected).toBe(true);
+    expect(updated.body.issue.identifier).toBe('ENG-12');
+    expect(updated.body.issue.state).toEqual({ id: 'state-done', name: 'Done', type: 'completed' });
+    expect(JSON.stringify(updated.body)).not.toContain('access-1');
+  });
+
+  it('returns 400 for Linear validation and not-found GraphQL errors', async () => {
+    setLinearAuth({
+      accessToken: 'access-1',
+      refreshToken: 'refresh-1',
+      tokenType: 'Bearer',
+      expiresAt: Date.now() + 86_400_000,
+      scope: 'write',
+    });
+    vi.stubGlobal('fetch', vi.fn(async (_url, options) => {
+      const body = JSON.parse(options.body);
+      if (body.query.includes('TeamWorkflowStates')) {
+        return jsonResponse({
+          data: null,
+          errors: [{
+            message: 'Entity not found: Team',
+            extensions: {
+              code: 'INPUT_ERROR',
+              userError: true,
+              userPresentableMessage: 'Could not find referenced Team.',
+            },
+          }],
+        });
+      }
+      return jsonResponse({
+        data: null,
+        errors: [{
+          message: 'Argument Validation Error',
+          extensions: {
+            code: 'INVALID_INPUT',
+            userError: true,
+            userPresentableMessage: 'stateId must be a UUID.',
+          },
+        }],
+      });
+    }));
+
+    const app = createApp();
+    const states = await request(app).get('/api/linear/issues/states').query({ teamId: 'missing-team' }).expect(400);
+    expect(states.body.error).toBe('Could not find referenced Team.');
+
+    const updated = await request(app).post('/api/linear/issues/update').send({
+      id: 'issue-uuid-1',
+      stateId: 'not-a-uuid',
+    }).expect(400);
+    expect(updated.body.error).toBe('stateId must be a UUID.');
   });
 
   it('returns disconnected for issue routes when Linear is not connected', async () => {
@@ -339,6 +499,13 @@ describe('Linear auth routes', () => {
     expect(list.body).toEqual({ connected: false });
     const got = await request(app).get('/api/linear/issues/get').query({ id: 'ENG-12' }).expect(200);
     expect(got.body).toEqual({ connected: false });
+    const states = await request(app).get('/api/linear/issues/states').query({ teamId: 'team-eng' }).expect(200);
+    expect(states.body).toEqual({ connected: false });
+    const updated = await request(app).post('/api/linear/issues/update').send({
+      id: 'issue-1',
+      stateId: 'state-done',
+    }).expect(200);
+    expect(updated.body).toEqual({ connected: false });
   });
 
   it('returns disconnected mapping when Linear is not connected', async () => {

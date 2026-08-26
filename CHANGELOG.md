@@ -5,6 +5,7 @@ All notable changes to this project will be documented in this file.
 ## [Unreleased]
 
 - **Settings/Integrations:** connect one or more Linear workspaces. The logins live on this OpenChamber server, so web, desktop, and a phone paired to it share them. Switch between workspaces in Settings. After connecting, map that workspace's default and each Linear team to an OpenChamber project.
+- Linear: the right-hand panel lists issues from the current workspace. Filter by status, priority, assignee, or team, and switch workspace there. On a narrow panel, search and the filters other than status show as icons. They stay when you switch to another right-hand tool, and they no longer flash while the list reloads. Open an issue to see priority and labels, change its status, or close it. Start session stays in a footer while you scroll the card. Issue and comment images show in the card. Hidden in VS Code.
 - Chat: attach a Linear issue from the composer attach menu. It rides the next send as context and stays on the work-status card. Exclusive with a linked GitHub issue or PR. Hidden in VS Code.
 - Git: when creating a worktree, start from a Linear issue the same way you already can from a GitHub issue. It stays in the current project, names the branch from the issue, and seeds the new session. Hidden in VS Code.
 - Linear: sessions started from an issue post started, completed, and failed comments on that issue, named like `OpenChamber session started: Session title`, each a link that opens the session.

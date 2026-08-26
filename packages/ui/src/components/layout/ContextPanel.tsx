@@ -5,6 +5,7 @@ import { DiffViewIcon } from '@/components/icons/DiffIcon';
 import { Button } from '@/components/ui/button';
 import { SortableTabsStrip } from '@/components/ui/sortable-tabs-strip';
 import { PullRequestView } from '@/components/views/PullRequestView';
+import { LinearIssuesView } from '@/components/views/LinearIssuesView';
 import { TerminalView } from '@/components/views/TerminalView';
 import { lazyWithChunkRecovery } from '@/lib/chunkLoadRecovery';
 
@@ -118,6 +119,7 @@ const getModeLabel = (
   if (mode === 'browser') return t('contextPanel.mode.browser');
   if (mode === 'git') return t('layout.rightSidebar.git');
   if (mode === 'pr') return t('contextPanel.mode.pr');
+  if (mode === 'linear') return t('contextPanel.mode.linear');
   if (mode === 'notes') return t('contextRail.surface.notes');
   if (mode === 'terminal') return t('layout.mainTab.terminal');
   return t('contextPanel.mode.context');
@@ -210,6 +212,10 @@ const getTabIcon = (
 
   if (tab.mode === 'pr') {
     return <Icon name="github" className="h-3.5 w-3.5" />;
+  }
+
+  if (tab.mode === 'linear') {
+    return <Icon name="linear" className="h-3.5 w-3.5" />;
   }
 
   if (tab.mode === 'notes') {
@@ -937,6 +943,8 @@ export const ContextPanel: React.FC = () => {
             ? <React.Suspense fallback={null}><GitView isActive={isOpen} /></React.Suspense>
             : activeTab?.mode === 'pr'
                 ? <PullRequestView />
+            : activeTab?.mode === 'linear'
+                ? <LinearIssuesView />
             : activeTab?.mode === 'notes'
                 ? <ProjectContextPanel />
         : activeTab?.mode === 'plan'

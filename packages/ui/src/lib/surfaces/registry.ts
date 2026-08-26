@@ -6,6 +6,7 @@ export type ContextSurfaceId =
   | 'editor'
   | 'git'
   | 'pr'
+  | 'linear'
   | 'diff'
   | 'walkthrough'
   | 'terminal'
@@ -63,6 +64,15 @@ export const CONTEXT_SURFACES: readonly ContextSurfaceDescriptor[] = [
     mode: 'pr',
     icon: 'github',
     labelKey: 'contextPanel.mode.pr',
+    availability: 'always',
+  },
+  {
+    id: 'linear',
+    descriptionKey: 'contextRail.surface.linear.description',
+    defaultWidthFraction: 0.45,
+    mode: 'linear',
+    icon: 'linear',
+    labelKey: 'contextPanel.mode.linear',
     availability: 'always',
   },
   {

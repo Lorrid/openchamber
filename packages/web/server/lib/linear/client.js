@@ -10,13 +10,54 @@ import { isPlainObject, readTrimmedString } from './parse.js';
 
 const LINEAR_GRAPHQL_URL = 'https://api.linear.app/graphql';
 const VIEWER_QUERY = '{ viewer { id name displayName email avatarUrl } organization { id name urlKey } }';
+// Linear file URLs in GraphQL need this header or the browser cannot load
+// uploads.linear.app images (comment screenshots, description images).
+const LINEAR_PUBLIC_FILE_URL_TTL_SECONDS = '3600';
 
 export class LinearApiError extends Error {
-  constructor(message, status) {
+  constructor(message, status, options = {}) {
     super(message);
     this.name = 'LinearApiError';
     this.status = status;
+    this.userError = options.userError === true;
   }
+}
+
+function readGraphqlError(payload) {
+  const errors = Array.isArray(payload.errors) ? payload.errors : [];
+  const first = errors.length > 0 && isPlainObject(errors[0]) ? errors[0] : null;
+  if (!first) {
+    return { message: '', userError: false, status: 502 };
+  }
+  const extensions = isPlainObject(first.extensions) ? first.extensions : null;
+  const presentable = extensions ? readTrimmedString(extensions.userPresentableMessage) : '';
+  let constraint = '';
+  const validationErrors = extensions && Array.isArray(extensions.validationErrors)
+    ? extensions.validationErrors
+    : [];
+  for (const entry of validationErrors) {
+    if (!isPlainObject(entry) || !isPlainObject(entry.constraints)) continue;
+    for (const value of Object.values(entry.constraints)) {
+      const text = readTrimmedString(value);
+      if (text) {
+        constraint = text;
+        break;
+      }
+    }
+    if (constraint) break;
+  }
+  const message = presentable || constraint || readTrimmedString(first.message);
+  const code = extensions ? readTrimmedString(extensions.code) : '';
+  const userError = extensions?.userError === true
+    || code === 'INVALID_INPUT'
+    || code === 'INPUT_ERROR'
+    || /^entity not found/i.test(message)
+    || /^argument validation/i.test(message);
+  return {
+    message,
+    userError,
+    status: userError ? 400 : 502,
+  };
 }
 
 function readIdentity(payload) {
@@ -63,6 +104,7 @@ export async function fetchLinearGraphql(accessToken, query, variables) {
       Accept: 'application/json',
       'Content-Type': 'application/json',
       Authorization: `Bearer ${token}`,
+      'public-file-urls-expire-in': LINEAR_PUBLIC_FILE_URL_TTL_SECONDS,
     },
     body: JSON.stringify(body),
   });
@@ -78,11 +120,12 @@ export async function fetchLinearGraphql(accessToken, query, variables) {
   }
   const data = isPlainObject(payload.data) ? payload.data : null;
   if (!data) {
-    const errors = Array.isArray(payload.errors) ? payload.errors : [];
-    const first = errors.length > 0 && isPlainObject(errors[0])
-      ? readTrimmedString(errors[0].message)
-      : '';
-    throw new LinearApiError(first || 'Linear GraphQL response did not include data', 502);
+    const graphqlError = readGraphqlError(payload);
+    throw new LinearApiError(
+      graphqlError.message || 'Linear GraphQL response did not include data',
+      graphqlError.status,
+      { userError: graphqlError.userError },
+    );
   }
   return data;
 }

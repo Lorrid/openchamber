@@ -6,10 +6,16 @@ import type {
   LinearIssue,
   LinearIssueAssignee,
   LinearIssueComment,
+  LinearIssueLabel,
+  LinearIssuePriority,
   LinearIssueGetResult,
   LinearIssueState,
+  LinearIssueStatesResult,
+  LinearIssueUpdateInput,
+  LinearIssueUpdateResult,
   LinearIssueSummary,
   LinearIssueTeam,
+  LinearIssuesListOptions,
   LinearIssuesListResult,
   LinearMappingResult,
   LinearMappingWrite,
@@ -17,6 +23,7 @@ import type {
   LinearSessionStatusPostInput,
   LinearSessionStatusPostResult,
   LinearTeamMapping,
+  LinearWorkflowState,
   LinearUserSummary,
   LinearWorkspaceSummary,
 } from '@openchamber/ui/lib/api/types';
@@ -36,6 +43,7 @@ type LinearJson = {
   cursor?: string | null;
   hasMore?: boolean;
   issue?: LinearIssue | null;
+  states?: LinearWorkflowState[];
   defaultProjectPath?: string | null;
   teams?: LinearTeamMapping[];
   posted?: boolean;
@@ -120,10 +128,24 @@ function toAuthStart(payload: LinearJson | null): LinearAuthStart | null {
 }
 
 function parseState(payload: LinearIssueState | null | undefined): LinearIssueState | null {
+  const id = payload?.id?.trim() || null;
   const name = payload?.name?.trim() || null;
   const type = payload?.type?.trim() || null;
-  if (!name && !type) return null;
-  return { name, type };
+  if (!id && !name && !type) return null;
+  return { id, name, type };
+}
+
+function parseWorkflowState(payload: LinearWorkflowState | null | undefined): LinearWorkflowState | null {
+  const id = payload?.id?.trim();
+  const name = payload?.name?.trim();
+  if (!id || !name) return null;
+  const position = payload?.position;
+  return {
+    id,
+    name,
+    type: payload?.type?.trim() || null,
+    position: typeof position === 'number' && Number.isFinite(position) ? position : 0,
+  };
 }
 
 function parseAssignee(payload: LinearIssueAssignee | null | undefined): LinearIssueAssignee | null {
@@ -142,6 +164,37 @@ function parseTeam(payload: LinearIssueTeam | null | undefined): LinearIssueTeam
   return { id, key, name };
 }
 
+function parsePriority(value: LinearIssueSummary['priority']): LinearIssuePriority | null {
+  if (value !== 0 && value !== 1 && value !== 2 && value !== 3 && value !== 4) {
+    return null;
+  }
+  return value;
+}
+
+function parseLabelColor(value: string | null | undefined): string | null {
+  const raw = value?.trim();
+  if (!raw) return null;
+  const hex = raw.startsWith('#') ? raw.slice(1) : raw;
+  if (!/^[0-9A-Fa-f]{6}$/.test(hex)) return null;
+  return `#${hex.toLowerCase()}`;
+}
+
+function parseLabel(payload: LinearIssueLabel | null | undefined): LinearIssueLabel | null {
+  const id = payload?.id?.trim();
+  const name = payload?.name?.trim();
+  if (!id || !name) return null;
+  return {
+    id,
+    name,
+    color: parseLabelColor(payload.color),
+  };
+}
+
+function parseLabels(payload: LinearIssueSummary['labels']): LinearIssueLabel[] {
+  if (!Array.isArray(payload)) return [];
+  return payload.map(parseLabel).filter((label): label is LinearIssueLabel => label != null);
+}
+
 function parseIssueSummary(payload: LinearIssueSummary | null | undefined): LinearIssueSummary | null {
   const id = payload?.id?.trim();
   const identifier = payload?.identifier?.trim();
@@ -156,6 +209,8 @@ function parseIssueSummary(payload: LinearIssueSummary | null | undefined): Line
     state: parseState(payload.state),
     assignee: parseAssignee(payload.assignee),
     team: parseTeam(payload.team),
+    priority: parsePriority(payload.priority),
+    labels: parseLabels(payload.labels),
   };
 }
 
@@ -209,6 +264,32 @@ function toIssuesList(payload: LinearJson | null): LinearIssuesListResult | null
 }
 
 function toIssueGet(payload: LinearJson | null): LinearIssueGetResult | null {
+  if (payload?.connected !== true && payload?.connected !== false) {
+    return null;
+  }
+  if (payload.connected === false) {
+    return { connected: false };
+  }
+  return {
+    connected: true,
+    issue: parseIssue(payload.issue),
+  };
+}
+
+function toIssueStates(payload: LinearJson | null): LinearIssueStatesResult | null {
+  if (payload?.connected !== true && payload?.connected !== false) {
+    return null;
+  }
+  if (payload.connected === false) {
+    return { connected: false };
+  }
+  const states = Array.isArray(payload.states)
+    ? payload.states.map(parseWorkflowState).filter((state): state is LinearWorkflowState => state != null)
+    : [];
+  return { connected: true, states };
+}
+
+function toIssueUpdate(payload: LinearJson | null): LinearIssueUpdateResult | null {
   if (payload?.connected !== true && payload?.connected !== false) {
     return null;
   }
@@ -335,12 +416,20 @@ export const createWebLinearAPI = (): LinearAPI => ({
     return status;
   },
 
-  async issuesList(options?: { query?: string; cursor?: string }): Promise<LinearIssuesListResult> {
+  async issuesList(options?: LinearIssuesListOptions): Promise<LinearIssuesListResult> {
     const params = new URLSearchParams();
     const query = options?.query?.trim();
     const cursor = options?.cursor?.trim();
+    const status = options?.status?.trim();
+    const assignee = options?.assignee?.trim();
+    const teamId = options?.teamId?.trim();
+    const priority = options?.priority?.trim();
     if (query) params.set('query', query);
     if (cursor) params.set('cursor', cursor);
+    if (status) params.set('status', status);
+    if (assignee) params.set('assignee', assignee);
+    if (teamId) params.set('teamId', teamId);
+    if (priority) params.set('priority', priority);
     const queryString = params.toString();
     const suffix = queryString ? `?${queryString}` : '';
     const response = await runtimeFetch(`/api/linear/issues/list${suffix}`, {
@@ -365,6 +454,40 @@ export const createWebLinearAPI = (): LinearAPI => ({
     const result = toIssueGet(payload);
     if (!response.ok || !result) {
       throw new Error(readErrorMessage(payload, response.statusText || 'Failed to load Linear issue'));
+    }
+    return result;
+  },
+
+  async issueStates(teamId: string): Promise<LinearIssueStatesResult> {
+    const params = new URLSearchParams({ teamId });
+    const response = await runtimeFetch(`/api/linear/issues/states?${params.toString()}`, {
+      method: 'GET',
+      headers: { Accept: 'application/json' },
+    });
+    const payload = await readLinearJson(response);
+    const result = toIssueStates(payload);
+    if (!response.ok || !result) {
+      throw new Error(readErrorMessage(payload, response.statusText || 'Failed to load Linear workflow states'));
+    }
+    return result;
+  },
+
+  async issueUpdate(input: LinearIssueUpdateInput): Promise<LinearIssueUpdateResult> {
+    const response = await runtimeFetch('/api/linear/issues/update', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Accept: 'application/json',
+      },
+      body: JSON.stringify({
+        id: input.id,
+        stateId: input.stateId,
+      }),
+    });
+    const payload = await readLinearJson(response);
+    const result = toIssueUpdate(payload);
+    if (!response.ok || !result) {
+      throw new Error(readErrorMessage(payload, response.statusText || 'Failed to update Linear issue'));
     }
     return result;
   },

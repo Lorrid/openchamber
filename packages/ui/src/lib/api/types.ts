@@ -1183,8 +1183,16 @@ export type LinearAuthStart = {
 export type LinearAuthOrigin = 'desktop' | 'web';
 
 export type LinearIssueState = {
+  id: string | null;
   name: string | null;
   type: string | null;
+};
+
+export type LinearWorkflowState = {
+  id: string;
+  name: string;
+  type: string | null;
+  position: number;
 };
 
 export type LinearIssueAssignee = {
@@ -1199,6 +1207,14 @@ export type LinearIssueTeam = {
   name: string;
 };
 
+export type LinearIssuePriority = 0 | 1 | 2 | 3 | 4;
+
+export type LinearIssueLabel = {
+  id: string;
+  name: string;
+  color: string | null;
+};
+
 export type LinearIssueSummary = {
   id: string;
   identifier: string;
@@ -1207,6 +1223,8 @@ export type LinearIssueSummary = {
   state?: LinearIssueState | null;
   assignee?: LinearIssueAssignee | null;
   team?: LinearIssueTeam | null;
+  priority?: LinearIssuePriority | null;
+  labels?: LinearIssueLabel[];
 };
 
 export type LinearIssueComment = {
@@ -1221,6 +1239,19 @@ export type LinearIssue = LinearIssueSummary & {
   comments?: LinearIssueComment[];
 };
 
+export type LinearIssueListStatus = 'open' | 'completed' | 'all';
+export type LinearIssueListAssignee = 'any' | 'me';
+export type LinearIssueListPriority = 'all' | 'none' | 'urgent' | 'high' | 'medium' | 'low';
+
+export type LinearIssuesListOptions = {
+  query?: string;
+  cursor?: string;
+  status?: LinearIssueListStatus;
+  assignee?: LinearIssueListAssignee;
+  teamId?: string;
+  priority?: LinearIssueListPriority;
+};
+
 export type LinearIssuesListResult = {
   connected: boolean;
   issues?: LinearIssueSummary[];
@@ -1229,6 +1260,21 @@ export type LinearIssuesListResult = {
 };
 
 export type LinearIssueGetResult = {
+  connected: boolean;
+  issue?: LinearIssue | null;
+};
+
+export type LinearIssueStatesResult = {
+  connected: boolean;
+  states?: LinearWorkflowState[];
+};
+
+export type LinearIssueUpdateInput = {
+  id: string;
+  stateId: string;
+};
+
+export type LinearIssueUpdateResult = {
   connected: boolean;
   issue?: LinearIssue | null;
 };
@@ -1271,8 +1317,10 @@ export interface LinearAPI {
   authStart(origin?: LinearAuthOrigin): Promise<LinearAuthStart>;
   authDisconnect(): Promise<{ removed: boolean }>;
   authActivate(organizationId: string): Promise<LinearAuthStatus>;
-  issuesList(options?: { query?: string; cursor?: string }): Promise<LinearIssuesListResult>;
+  issuesList(options?: LinearIssuesListOptions): Promise<LinearIssuesListResult>;
   issueGet(id: string): Promise<LinearIssueGetResult>;
+  issueStates(teamId: string): Promise<LinearIssueStatesResult>;
+  issueUpdate(input: LinearIssueUpdateInput): Promise<LinearIssueUpdateResult>;
   mappingGet(): Promise<LinearMappingResult>;
   mappingSet(mapping: LinearMappingWrite): Promise<LinearMappingResult>;
   sessionStatusPost(input: LinearSessionStatusPostInput): Promise<LinearSessionStatusPostResult>;

@@ -50,7 +50,15 @@ the `openContext*` actions in `useUIStore`.
   positions). Chat tab records stay open, but only the active chat iframe is
   mounted while the panel is open. A selected chat restores its state from
   the session stores. A closed panel mounts no chat iframe.
-  Singleton surfaces (git, pr, notes, plan, context) remount on switch. These
+  Singleton surfaces (git, pr, linear, notes, plan, context) remount on switch. These
   surfaces must restore their state from stores or snapshots.
 - Runtime scope: desktop/web `MainLayout` only. VS Code and the dedicated
   mobile shell have their own layouts and do not consume this registry.
+  Linear is a desktop/web singleton on this rail. VS Code and mobile omit it
+  (no this registry, and VS Code has no `RuntimeAPIs.linear`). The Linear
+  surface lists issues with status, assignee, team, and priority filters, can switch
+  the current workspace, and keeps Start session in a footer on the issue card.
+  Those filters restore from `useUIStore` when the surface remounts. Below 520px
+  search and the filters other than status drop to icons; status keeps its label. The card
+  shows priority and labels. Changing filters keeps the previous list
+  until the next page arrives.
