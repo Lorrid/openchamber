@@ -1,6 +1,9 @@
 export {
   getLinearAuth,
+  getLinearAuthByWorkspaceId,
+  getLinearAuthWorkspaces,
   setLinearAuth,
+  activateLinearAuth,
   clearLinearAuth,
   toLinearPublicStatus,
   getLinearClientId,

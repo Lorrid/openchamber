@@ -1,6 +1,6 @@
 import fs from 'fs';
 import path from 'path';
-import { getLinearAuthFilePath } from './auth.js';
+import { getLinearAuth, getLinearAuthFilePath } from './auth.js';
 import { createLinearIssueComment } from './issues.js';
 import { isPlainObject, readEnv, readTrimmedString } from './parse.js';
 
@@ -110,6 +110,7 @@ function readRecord(value) {
     issueIdentifier,
     sessionOrigin: readSessionOrigin(value.sessionOrigin) || null,
     sessionTitle: readSessionTitle(value.sessionTitle) || null,
+    organizationId: readTrimmedString(value.organizationId) || null,
     started: readBooleanFlag(value.started),
     completed: readBooleanFlag(value.completed),
     failure: readBooleanFlag(value.failure),
@@ -178,8 +179,15 @@ async function postOnce(input) {
     || readTrimmedString(existing?.sessionTitle)
     || sessionId;
   const sessionUrl = buildLinearSessionOpenUrl(sessionId, sessionOrigin);
+  const organizationId = readTrimmedString(input?.organizationId)
+    || readTrimmedString(existing?.organizationId)
+    || readTrimmedString(getLinearAuth()?.workspaceId);
   const body = buildLinearSessionStatusComment({ kind, sessionUrl, sessionTitle });
-  const commentResult = await createLinearIssueComment({ issueId: issueIdentifier, body });
+  const commentResult = await createLinearIssueComment({
+    issueId: issueIdentifier,
+    body,
+    organizationId,
+  });
   if (commentResult.connected === false) {
     return { connected: false };
   }
@@ -191,6 +199,7 @@ async function postOnce(input) {
     issueIdentifier,
     sessionOrigin: sessionOrigin || null,
     sessionTitle,
+    organizationId: organizationId || null,
     started: existing?.started === true || kind === 'started',
     completed: existing?.completed === true || kind === 'completed',
     failure: existing?.failure === true || kind === 'failure',

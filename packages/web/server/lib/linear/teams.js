@@ -1,4 +1,4 @@
-import { clearLinearAuth } from './auth.js';
+import { clearLinearAuth, getLinearAuth } from './auth.js';
 import { fetchLinearGraphql, getValidLinearAccessToken } from './client.js';
 import { isPlainObject, readTrimmedString } from './parse.js';
 
@@ -64,7 +64,7 @@ export async function listLinearTeams() {
     return { connected: true, teams };
   } catch (error) {
     if (error?.status === 401) {
-      clearLinearAuth();
+      clearLinearAuth(getLinearAuth()?.workspaceId);
       return { connected: false };
     }
     throw error;

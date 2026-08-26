@@ -1157,11 +1157,21 @@ export type LinearOrganizationSummary = {
   urlKey: string | null;
 };
 
+export type LinearWorkspaceSummary = {
+  id: string;
+  name: string | null;
+  urlKey: string | null;
+  current: boolean;
+  user?: LinearUserSummary | null;
+  authorizedAt?: number | null;
+};
+
 export type LinearAuthStatus = {
   connected: boolean;
   user?: LinearUserSummary | null;
   organization?: LinearOrganizationSummary | null;
   scope?: string;
+  workspaces?: LinearWorkspaceSummary[];
 };
 
 export type LinearAuthStart = {
@@ -1260,6 +1270,7 @@ export interface LinearAPI {
   authStatus(): Promise<LinearAuthStatus>;
   authStart(origin?: LinearAuthOrigin): Promise<LinearAuthStart>;
   authDisconnect(): Promise<{ removed: boolean }>;
+  authActivate(organizationId: string): Promise<LinearAuthStatus>;
   issuesList(options?: { query?: string; cursor?: string }): Promise<LinearIssuesListResult>;
   issueGet(id: string): Promise<LinearIssueGetResult>;
   mappingGet(): Promise<LinearMappingResult>;

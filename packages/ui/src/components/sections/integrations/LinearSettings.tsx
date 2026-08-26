@@ -15,6 +15,36 @@ import { LinearProjectMapping } from './LinearProjectMapping';
 const AUTHORIZATION_WATCH_MS = 3 * 60_000;
 const AUTHORIZATION_POLL_MS = 1_500;
 
+type WorkspaceSnapshot = {
+  connected: boolean;
+  ids: string;
+  currentId: string;
+  currentAuthorizedAt: number;
+};
+
+function snapshotWorkspaces(status: {
+  connected?: boolean;
+  organization?: { id?: string } | null;
+  workspaces?: Array<{ id: string; current: boolean; authorizedAt?: number | null }>;
+} | null): WorkspaceSnapshot {
+  const workspaces = status?.workspaces ?? [];
+  const current = workspaces.find((entry) => entry.current);
+  return {
+    connected: Boolean(status?.connected),
+    ids: workspaces.map((entry) => entry.id).slice().sort().join(','),
+    currentId: current?.id || status?.organization?.id || '',
+    currentAuthorizedAt: current?.authorizedAt ?? 0,
+  };
+}
+
+function authorizationCompleted(previous: WorkspaceSnapshot, next: WorkspaceSnapshot): boolean {
+  if (!next.connected) return false;
+  if (!previous.connected) return true;
+  return next.ids !== previous.ids
+    || next.currentId !== previous.currentId
+    || next.currentAuthorizedAt !== previous.currentAuthorizedAt;
+}
+
 export const LinearSettings: React.FC = () => {
   const { t } = useI18n();
   const runtimeLinear = getRegisteredRuntimeAPIs()?.linear;
@@ -22,6 +52,7 @@ export const LinearSettings: React.FC = () => {
   const isLoading = useLinearAuthStore((state) => state.isLoading);
   const hasChecked = useLinearAuthStore((state) => state.hasChecked);
   const refreshStatus = useLinearAuthStore((state) => state.refreshStatus);
+  const setStatus = useLinearAuthStore((state) => state.setStatus);
 
   const [isBusy, setIsBusy] = React.useState(false);
   const [isWaiting, setIsWaiting] = React.useState(false);
@@ -52,6 +83,7 @@ export const LinearSettings: React.FC = () => {
     if (!runtimeLinear) return;
     stopWaiting();
     setIsBusy(true);
+    const previous = snapshotWorkspaces(useLinearAuthStore.getState().status);
     try {
       const payload = await runtimeLinear.authStart(isDesktopShell() ? 'desktop' : 'web');
       setIsWaiting(true);
@@ -67,7 +99,7 @@ export const LinearSettings: React.FC = () => {
             return;
           }
           const next = await refreshStatus(runtimeLinear, { force: true });
-          if (next?.connected) {
+          if (authorizationCompleted(previous, snapshotWorkspaces(next))) {
             stopWaiting();
             toast.success(t('settings.integrations.linear.toast.connected'));
             void focusDesktopWindow();
@@ -82,6 +114,21 @@ export const LinearSettings: React.FC = () => {
       setIsBusy(false);
     }
   }, [refreshStatus, runtimeLinear, stopWaiting, t]);
+
+  const activateWorkspace = React.useCallback(async (organizationId: string) => {
+    if (!runtimeLinear || !organizationId) return;
+    setIsBusy(true);
+    try {
+      const payload = await runtimeLinear.authActivate(organizationId);
+      setStatus(payload);
+      toast.success(t('settings.integrations.linear.toast.workspaceSwitched'));
+    } catch (error) {
+      console.error('Failed to switch Linear workspace:', error);
+      toast.error(t('settings.integrations.linear.toast.workspaceSwitchFailed'));
+    } finally {
+      setIsBusy(false);
+    }
+  }, [runtimeLinear, setStatus, t]);
 
   const disconnect = React.useCallback(async () => {
     if (!runtimeLinear) return;
@@ -106,6 +153,8 @@ export const LinearSettings: React.FC = () => {
   const connected = Boolean(status?.connected);
   const user = status?.user;
   const organization = status?.organization;
+  const workspaces = status?.workspaces ?? [];
+  const otherWorkspaces = workspaces.filter((workspace) => !workspace.current);
   const displayName = user?.displayName?.trim() || user?.name?.trim() || t('settings.integrations.linear.label.unknownUser');
   const statusLabel = isWaiting
     ? t('settings.integrations.linear.status.waiting')
@@ -206,8 +255,58 @@ export const LinearSettings: React.FC = () => {
 
               {connected ? (
                 <>
-                  <LinearProjectMapping linear={runtimeLinear} connected={connected} />
+                  <LinearProjectMapping
+                    linear={runtimeLinear}
+                    connected={connected}
+                    organizationId={organization?.id ?? null}
+                  />
+                  {otherWorkspaces.length > 0 ? (
+                    <div className="space-y-2">
+                      <p className="typography-micro text-muted-foreground">
+                        {t('settings.integrations.linear.label.otherWorkspaces')}
+                      </p>
+                      <div className="space-y-1">
+                        {otherWorkspaces.map((workspace) => {
+                          const workspaceUser = workspace.user;
+                          const workspaceName = workspace.name?.trim()
+                            || t('settings.integrations.linear.status.connected');
+                          return (
+                            <div
+                              key={workspace.id}
+                              className="flex items-center justify-between gap-3 rounded-md border border-[var(--surface-subtle)] bg-[var(--surface-muted)] px-3 py-2"
+                            >
+                              <div className="min-w-0">
+                                <div className="truncate text-sm font-medium text-foreground">{workspaceName}</div>
+                                {workspaceUser?.email ? (
+                                  <p className="truncate text-xs text-muted-foreground">{workspaceUser.email}</p>
+                                ) : null}
+                              </div>
+                              <Button
+                                type="button"
+                                size="sm"
+                                variant="ghost"
+                                onClick={() => void activateWorkspace(workspace.id)}
+                                disabled={isBusy}
+                              >
+                                {t('settings.integrations.linear.actions.switchTo')}
+                              </Button>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  ) : null}
                   <div className="flex flex-wrap items-center gap-2">
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="outline"
+                      onClick={() => void startConnect()}
+                      disabled={isBusy || isWaiting}
+                      data-settings-item="integrations.linear.add-workspace"
+                    >
+                      {t('settings.integrations.linear.actions.addWorkspace')}
+                    </Button>
                     <Button
                       type="button"
                       size="sm"

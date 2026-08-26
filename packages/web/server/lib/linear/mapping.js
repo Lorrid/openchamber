@@ -1,6 +1,6 @@
 import fs from 'fs';
 import path from 'path';
-import { getLinearAuthFilePath } from './auth.js';
+import { getLinearAuth, getLinearAuthFilePath } from './auth.js';
 import { isPlainObject, readTrimmedString } from './parse.js';
 
 export class LinearMappingError extends Error {
@@ -13,6 +13,13 @@ export class LinearMappingError extends Error {
 
 function mappingFile() {
   return path.join(path.dirname(getLinearAuthFilePath()), 'linear-mapping.json');
+}
+
+const UNSCOPED_MAPPING_KEY = '__unscoped__';
+
+function mappingOrgKey() {
+  const auth = getLinearAuth();
+  return readTrimmedString(auth?.workspaceId) || UNSCOPED_MAPPING_KEY;
 }
 
 function emptyMapping() {
@@ -37,13 +44,33 @@ function readTeamProjectPaths(value) {
   return next;
 }
 
-function normalizeStoredMapping(raw) {
+function normalizeMappingSlice(raw) {
   if (!isPlainObject(raw)) {
-    return null;
+    return emptyMapping();
   }
   return {
     defaultProjectPath: readTrimmedString(raw.defaultProjectPath) || null,
     teamProjectPaths: readTeamProjectPaths(raw.teamProjectPaths),
+  };
+}
+
+function readMappingDocument(raw) {
+  if (!isPlainObject(raw)) {
+    return { workspaces: {} };
+  }
+  if (isPlainObject(raw.workspaces)) {
+    const workspaces = {};
+    for (const key of Object.keys(raw.workspaces)) {
+      const orgKey = readTrimmedString(key);
+      if (!orgKey) continue;
+      workspaces[orgKey] = normalizeMappingSlice(raw.workspaces[key]);
+    }
+    return { workspaces };
+  }
+  return {
+    workspaces: {
+      [mappingOrgKey()]: normalizeMappingSlice(raw),
+    },
   };
 }
 
@@ -87,22 +114,43 @@ export function readStoredLinearMapping() {
   } catch {
     throw new LinearMappingError('Linear mapping file is malformed', 'MALFORMED');
   }
-  const normalized = normalizeStoredMapping(parsed);
-  if (!normalized) {
+  if (!isPlainObject(parsed)) {
     throw new LinearMappingError('Linear mapping file is malformed', 'MALFORMED');
   }
-  return normalized;
+  const document = readMappingDocument(parsed);
+  return document.workspaces[mappingOrgKey()] || emptyMapping();
 }
 
 export function setStoredLinearMapping(input) {
   if (!isPlainObject(input)) {
     throw new LinearMappingError('Mapping body must be an object', 'INVALID');
   }
+  const filePath = mappingFile();
+  let document = { workspaces: {} };
+  if (fs.existsSync(filePath)) {
+    try {
+      const raw = fs.readFileSync(filePath, 'utf8');
+      const trimmed = raw.trim();
+      if (trimmed) {
+        const parsed = JSON.parse(trimmed);
+        if (!isPlainObject(parsed)) {
+          throw new LinearMappingError('Linear mapping file is malformed', 'MALFORMED');
+        }
+        document = readMappingDocument(parsed);
+      }
+    } catch (error) {
+      if (error instanceof LinearMappingError) {
+        throw error;
+      }
+      throw new LinearMappingError('Linear mapping file is malformed', 'MALFORMED');
+    }
+  }
   const next = {
     defaultProjectPath: readTrimmedString(input.defaultProjectPath) || null,
     teamProjectPaths: readTeamProjectPaths(input.teamProjectPaths),
   };
-  writeJsonFile(mappingFile(), next);
+  document.workspaces[mappingOrgKey()] = next;
+  writeJsonFile(filePath, document);
   return next;
 }
 

@@ -48,6 +48,7 @@ describe('settings search', () => {
     });
 
     expect(results.some((result) => result.id === 'integrations.linear')).toBe(true);
+    expect(results.some((result) => result.id === 'integrations.linear.add-workspace')).toBe(true);
     expect(results.some((result) => result.id === 'integrations.linear.mapping')).toBe(true);
   });
 
@@ -60,6 +61,7 @@ describe('settings search', () => {
     });
 
     expect(results.some((result) => result.id === 'integrations.linear')).toBe(false);
+    expect(results.some((result) => result.id === 'integrations.linear.add-workspace')).toBe(false);
     expect(results.some((result) => result.id === 'integrations.linear.mapping')).toBe(false);
   });
 });

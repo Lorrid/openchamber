@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import fs from 'fs';
 import os from 'os';
 import path from 'path';
-import { setLinearAuth } from './auth.js';
+import { activateLinearAuth, getLinearAuth, setLinearAuth } from './auth.js';
 import {
   getLinearMappingFilePath,
   mergeLinearMappingView,
@@ -84,8 +84,7 @@ describe('Linear project mapping storage', () => {
       defaultProjectPath: '/keep',
       teamProjectPaths: { 'team-eng': '/eng' },
     });
-    const authPath = path.join(dataDir, 'linear-auth.json');
-    expect(JSON.parse(fs.readFileSync(authPath, 'utf8')).accessToken).toBe('access-keep');
+    expect(getLinearAuth().accessToken).toBe('access-keep');
   });
 
   it('rejects a malformed mapping file instead of treating it as empty', () => {
@@ -112,5 +111,37 @@ describe('Linear project mapping storage', () => {
     expect(resolveMappedProjectPath(view, { id: 'team-eng', key: 'ENG' })).toBe('/eng');
     expect(resolveMappedProjectPath(view, { id: 'team-des', key: 'DES' })).toBe('/default');
     expect(resolveMappedProjectPath(view, null)).toBe('/default');
+  });
+
+  it('keeps mapping slices isolated per workspace', () => {
+    setLinearAuth({
+      accessToken: 'access-a',
+      user: { id: 'user-a', name: 'Ada' },
+      organization: { id: 'org-a', name: 'Alpha', urlKey: 'alpha' },
+    });
+    setStoredLinearMapping({
+      defaultProjectPath: '/alpha',
+      teamProjectPaths: { 'team-a': '/alpha-eng' },
+    });
+
+    setLinearAuth({
+      accessToken: 'access-b',
+      user: { id: 'user-b', name: 'Ben' },
+      organization: { id: 'org-b', name: 'Beta', urlKey: 'beta' },
+    });
+    setStoredLinearMapping({
+      defaultProjectPath: '/beta',
+      teamProjectPaths: {},
+    });
+    expect(readStoredLinearMapping()).toEqual({
+      defaultProjectPath: '/beta',
+      teamProjectPaths: {},
+    });
+
+    expect(activateLinearAuth('org-a')).toBe(true);
+    expect(readStoredLinearMapping()).toEqual({
+      defaultProjectPath: '/alpha',
+      teamProjectPaths: { 'team-a': '/alpha-eng' },
+    });
   });
 });

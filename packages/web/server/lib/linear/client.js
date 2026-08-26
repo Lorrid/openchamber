@@ -1,5 +1,6 @@
 import {
   getLinearAuth,
+  getLinearAuthByWorkspaceId,
   setLinearAuth,
   clearLinearAuth,
   isLinearAccessTokenStale,
@@ -95,9 +96,9 @@ export async function fetchLinearIdentity(accessToken) {
   return identity;
 }
 
-let inFlightRefresh = null;
+const inFlightRefreshByWorkspace = new Map();
 
-async function refreshCurrentAuth(auth) {
+async function refreshWorkspaceAuth(auth) {
   const tokens = await refreshAccessToken(auth.refreshToken);
   const next = setLinearAuth({
     accessToken: tokens.accessToken,
@@ -107,12 +108,15 @@ async function refreshCurrentAuth(auth) {
     scope: tokens.scope || auth.scope,
     user: auth.user,
     organization: auth.organization,
-  });
+    workspaceId: auth.workspaceId,
+  }, { activate: false });
   return next.accessToken;
 }
 
-export async function getValidLinearAccessToken() {
-  const auth = getLinearAuth();
+export async function getValidLinearAccessToken(workspaceId) {
+  const auth = workspaceId
+    ? getLinearAuthByWorkspaceId(workspaceId)
+    : getLinearAuth();
   if (!auth?.accessToken) {
     return null;
   }
@@ -120,22 +124,25 @@ export async function getValidLinearAccessToken() {
     return auth.accessToken;
   }
   if (!auth.refreshToken) {
-    clearLinearAuth();
+    clearLinearAuth(auth.workspaceId);
     return null;
   }
-  if (inFlightRefresh) {
-    return inFlightRefresh;
+  const key = auth.workspaceId;
+  const pending = inFlightRefreshByWorkspace.get(key);
+  if (pending) {
+    return pending;
   }
-  inFlightRefresh = refreshCurrentAuth(auth)
+  const promise = refreshWorkspaceAuth(auth)
     .catch((error) => {
       if (error?.code === 'INVALID_GRANT' || error?.status === 400 || error?.status === 401) {
-        clearLinearAuth();
+        clearLinearAuth(auth.workspaceId);
         return null;
       }
       throw error;
     })
     .finally(() => {
-      inFlightRefresh = null;
+      inFlightRefreshByWorkspace.delete(key);
     });
-  return inFlightRefresh;
+  inFlightRefreshByWorkspace.set(key, promise);
+  return promise;
 }

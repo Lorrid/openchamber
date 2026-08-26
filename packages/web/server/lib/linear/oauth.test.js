@@ -47,6 +47,7 @@ describe('Linear OAuth PKCE', () => {
     expect(url.searchParams.get('code_challenge_method')).toBe('S256');
     expect(url.searchParams.get('code_challenge')).toMatch(/^[A-Za-z0-9_-]{43}$/);
     expect(url.searchParams.get('actor')).toBe('user');
+    expect(url.searchParams.get('prompt')).toBe('consent');
     expect(started.scope).toBe('read,write,comments:create');
     expect(started.expiresIn).toBe(600);
   });

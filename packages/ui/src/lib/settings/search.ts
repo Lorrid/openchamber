@@ -981,6 +981,14 @@ const SETTINGS_SEARCH_ITEMS: readonly SettingsSearchItem[] = [
     isAvailable: (ctx) => !ctx.isVSCode,
   },
   {
+    id: 'integrations.linear.add-workspace',
+    page: 'integrations',
+    titleKey: 'settings.integrations.linear.actions.addWorkspace',
+    descriptionKey: 'settings.integrations.linear.description',
+    keywords: ['linear', 'workspace', 'add', 'connect', 'oauth'],
+    isAvailable: (ctx) => !ctx.isVSCode,
+  },
+  {
     id: 'integrations.linear.mapping',
     page: 'integrations',
     titleKey: 'settings.integrations.linear.mapping.defaultProject',

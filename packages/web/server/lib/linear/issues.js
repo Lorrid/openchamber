@@ -1,4 +1,4 @@
-import { clearLinearAuth } from './auth.js';
+import { clearLinearAuth, getLinearAuth, getLinearAuthByWorkspaceId } from './auth.js';
 import { fetchLinearGraphql, getValidLinearAccessToken } from './client.js';
 import { isPlainObject, isString, readTrimmedString } from './parse.js';
 
@@ -169,16 +169,19 @@ function readIssueNodes(connection) {
   return nodes.map(readIssueSummary).filter(Boolean);
 }
 
-async function withLinearToken(run) {
+async function withLinearToken(run, workspaceId) {
   try {
-    const token = await getValidLinearAccessToken();
+    const token = await getValidLinearAccessToken(workspaceId);
     if (!token) {
       return { connected: false };
     }
     return await run(token);
   } catch (error) {
     if (error?.status === 401) {
-      clearLinearAuth();
+      const failed = workspaceId
+        ? getLinearAuthByWorkspaceId(workspaceId)
+        : getLinearAuth();
+      clearLinearAuth(failed?.workspaceId || workspaceId);
       return { connected: false };
     }
     throw error;
@@ -249,7 +252,7 @@ export async function getLinearIssue(id) {
   });
 }
 
-export async function createLinearIssueComment({ issueId, body } = {}) {
+export async function createLinearIssueComment({ issueId, body, organizationId } = {}) {
   const text = isString(body) ? body : '';
   const ref = parseLinearIssueRef(issueId)
     || (readTrimmedString(issueId) ? { kind: 'id', value: readTrimmedString(issueId) } : null);
@@ -271,5 +274,5 @@ export async function createLinearIssueComment({ issueId, body } = {}) {
       connected: true,
       comment: id ? { id } : null,
     };
-  });
+  }, organizationId);
 }

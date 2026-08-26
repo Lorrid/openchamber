@@ -6,6 +6,7 @@ import { isPlainObject, readEnv, readFiniteNumber, readTrimmedString } from './p
 const DEFAULT_LINEAR_CLIENT_ID = '91bbe26a69a2c8568d3683f1e01e776c';
 const DEFAULT_LINEAR_SCOPES = 'read,write,comments:create';
 const ACCESS_TOKEN_REFRESH_SKEW_MS = 2 * 60_000;
+const LEGACY_WORKSPACE_ID = 'legacy';
 
 function resolveDataDir() {
   const fromEnv = readEnv('OPENCHAMBER_DATA_DIR');
@@ -101,7 +102,17 @@ function normalizeOrganization(organization) {
   };
 }
 
-function normalizeAuth(raw) {
+function resolveLinearWorkspaceId({ organization, user, workspaceId } = {}) {
+  const explicit = readTrimmedString(workspaceId);
+  if (explicit) return explicit;
+  const organizationId = organization ? readTrimmedString(organization.id) : '';
+  if (organizationId) return organizationId;
+  const userId = user ? readTrimmedString(user.id) : '';
+  if (userId) return `user:${userId}`;
+  return LEGACY_WORKSPACE_ID;
+}
+
+function normalizeAuthEntry(raw) {
   if (!isPlainObject(raw)) {
     return null;
   }
@@ -109,6 +120,8 @@ function normalizeAuth(raw) {
   if (!accessToken) {
     return null;
   }
+  const user = normalizeUser(raw.user);
+  const organization = normalizeOrganization(raw.organization);
   return {
     accessToken,
     refreshToken: readTrimmedString(raw.refreshToken) || null,
@@ -116,9 +129,79 @@ function normalizeAuth(raw) {
     expiresAt: readFiniteNumber(raw.expiresAt),
     scope: readTrimmedString(raw.scope),
     createdAt: readFiniteNumber(raw.createdAt),
-    user: normalizeUser(raw.user),
-    organization: normalizeOrganization(raw.organization),
+    authorizedAt: readFiniteNumber(raw.authorizedAt) || readFiniteNumber(raw.createdAt),
+    user,
+    organization,
+    current: Boolean(raw.current),
+    workspaceId: resolveLinearWorkspaceId({
+      organization,
+      user,
+      workspaceId: raw.workspaceId,
+    }),
   };
+}
+
+function normalizeAuthList(raw) {
+  const source = Array.isArray(raw?.workspaces)
+    ? raw.workspaces
+    : (raw?.accessToken ? [raw] : []);
+  const list = source.map((entry) => normalizeAuthEntry(entry)).filter(Boolean);
+
+  if (!list.length) {
+    return { list: [], changed: Boolean(raw && (raw.accessToken || Array.isArray(raw.workspaces))) };
+  }
+
+  let changed = Array.isArray(raw?.workspaces) === false && Boolean(raw?.accessToken);
+  const seen = new Set();
+  const deduped = [];
+  for (const entry of list) {
+    if (seen.has(entry.workspaceId)) {
+      changed = true;
+      continue;
+    }
+    seen.add(entry.workspaceId);
+    deduped.push(entry);
+  }
+
+  let currentFound = false;
+  deduped.forEach((entry) => {
+    if (entry.current && !currentFound) {
+      currentFound = true;
+    } else if (entry.current && currentFound) {
+      entry.current = false;
+      changed = true;
+    }
+  });
+
+  if (!currentFound && deduped[0]) {
+    deduped[0].current = true;
+    changed = true;
+  }
+
+  return { list: deduped, changed };
+}
+
+function readAuthList() {
+  const data = readJsonFile(storageFile());
+  if (!data) {
+    return [];
+  }
+  const { list, changed } = normalizeAuthList(data);
+  if (changed) {
+    writeAuthList(list);
+  }
+  return list;
+}
+
+function writeAuthList(list) {
+  if (!list.length) {
+    const filePath = storageFile();
+    if (fs.existsSync(filePath)) {
+      fs.unlinkSync(filePath);
+    }
+    return;
+  }
+  writeJsonFile(storageFile(), { workspaces: list });
 }
 
 function readSettings() {
@@ -131,15 +214,62 @@ function readSettingString(key) {
 }
 
 export function getLinearAuth() {
-  return normalizeAuth(readJsonFile(storageFile()));
+  const list = readAuthList();
+  if (!list.length) {
+    return null;
+  }
+  return list.find((entry) => entry.current) || list[0];
 }
 
-export function setLinearAuth(input) {
+export function getLinearAuthByWorkspaceId(workspaceId) {
+  const id = readTrimmedString(workspaceId);
+  if (!id) {
+    return getLinearAuth();
+  }
+  return readAuthList().find((entry) => entry.workspaceId === id) || null;
+}
+
+export function getLinearAuthWorkspaces() {
+  return readAuthList().map((entry) => ({
+    id: entry.workspaceId,
+    name: entry.organization?.name || null,
+    urlKey: entry.organization?.urlKey || null,
+    current: Boolean(entry.current),
+    user: entry.user || null,
+    authorizedAt: entry.authorizedAt || entry.createdAt || null,
+  }));
+}
+
+export function setLinearAuth(input, options = {}) {
   const accessToken = readTrimmedString(input?.accessToken);
   if (!accessToken) {
     throw new Error('accessToken is required');
   }
-  const previous = getLinearAuth();
+  const activate = options.activate !== false;
+  const list = readAuthList();
+  const current = list.find((entry) => entry.current) || list[0] || null;
+
+  const nextUser = Object.prototype.hasOwnProperty.call(input, 'user')
+    ? normalizeUser(input.user)
+    : current?.user || null;
+  const nextOrganization = Object.prototype.hasOwnProperty.call(input, 'organization')
+    ? normalizeOrganization(input.organization)
+    : current?.organization || null;
+  const workspaceId = resolveLinearWorkspaceId({
+    organization: nextOrganization,
+    user: nextUser,
+    workspaceId: input?.workspaceId || (nextOrganization || nextUser ? '' : current?.workspaceId),
+  });
+
+  const existingIndex = list.findIndex((entry) => entry.workspaceId === workspaceId);
+  const previous = existingIndex >= 0 ? list[existingIndex] : (
+    nextOrganization || nextUser ? null : current
+  );
+  const targetIndex = existingIndex >= 0
+    ? existingIndex
+    : (previous && !nextOrganization && !nextUser ? list.indexOf(previous) : -1);
+  const wasCurrent = previous?.current === true;
+
   const next = {
     accessToken,
     refreshToken: Object.prototype.hasOwnProperty.call(input, 'refreshToken')
@@ -149,23 +279,69 @@ export function setLinearAuth(input) {
     expiresAt: readFiniteNumber(input?.expiresAt) ?? previous?.expiresAt ?? null,
     scope: readTrimmedString(input?.scope) || previous?.scope || '',
     createdAt: previous?.createdAt || Date.now(),
-    user: Object.prototype.hasOwnProperty.call(input, 'user')
-      ? normalizeUser(input.user)
-      : previous?.user || null,
-    organization: Object.prototype.hasOwnProperty.call(input, 'organization')
-      ? normalizeOrganization(input.organization)
-      : previous?.organization || null,
+    authorizedAt: Object.prototype.hasOwnProperty.call(input, 'authorizedAt')
+      ? (readFiniteNumber(input.authorizedAt) || Date.now())
+      : (activate ? Date.now() : (previous?.authorizedAt || previous?.createdAt || Date.now())),
+    user: nextUser,
+    organization: nextOrganization,
+    current: false,
+    workspaceId,
   };
-  writeJsonFile(storageFile(), next);
-  return next;
+
+  if (targetIndex >= 0) {
+    list[targetIndex] = next;
+  } else {
+    list.push(next);
+  }
+
+  const writtenIndex = targetIndex >= 0 ? targetIndex : list.length - 1;
+  if (activate || !list.some((entry) => entry.current)) {
+    list.forEach((entry, index) => {
+      entry.current = index === writtenIndex;
+    });
+  } else {
+    list[writtenIndex].current = wasCurrent;
+  }
+
+  writeAuthList(list);
+  return list[writtenIndex];
 }
 
-export function clearLinearAuth() {
+export function activateLinearAuth(workspaceId) {
+  const id = readTrimmedString(workspaceId);
+  if (!id) {
+    return false;
+  }
+  const list = readAuthList();
+  const index = list.findIndex((entry) => entry.workspaceId === id);
+  if (index === -1) {
+    return false;
+  }
+  list.forEach((entry, idx) => {
+    entry.current = idx === index;
+  });
+  writeAuthList(list);
+  return true;
+}
+
+export function clearLinearAuth(workspaceId) {
   try {
-    const filePath = storageFile();
-    if (fs.existsSync(filePath)) {
-      fs.unlinkSync(filePath);
+    const list = readAuthList();
+    if (!list.length) {
+      return true;
     }
+    const id = readTrimmedString(workspaceId);
+    const remaining = id
+      ? list.filter((entry) => entry.workspaceId !== id)
+      : list.filter((entry) => !entry.current);
+    if (!remaining.length) {
+      writeAuthList([]);
+      return true;
+    }
+    if (!remaining.some((entry) => entry.current)) {
+      remaining[0].current = true;
+    }
+    writeAuthList(remaining);
     return true;
   } catch (error) {
     console.error('Failed to clear Linear auth file:', error);
@@ -181,7 +357,7 @@ export function isLinearAccessTokenStale(expiresAt, now = Date.now()) {
   return expiry - ACCESS_TOKEN_REFRESH_SKEW_MS <= now;
 }
 
-export function toLinearPublicStatus(auth) {
+export function toLinearPublicStatus(auth, workspaces = getLinearAuthWorkspaces()) {
   if (!auth?.accessToken) {
     return { connected: false };
   }
@@ -190,6 +366,7 @@ export function toLinearPublicStatus(auth) {
     user: auth.user || null,
     organization: auth.organization || null,
     scope: auth.scope || undefined,
+    workspaces,
   };
 }
 

@@ -18,6 +18,7 @@ import type {
   LinearSessionStatusPostResult,
   LinearTeamMapping,
   LinearUserSummary,
+  LinearWorkspaceSummary,
 } from '@openchamber/ui/lib/api/types';
 import { runtimeFetch } from '@openchamber/ui/lib/runtime-fetch';
 
@@ -26,6 +27,7 @@ type LinearJson = {
   user?: LinearUserSummary | null;
   organization?: LinearOrganizationSummary | null;
   scope?: string;
+  workspaces?: LinearWorkspaceSummary[];
   authorizationUrl?: string;
   expiresIn?: number;
   removed?: boolean;
@@ -77,15 +79,33 @@ function parseOrganization(payload: LinearOrganizationSummary | null | undefined
   };
 }
 
+function parseWorkspace(payload: LinearWorkspaceSummary | null | undefined): LinearWorkspaceSummary | null {
+  const id = payload?.id?.trim();
+  if (!id) return null;
+  const authorizedAt = payload?.authorizedAt;
+  return {
+    id,
+    name: payload?.name?.trim() || null,
+    urlKey: payload?.urlKey?.trim() || null,
+    current: payload?.current === true,
+    user: parseUser(payload?.user),
+    authorizedAt: typeof authorizedAt === 'number' && Number.isFinite(authorizedAt) ? authorizedAt : null,
+  };
+}
+
 function toAuthStatus(payload: LinearJson | null): LinearAuthStatus | null {
   if (payload?.connected !== true && payload?.connected !== false) {
     return null;
   }
+  const workspaces = Array.isArray(payload.workspaces)
+    ? payload.workspaces.map(parseWorkspace).filter((entry): entry is LinearWorkspaceSummary => entry != null)
+    : [];
   return {
     connected: payload.connected,
     user: parseUser(payload.user),
     organization: parseOrganization(payload.organization),
     scope: payload.scope?.trim() || undefined,
+    workspaces: payload.connected ? workspaces : undefined,
   };
 }
 
@@ -296,6 +316,23 @@ export const createWebLinearAPI = (): LinearAPI => ({
       throw new Error(readErrorMessage(payload, response.statusText || 'Failed to disconnect Linear'));
     }
     return { removed: payload?.removed === true };
+  },
+
+  async authActivate(organizationId: string): Promise<LinearAuthStatus> {
+    const response = await runtimeFetch('/api/linear/auth/activate', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Accept: 'application/json',
+      },
+      body: JSON.stringify({ organizationId }),
+    });
+    const payload = await readLinearJson(response);
+    const status = toAuthStatus(payload);
+    if (!response.ok || !status) {
+      throw new Error(readErrorMessage(payload, response.statusText || 'Failed to switch Linear workspace'));
+    }
+    return status;
   },
 
   async issuesList(options?: { query?: string; cursor?: string }): Promise<LinearIssuesListResult> {

@@ -11,7 +11,6 @@ import {
 } from './sessionNodeItemUtils';
 import type { SessionNodeRenderExtras } from './sessionNodeItemUtils';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
-import { LinearCreateSessionButton } from '@/components/session/LinearCreateSessionButton';
 
 export type ActivityItem = {
   node: SessionNode;
@@ -201,7 +200,7 @@ export function SidebarActivitySections(props: Props): React.ReactNode {
                 onClick={() => toggleSection(section.key)}
                 className={cn(
                   'group flex w-full items-center gap-1.5 py-1 pl-4 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50',
-                  section.key === 'chats' && props.onNewChat ? 'pr-16' : 'pr-3.5',
+                  section.key === 'chats' && props.onNewChat ? 'pr-7' : 'pr-3.5',
                 )}
                 aria-expanded={!isCollapsed}
               >
@@ -222,7 +221,6 @@ export function SidebarActivitySections(props: Props): React.ReactNode {
                       : 'opacity-0 pointer-events-none group-hover/chats:opacity-100 group-hover/chats:pointer-events-auto group-focus-within/chats:opacity-100 group-focus-within/chats:pointer-events-auto',
                   )}
                 >
-                  <LinearCreateSessionButton placement="sidebar" />
                   <Tooltip delayDuration={500}>
                     <TooltipTrigger asChild>
                       <button

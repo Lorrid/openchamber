@@ -118,6 +118,7 @@ export function registerLinearRoutes(app) {
     try {
       const {
         getLinearAuth,
+        getLinearAuthWorkspaces,
         getValidLinearAccessToken,
         fetchLinearIdentity,
         setLinearAuth,
@@ -141,15 +142,20 @@ export function registerLinearRoutes(app) {
           scope: auth?.scope,
           user: identity.user,
           organization: identity.organization,
-        });
-        return res.json(toLinearPublicStatus(next));
+          workspaceId: auth?.workspaceId,
+        }, { activate: false });
+        return res.json(toLinearPublicStatus(next, getLinearAuthWorkspaces()));
       } catch (error) {
         if (error?.status === 401) {
-          clearLinearAuth();
-          return res.json({ connected: false });
+          clearLinearAuth(auth?.workspaceId);
+          const remaining = getLinearAuth();
+          if (!remaining) {
+            return res.json({ connected: false });
+          }
+          return res.json(toLinearPublicStatus(remaining, getLinearAuthWorkspaces()));
         }
         if (auth) {
-          return res.json(toLinearPublicStatus(auth));
+          return res.json(toLinearPublicStatus(auth, getLinearAuthWorkspaces()));
         }
         throw error;
       }
@@ -298,6 +304,33 @@ export function registerLinearRoutes(app) {
     }
   });
 
+  app.post('/api/linear/auth/activate', parseJsonBody, async (req, res) => {
+    try {
+      const {
+        activateLinearAuth,
+        getLinearAuth,
+        getLinearAuthWorkspaces,
+        toLinearPublicStatus,
+      } = await getLinearLibraries();
+      const organizationId = readTrimmedString(req.body?.organizationId);
+      if (!organizationId) {
+        return res.status(400).json({ error: 'organizationId is required' });
+      }
+      const activated = activateLinearAuth(organizationId);
+      if (!activated) {
+        return res.status(404).json({ error: 'Linear workspace not found' });
+      }
+      const auth = getLinearAuth();
+      if (!auth) {
+        return res.json({ connected: false });
+      }
+      return res.json(toLinearPublicStatus(auth, getLinearAuthWorkspaces()));
+    } catch (error) {
+      console.error('Failed to switch Linear workspace:', error);
+      return res.status(500).json({ error: error.message || 'Failed to switch Linear workspace' });
+    }
+  });
+
   app.delete('/api/linear/auth', async (_req, res) => {
     try {
       const { getLinearAuth, clearLinearAuth, revokeToken } = await getLinearLibraries();
@@ -307,7 +340,7 @@ export function registerLinearRoutes(app) {
       } else if (auth?.accessToken) {
         await revokeToken(auth.accessToken, 'access_token');
       }
-      const removed = clearLinearAuth();
+      const removed = clearLinearAuth(auth?.workspaceId);
       return res.json({ success: true, removed });
     } catch (error) {
       console.error('Failed to disconnect Linear:', error);

@@ -18,9 +18,11 @@ const INHERIT = '__inherit__';
 export function LinearProjectMapping({
   linear,
   connected,
+  organizationId,
 }: {
   linear: LinearAPI;
   connected: boolean;
+  organizationId?: string | null;
 }) {
   const { t } = useI18n();
   const projects = useProjectsStore((state) => state.projects);
@@ -47,7 +49,7 @@ export function LinearProjectMapping({
       console.error('Failed to load Linear mapping:', error);
       setLoadFailed(true);
     }
-  }, [connected, linear]);
+  }, [connected, linear, organizationId]);
 
   React.useEffect(() => {
     void loadMapping();

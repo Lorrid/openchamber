@@ -90,8 +90,21 @@ describe('Linear auth routes', () => {
     expect(callback.text).toContain('openchamber://focus/linear-auth');
 
     const status = await request(app).get('/api/linear/auth/status').expect(200);
-    expect(status.body).toEqual({
-      connected: true,
+    expect(status.body.connected).toBe(true);
+    expect(status.body.user).toEqual({
+      id: 'user-1',
+      name: 'Ada',
+      displayName: 'Ada Lovelace',
+      email: 'ada@example.com',
+      avatarUrl: 'https://example.com/a.png',
+    });
+    expect(status.body.organization).toEqual({ id: 'org-1', name: 'OpenChamber', urlKey: 'openchamber' });
+    expect(status.body.scope).toBe('read,write,comments:create');
+    expect(status.body.workspaces).toEqual([{
+      id: 'org-1',
+      name: 'OpenChamber',
+      urlKey: 'openchamber',
+      current: true,
       user: {
         id: 'user-1',
         name: 'Ada',
@@ -99,11 +112,13 @@ describe('Linear auth routes', () => {
         email: 'ada@example.com',
         avatarUrl: 'https://example.com/a.png',
       },
-      organization: { id: 'org-1', name: 'OpenChamber', urlKey: 'openchamber' },
-      scope: 'read,write,comments:create',
-    });
+      authorizedAt: expect.any(Number),
+    }]);
     expect(JSON.stringify(status.body)).not.toContain('access-1');
     expect(JSON.stringify(status.body)).not.toContain('refresh-1');
+
+    const again = await request(app).get('/api/linear/auth/status').expect(200);
+    expect(again.body.workspaces[0].authorizedAt).toBe(status.body.workspaces[0].authorizedAt);
   });
 
   it('never exchanges a code whose state is unknown', async () => {
@@ -182,6 +197,83 @@ describe('Linear auth routes', () => {
 
     const status = await request(app).get('/api/linear/auth/status').expect(200);
     expect(status.body).toEqual({ connected: false });
+  });
+
+  it('stores a second workspace, switches current, and disconnects only that one', async () => {
+    const app = createApp();
+
+    const startA = await request(app).post('/api/linear/auth/start').send({}).expect(200);
+    const stateA = new URL(startA.body.authorizationUrl).searchParams.get('state');
+    vi.stubGlobal('fetch', vi.fn(async (url) => {
+      const target = String(url);
+      if (target.includes('/oauth/token')) {
+        return jsonResponse({
+          access_token: 'access-a',
+          refresh_token: 'refresh-a',
+          expires_in: 86399,
+          scope: 'read,write,comments:create',
+        });
+      }
+      if (target.includes('/graphql')) {
+        return jsonResponse({
+          data: {
+            viewer: { id: 'user-a', name: 'Ada' },
+            organization: { id: 'org-a', name: 'Alpha', urlKey: 'alpha' },
+          },
+        });
+      }
+      throw new Error(`unexpected fetch: ${target}`);
+    }));
+    await request(app).get('/linear/oauth/callback').query({ state: stateA, code: 'code-a' }).expect(200);
+
+    const startB = await request(app).post('/api/linear/auth/start').send({}).expect(200);
+    const stateB = new URL(startB.body.authorizationUrl).searchParams.get('state');
+    vi.stubGlobal('fetch', vi.fn(async (url) => {
+      const target = String(url);
+      if (target.includes('/oauth/token')) {
+        return jsonResponse({
+          access_token: 'access-b',
+          refresh_token: 'refresh-b',
+          expires_in: 86399,
+          scope: 'read,write,comments:create',
+        });
+      }
+      if (target.includes('/graphql')) {
+        return jsonResponse({
+          data: {
+            viewer: { id: 'user-b', name: 'Ben' },
+            organization: { id: 'org-b', name: 'Beta', urlKey: 'beta' },
+          },
+        });
+      }
+      if (target.includes('/oauth/revoke')) {
+        return new Response('', { status: 200 });
+      }
+      throw new Error(`unexpected fetch: ${target}`);
+    }));
+    await request(app).get('/linear/oauth/callback').query({ state: stateB, code: 'code-b' }).expect(200);
+
+    const both = await request(app).get('/api/linear/auth/status').expect(200);
+    expect(both.body.organization.id).toBe('org-b');
+    expect(both.body.workspaces).toHaveLength(2);
+
+    await request(app).post('/api/linear/auth/activate').send({}).expect(400);
+    await request(app).post('/api/linear/auth/activate').send({ organizationId: 'missing' }).expect(404);
+
+    const activated = await request(app)
+      .post('/api/linear/auth/activate')
+      .send({ organizationId: 'org-a' })
+      .expect(200);
+    expect(activated.body.organization.id).toBe('org-a');
+    expect(activated.body.workspaces.find((entry) => entry.id === 'org-a').current).toBe(true);
+    expect(activated.body.workspaces.find((entry) => entry.id === 'org-b').current).toBe(false);
+
+    await request(app).delete('/api/linear/auth').expect(200);
+    const remaining = await request(app).get('/api/linear/auth/status').expect(200);
+    expect(remaining.body.connected).toBe(true);
+    expect(remaining.body.organization.id).toBe('org-b');
+    expect(remaining.body.workspaces).toHaveLength(1);
+    expect(remaining.body.workspaces[0].id).toBe('org-b');
   });
 
   it('lists and gets issues through authenticated routes without leaking tokens', async () => {

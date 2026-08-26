@@ -4,7 +4,9 @@ import os from 'os';
 import path from 'path';
 import {
   getLinearAuth,
+  getLinearAuthWorkspaces,
   setLinearAuth,
+  activateLinearAuth,
   clearLinearAuth,
   toLinearPublicStatus,
   getLinearClientId,
@@ -62,7 +64,9 @@ describe('Linear auth storage', () => {
     const stored = getLinearAuth();
     expect(stored.accessToken).toBe('lin_oauth_access');
     expect(stored.refreshToken).toBe('lin_oauth_refresh');
-    expect(toLinearPublicStatus(stored)).toEqual({
+    expect(stored.workspaceId).toBe('org-1');
+    const publicStatus = toLinearPublicStatus(stored);
+    expect(publicStatus).toEqual({
       connected: true,
       user: {
         id: 'user-1',
@@ -73,8 +77,26 @@ describe('Linear auth storage', () => {
       },
       organization: { id: 'org-1', name: 'OpenChamber', urlKey: 'openchamber' },
       scope: 'read,write',
+      workspaces: [{
+        id: 'org-1',
+        name: 'OpenChamber',
+        urlKey: 'openchamber',
+        current: true,
+        user: {
+          id: 'user-1',
+          name: 'Ada',
+          displayName: 'Ada Lovelace',
+          email: 'ada@example.com',
+          avatarUrl: 'https://example.com/a.png',
+        },
+        authorizedAt: stored.authorizedAt,
+      }],
     });
-    expect(JSON.stringify(toLinearPublicStatus(stored))).not.toContain('lin_oauth');
+    expect(JSON.stringify(publicStatus)).not.toContain('lin_oauth');
+    const file = JSON.parse(fs.readFileSync(getLinearAuthFilePath(), 'utf8'));
+    expect(file.accessToken).toBeUndefined();
+    expect(file.workspaces).toHaveLength(1);
+    expect(file.workspaces[0].accessToken).toBe('lin_oauth_access');
   });
 
   it('keeps the previous refresh token when a later write omits it', () => {
@@ -132,6 +154,82 @@ describe('Linear auth storage', () => {
     expect(clearLinearAuth()).toBe(true);
     expect(fs.existsSync(getLinearAuthFilePath())).toBe(false);
     expect(getLinearAuth()).toBeNull();
+  });
+
+  it('migrates a legacy single-workspace file', () => {
+    fs.writeFileSync(getLinearAuthFilePath(), JSON.stringify({
+      accessToken: 'legacy-access',
+      refreshToken: 'legacy-refresh',
+      user: { id: 'user-1', name: 'Ada' },
+      organization: { id: 'org-1', name: 'OpenChamber', urlKey: 'openchamber' },
+    }), 'utf8');
+
+    const stored = getLinearAuth();
+    expect(stored.accessToken).toBe('legacy-access');
+    expect(stored.workspaceId).toBe('org-1');
+    expect(stored.current).toBe(true);
+    const file = JSON.parse(fs.readFileSync(getLinearAuthFilePath(), 'utf8'));
+    expect(file.workspaces).toHaveLength(1);
+    expect(file.accessToken).toBeUndefined();
+  });
+
+  it('stores a second workspace and activates it without dropping the first', () => {
+    setLinearAuth({
+      accessToken: 'access-a',
+      refreshToken: 'refresh-a',
+      user: { id: 'user-a', name: 'Ada' },
+      organization: { id: 'org-a', name: 'Alpha', urlKey: 'alpha' },
+    });
+    setLinearAuth({
+      accessToken: 'access-b',
+      refreshToken: 'refresh-b',
+      user: { id: 'user-b', name: 'Ben' },
+      organization: { id: 'org-b', name: 'Beta', urlKey: 'beta' },
+    });
+
+    expect(getLinearAuth().workspaceId).toBe('org-b');
+    expect(getLinearAuthWorkspaces().map((entry) => entry.id).sort()).toEqual(['org-a', 'org-b']);
+    expect(activateLinearAuth('org-a')).toBe(true);
+    expect(getLinearAuth().workspaceId).toBe('org-a');
+    expect(getLinearAuth().accessToken).toBe('access-a');
+    expect(getLinearAuthWorkspaces().find((entry) => entry.id === 'org-b').current).toBe(false);
+  });
+
+  it('drops only the current workspace on unscoped clear', () => {
+    setLinearAuth({
+      accessToken: 'access-a',
+      organization: { id: 'org-a', name: 'Alpha', urlKey: 'alpha' },
+      user: { id: 'user-a', name: 'Ada' },
+    });
+    setLinearAuth({
+      accessToken: 'access-b',
+      organization: { id: 'org-b', name: 'Beta', urlKey: 'beta' },
+      user: { id: 'user-b', name: 'Ben' },
+    });
+    expect(clearLinearAuth()).toBe(true);
+    expect(getLinearAuth().workspaceId).toBe('org-a');
+    expect(getLinearAuth().accessToken).toBe('access-a');
+    expect(getLinearAuthWorkspaces()).toHaveLength(1);
+  });
+
+  it('does not bump authorizedAt when a later write opts out of activate', () => {
+    setLinearAuth({
+      accessToken: 'access-1',
+      user: { id: 'user-1', name: 'Ada' },
+      organization: { id: 'org-1', name: 'OpenChamber', urlKey: 'openchamber' },
+    });
+    const file = JSON.parse(fs.readFileSync(getLinearAuthFilePath(), 'utf8'));
+    file.workspaces[0].authorizedAt = 111;
+    fs.writeFileSync(getLinearAuthFilePath(), JSON.stringify(file, null, 2), 'utf8');
+
+    setLinearAuth({
+      accessToken: 'access-1',
+      user: { id: 'user-1', name: 'Ada' },
+      organization: { id: 'org-1', name: 'OpenChamber', urlKey: 'openchamber' },
+      workspaceId: 'org-1',
+    }, { activate: false });
+    expect(getLinearAuth().authorizedAt).toBe(111);
+    expect(getLinearAuth().current).toBe(true);
   });
 });
 
