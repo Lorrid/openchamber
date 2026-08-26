@@ -29,6 +29,7 @@ describe('Linear auth routes', () => {
     dataDir = makeTempDir();
     process.env.OPENCHAMBER_DATA_DIR = dataDir;
     process.env.OPENCHAMBER_PORT = '3001';
+    process.env.OPENCHAMBER_LINEAR_REDIRECT_URI = 'http://127.0.0.1:3001/linear/oauth/callback';
     delete process.env.OPENCHAMBER_LINEAR_CLIENT_ID;
   });
 
@@ -40,6 +41,7 @@ describe('Linear auth routes', () => {
       process.env.OPENCHAMBER_DATA_DIR = previousDataDir;
     }
     delete process.env.OPENCHAMBER_PORT;
+    delete process.env.OPENCHAMBER_LINEAR_REDIRECT_URI;
     fs.rmSync(dataDir, { recursive: true, force: true });
   });
 

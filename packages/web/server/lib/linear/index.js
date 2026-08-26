@@ -9,16 +9,20 @@ export {
   getLinearClientId,
   getLinearClientSecret,
   getLinearScopes,
+  getLinearBrokerUrl,
   getLinearRedirectUri,
   isLinearAccessTokenStale,
   getLinearAuthFilePath,
   DEFAULT_LINEAR_CLIENT_ID_VALUE,
   DEFAULT_LINEAR_SCOPES_VALUE,
+  DEFAULT_LINEAR_BROKER_URL_VALUE,
 } from './auth.js';
 
 export {
   startAuthorization,
   consumeAuthorizationCallback,
+  pollAuthorizationBroker,
+  completeAuthorizationBroker,
   refreshAccessToken,
   revokeToken,
   LinearOAuthError,

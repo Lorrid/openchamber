@@ -5,6 +5,7 @@ import { isPlainObject, readEnv, readFiniteNumber, readTrimmedString } from './p
 
 const DEFAULT_LINEAR_CLIENT_ID = '91bbe26a69a2c8568d3683f1e01e776c';
 const DEFAULT_LINEAR_SCOPES = 'read,write,comments:create';
+const DEFAULT_LINEAR_BROKER_URL = 'https://api.openchamber.dev/v1/oauth/linear';
 const ACCESS_TOKEN_REFRESH_SKEW_MS = 2 * 60_000;
 const LEGACY_WORKSPACE_ID = 'legacy';
 
@@ -392,6 +393,14 @@ export function getLinearScopes() {
   return DEFAULT_LINEAR_SCOPES;
 }
 
+export function getLinearBrokerUrl() {
+  const fromEnv = readEnv('OPENCHAMBER_LINEAR_BROKER_URL');
+  if (fromEnv) return fromEnv.replace(/\/+$/, '');
+  const stored = readSettingString('linearBrokerUrl');
+  if (stored) return stored.replace(/\/+$/, '');
+  return DEFAULT_LINEAR_BROKER_URL;
+}
+
 function readPositivePort(value) {
   const trimmed = readTrimmedString(value);
   if (!/^\d+$/.test(trimmed)) return null;
@@ -413,8 +422,7 @@ export function getLinearRedirectUri() {
   if (fromEnv) return fromEnv;
   const stored = readSettingString('linearRedirectUri');
   if (stored) return stored;
-  const port = readPositivePort(process.env.OPENCHAMBER_PORT) ?? readArgPort() ?? 3000;
-  return `http://127.0.0.1:${port}/linear/oauth/callback`;
+  return `${getLinearBrokerUrl()}/callback`;
 }
 
 export function getLinearAuthFilePath() {
@@ -422,3 +430,4 @@ export function getLinearAuthFilePath() {
 }
 export const DEFAULT_LINEAR_CLIENT_ID_VALUE = DEFAULT_LINEAR_CLIENT_ID;
 export const DEFAULT_LINEAR_SCOPES_VALUE = DEFAULT_LINEAR_SCOPES;
+export const DEFAULT_LINEAR_BROKER_URL_VALUE = DEFAULT_LINEAR_BROKER_URL;

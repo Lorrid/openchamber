@@ -5,6 +5,8 @@ import path from 'path';
 import {
   startAuthorization,
   consumeAuthorizationCallback,
+  pollAuthorizationBroker,
+  completeAuthorizationBroker,
   refreshAccessToken,
   clearPendingAuthorizationsForTests,
 } from './oauth.js';
@@ -25,7 +27,7 @@ describe('Linear OAuth PKCE', () => {
     process.env.OPENCHAMBER_DATA_DIR = dataDir;
     process.env.OPENCHAMBER_PORT = '3001';
     delete process.env.OPENCHAMBER_LINEAR_CLIENT_ID;
-    delete process.env.OPENCHAMBER_LINEAR_REDIRECT_URI;
+    process.env.OPENCHAMBER_LINEAR_REDIRECT_URI = 'http://127.0.0.1:3001/linear/oauth/callback';
     clearPendingAuthorizationsForTests();
   });
 
@@ -38,8 +40,8 @@ describe('Linear OAuth PKCE', () => {
     fs.rmSync(dataDir, { recursive: true, force: true });
   });
 
-  it('creates an S256 authorize URL and stores a pending verifier', () => {
-    const started = startAuthorization({ origin: 'desktop' });
+  it('creates an S256 authorize URL and stores a pending verifier', async () => {
+    const started = await startAuthorization({ origin: 'desktop' });
     const url = new URL(started.authorizationUrl);
     expect(url.origin + url.pathname).toBe('https://linear.app/oauth/authorize');
     expect(url.searchParams.get('client_id')).toBe('91bbe26a69a2c8568d3683f1e01e776c');
@@ -63,7 +65,7 @@ describe('Linear OAuth PKCE', () => {
   });
 
   it('exchanges a matching code with the original PKCE verifier', async () => {
-    const started = startAuthorization({ origin: 'web' });
+    const started = await startAuthorization({ origin: 'web' });
     const state = new URL(started.authorizationUrl).searchParams.get('state');
     const tokenFetch = vi.fn(async () => new Response(JSON.stringify({
       access_token: 'access-1',
@@ -108,6 +110,50 @@ describe('Linear OAuth PKCE', () => {
     const body = new URLSearchParams(tokenFetch.mock.calls[0][1].body);
     expect(body.get('grant_type')).toBe('refresh_token');
     expect(body.get('refresh_token')).toBe('refresh-1');
+  });
+
+  it('claims a broker callback and exchanges it locally with PKCE', async () => {
+    delete process.env.OPENCHAMBER_LINEAR_REDIRECT_URI;
+    const brokerAndTokenFetch = vi.fn(async (url, init) => {
+      const target = String(url);
+      if (target.endsWith('/start')) {
+        const body = JSON.parse(init.body);
+        expect(body.state).toMatch(/^[A-Za-z0-9_-]{43}$/);
+        expect(body.claimSecret).toMatch(/^[A-Za-z0-9_-]{43}$/);
+        return new Response(JSON.stringify({
+          redirectUri: 'https://api.openchamber.dev/v1/oauth/linear/callback',
+          expiresIn: 600,
+        }), { status: 200 });
+      }
+      if (target.endsWith('/poll')) {
+        return new Response(JSON.stringify({ status: 'complete', code: 'broker-code' }), { status: 200 });
+      }
+      if (target.endsWith('/complete')) {
+        return new Response(JSON.stringify({ ok: true }), { status: 200 });
+      }
+      if (target === 'https://api.linear.app/oauth/token') {
+        const body = new URLSearchParams(init.body);
+        expect(body.get('code')).toBe('broker-code');
+        expect(body.get('redirect_uri')).toBe('https://api.openchamber.dev/v1/oauth/linear/callback');
+        expect(body.get('code_verifier')).toMatch(/^[A-Za-z0-9_-]{43}$/);
+        return new Response(JSON.stringify({
+          access_token: 'broker-access',
+          refresh_token: 'broker-refresh',
+          expires_in: 86399,
+        }), { status: 200 });
+      }
+      throw new Error(`unexpected fetch: ${target}`);
+    });
+    vi.stubGlobal('fetch', brokerAndTokenFetch);
+
+    const started = await startAuthorization({ origin: 'desktop' });
+    const authorizationUrl = new URL(started.authorizationUrl);
+    expect(authorizationUrl.searchParams.get('redirect_uri')).toBe('https://api.openchamber.dev/v1/oauth/linear/callback');
+
+    const result = await pollAuthorizationBroker();
+    expect(result).toMatchObject({ accessToken: 'broker-access', origin: 'desktop' });
+    await expect(completeAuthorizationBroker(result.brokerReceipt)).resolves.toBe(true);
+    expect(brokerAndTokenFetch).toHaveBeenCalledTimes(4);
   });
 });
 

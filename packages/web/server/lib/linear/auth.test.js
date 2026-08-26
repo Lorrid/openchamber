@@ -141,9 +141,9 @@ describe('Linear auth storage', () => {
     expect(getLinearClientId()).toBe('env-client');
   });
 
-  it('builds the default redirect URI from the listen port', () => {
+  it('uses the stable public broker callback by default', () => {
     process.env.OPENCHAMBER_PORT = '3001';
-    expect(getLinearRedirectUri()).toBe('http://127.0.0.1:3001/linear/oauth/callback');
+    expect(getLinearRedirectUri()).toBe('https://api.openchamber.dev/v1/oauth/linear/callback');
     process.env.OPENCHAMBER_LINEAR_REDIRECT_URI = 'http://localhost:3000/linear/oauth/callback';
     expect(getLinearRedirectUri()).toBe('http://localhost:3000/linear/oauth/callback');
   });

@@ -11,7 +11,7 @@ VS Code omits Linear (`RuntimeAPIs.linear` is optional). Hide Linear UI when the
 - `packages/web/server/lib/linear/index.js`: public server entrypoint. `routes.js` loads it lazily with `await import('./index.js')`.
 - `packages/web/server/lib/linear/routes.js`: Express registration for the public callback, `/api/linear/auth/*`, `/api/linear/issues/*`, `/api/linear/mapping`, and `/api/linear/session-status`.
 - `packages/web/server/lib/linear/auth.js`: auth file, client id, scopes, redirect URI.
-- `packages/web/server/lib/linear/oauth.js`: authorization-code + PKCE S256, refresh, revoke.
+- `packages/web/server/lib/linear/oauth.js`: authorization-code + PKCE S256, public callback broker handoff, refresh, revoke.
 - `packages/web/server/lib/linear/client.js`: GraphQL helper, viewer/organization lookup, and access-token refresh. GraphQL errors prefer `extensions.userPresentableMessage` / validation constraints over the generic `Argument Validation Error` label. User-facing Linear errors set `LinearApiError.userError`. Requests send `public-file-urls-expire-in: 3600` so file URLs in issue descriptions and comments are temporarily readable in the panel.
 - `packages/web/server/lib/linear/issues.js`: list/search/get issues, team workflow states, `issueUpdate`, and `commentCreate`. Parses identifiers and Linear URLs. `issueUpdate` resolves identifiers to UUIDs first because Linear's mutation does not accept `ENG-12`. List/get include `state.id`, `priority` (0–4), and labels (`id`, `name`, sanitized hex `color`) so the panel can show them and update status.
 - `packages/web/server/lib/linear/teams.js`: list Linear teams for mapping UI.
@@ -22,7 +22,7 @@ VS Code omits Linear (`RuntimeAPIs.linear` is optional). Hide Linear UI when the
 
 ## Public routes
 
-- `GET /linear/oauth/callback`: public. Linear redirects the system browser here. Safe without a UI session because it only completes a `code` whose `state` matches a pending PKCE verifier created by an authenticated start call.
+- `GET /linear/oauth/callback`: public fallback for an explicitly configured direct redirect URI. The built-in flow uses the stable callback broker instead, because desktop and self-hosted instances may have private or dynamic addresses.
 - `GET /api/linear/auth/status`: connected flag, current user/organization/scope, and `workspaces` (id, name, current, user, authorizedAt). Never returns tokens. A 401 on the current workspace drops that workspace only; if another remains, status returns that one instead of disconnected. Identity refresh does not bump `authorizedAt`.
 - `POST /api/linear/auth/start`: returns `{ authorizationUrl, expiresIn, scope }`. Body may include `origin: "desktop"` so the callback page can raise the desktop window. The authorize URL uses `prompt=consent` so Add workspace can pick a different Linear org. Completing OAuth stores or replaces that org and makes it current.
 - `POST /api/linear/auth/activate`: body `{ organizationId }`. Makes that stored workspace current. 400 if the id is missing, 404 if it is not stored.
@@ -48,13 +48,15 @@ Disconnected list/get/states/update/mapping/session-status return `{ connected: 
 - Client ID: `OPENCHAMBER_LINEAR_CLIENT_ID` -> `settings.json` `linearClientId` -> baked-in public default.
 - Client secret: `OPENCHAMBER_LINEAR_CLIENT_SECRET` -> `settings.json` `linearClientSecret`. Optional with PKCE. Do not commit a secret.
 - Scopes: `OPENCHAMBER_LINEAR_SCOPES` -> `settings.json` `linearScopes` -> `read,write,comments:create`.
-- Redirect URI: `OPENCHAMBER_LINEAR_REDIRECT_URI` -> `settings.json` `linearRedirectUri` -> `http://127.0.0.1:<listen-port>/linear/oauth/callback`.
+- Broker URL: `OPENCHAMBER_LINEAR_BROKER_URL` -> `settings.json` `linearBrokerUrl` -> `https://api.openchamber.dev/v1/oauth/linear`.
+- Redirect URI: `OPENCHAMBER_LINEAR_REDIRECT_URI` -> `settings.json` `linearRedirectUri` -> `<broker-url>/callback`. Setting an explicit redirect URI bypasses the broker for custom/self-hosted OAuth applications.
 
-Linear requires an exact callback match. Production listens on 3000; `bun oc-dev` listens on 3001 unless `OPENCHAMBER_PORT` is set. Register every listen origin you actually use.
+Linear requires an exact callback match. The built-in application registers `https://api.openchamber.dev/v1/oauth/linear/callback`; the broker holds only the short-lived authorization code. The local OpenChamber server keeps the claim secret and PKCE verifier, exchanges the code for tokens locally, then acknowledges the handoff. Custom brokers must expose `/start`, `/callback`, `/poll`, and `/complete` with the same contract.
 
 ## OAuth contract
 
 - Authorization code + PKCE S256. Linear has no device flow.
+- The broker stores hashes of OAuth state and a separate claim secret for ten minutes. It never receives the PKCE verifier or Linear tokens. The local status polling path claims a completed broker result and persists tokens on the OpenChamber server.
 - Access tokens expire in 24 hours. Refresh tokens rotate; persist the new refresh token from every successful refresh. Concurrent refreshes share one in-flight promise per workspace.
 - `invalid_grant` / 401 on refresh clears that workspace only so a dead token cannot loop. If it was the last workspace, status becomes disconnected.
 - A GraphQL 401 after a valid-looking token also clears that workspace. A network failure while a token is stored does not: status stays connected with the last known user.
@@ -81,6 +83,11 @@ A worktree started from the panel or picker is created in that mapped project. N
 - Magic prompts: `linear.issue.review.visible` / `.instructions`. Do not reuse the GitHub issue-review templates for Linear.
 
 ## Notes for contributors
+
+The implementation and deployment hand-off for the stable callback broker is
+in [`OAUTH-BROKER-HANDOFF.md`](./OAUTH-BROKER-HANDOFF.md). It records the exact
+Linear redirect URI that must be registered and why the original loopback
+callback could not support packaged desktop or arbitrary self-hosted servers.
 
 - Do not log tokens, codes, verifiers, or the client secret.
 - Do not add Linear under Git or as a third-party plugin row.

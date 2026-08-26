@@ -53,6 +53,28 @@ ${desktopReturn ? `<a class="return" href="openchamber://focus/linear-auth">Retu
 </html>`;
 }
 
+async function storeAuthorizationResult(libraries, result) {
+  const { setLinearAuth, fetchLinearIdentity } = libraries;
+  let user = null;
+  let organization = null;
+  try {
+    const identity = await fetchLinearIdentity(result.accessToken);
+    user = identity.user;
+    organization = identity.organization;
+  } catch (error) {
+    console.error('Failed to load Linear identity after OAuth:', error);
+  }
+  return setLinearAuth({
+    accessToken: result.accessToken,
+    refreshToken: result.refreshToken,
+    tokenType: result.tokenType,
+    expiresAt: result.expiresAt,
+    scope: result.scope,
+    user,
+    organization,
+  });
+}
+
 export function registerLinearRoutes(app) {
   let linearLibraries = null;
   const getLinearLibraries = async () => {
@@ -68,11 +90,8 @@ export function registerLinearRoutes(app) {
     };
 
     try {
-      const {
-        consumeAuthorizationCallback,
-        setLinearAuth,
-        fetchLinearIdentity,
-      } = await getLinearLibraries();
+      const libraries = await getLinearLibraries();
+      const { consumeAuthorizationCallback } = libraries;
       const result = await consumeAuthorizationCallback({
         code: queryValue(req, 'code'),
         state: queryValue(req, 'state'),
@@ -80,25 +99,7 @@ export function registerLinearRoutes(app) {
         errorDescription: queryValue(req, 'error_description'),
       });
 
-      let user = null;
-      let organization = null;
-      try {
-        const identity = await fetchLinearIdentity(result.accessToken);
-        user = identity.user;
-        organization = identity.organization;
-      } catch (error) {
-        console.error('Failed to load Linear identity after OAuth:', error);
-      }
-
-      setLinearAuth({
-        accessToken: result.accessToken,
-        refreshToken: result.refreshToken,
-        tokenType: result.tokenType,
-        expiresAt: result.expiresAt,
-        scope: result.scope,
-        user,
-        organization,
-      });
+      await storeAuthorizationResult(libraries, result);
 
       return finish(200, {
         title: 'Authorization Complete',
@@ -120,6 +121,7 @@ export function registerLinearRoutes(app) {
 
   app.get('/api/linear/auth/status', async (_req, res) => {
     try {
+      const libraries = await getLinearLibraries();
       const {
         getLinearAuth,
         getLinearAuthWorkspaces,
@@ -128,7 +130,21 @@ export function registerLinearRoutes(app) {
         setLinearAuth,
         clearLinearAuth,
         toLinearPublicStatus,
-      } = await getLinearLibraries();
+        pollAuthorizationBroker,
+        completeAuthorizationBroker,
+      } = libraries;
+
+      try {
+        const result = await pollAuthorizationBroker();
+        if (result) {
+          await storeAuthorizationResult(libraries, result);
+          await completeAuthorizationBroker(result.brokerReceipt).catch((error) => {
+            console.warn('Failed to acknowledge Linear authorization broker result:', error);
+          });
+        }
+      } catch (error) {
+        console.error('Failed to complete Linear authorization through broker:', error);
+      }
 
       const accessToken = await getValidLinearAccessToken();
       if (!accessToken) {
@@ -173,7 +189,7 @@ export function registerLinearRoutes(app) {
     try {
       const { startAuthorization } = await getLinearLibraries();
       const origin = req.body?.origin === 'desktop' ? 'desktop' : 'web';
-      const payload = startAuthorization({ origin });
+      const payload = await startAuthorization({ origin });
       return res.json(payload);
     } catch (error) {
       const status = error?.code === 'LINEAR_CLIENT_ID_MISSING' ? 400 : 500;

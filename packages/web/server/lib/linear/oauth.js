@@ -2,6 +2,7 @@ import crypto from 'crypto';
 import {
   getLinearClientId,
   getLinearClientSecret,
+  getLinearBrokerUrl,
   getLinearRedirectUri,
   getLinearScopes,
 } from './auth.js';
@@ -13,6 +14,7 @@ export const LINEAR_REVOKE_URL = 'https://api.linear.app/oauth/revoke';
 export const PENDING_AUTHORIZATION_TTL_MS = 10 * 60_000;
 
 const pendingByState = new Map();
+const brokerPollsByState = new Map();
 
 export class LinearOAuthError extends Error {
   constructor(message, code = 'LINEAR_OAUTH_FAILED') {
@@ -101,7 +103,41 @@ async function postForm(url, body) {
   return parseTokenPayload(payload);
 }
 
-export function startAuthorization({ origin } = {}) {
+async function readJsonResponse(response, fallbackMessage) {
+  const payload = await response.json().catch(() => null);
+  if (!response.ok) {
+    const message = isPlainObject(payload) && readTrimmedString(payload.error)
+      ? readTrimmedString(payload.error)
+      : `${fallbackMessage} (${response.status})`;
+    const error = new LinearOAuthError(message, 'LINEAR_BROKER_FAILED');
+    error.status = response.status;
+    throw error;
+  }
+  if (!isPlainObject(payload)) {
+    throw new LinearOAuthError(`${fallbackMessage}: invalid response`, 'LINEAR_BROKER_FAILED');
+  }
+  return payload;
+}
+
+function brokerCallbackUrl(brokerUrl) {
+  return `${brokerUrl.replace(/\/+$/, '')}/callback`;
+}
+
+async function registerBrokerTransaction({ brokerUrl, state, claimSecret }) {
+  const response = await fetch(`${brokerUrl}/start`, {
+    method: 'POST',
+    headers: { Accept: 'application/json', 'Content-Type': 'application/json' },
+    body: JSON.stringify({ state, claimSecret }),
+  });
+  const payload = await readJsonResponse(response, 'Could not start Linear authorization broker');
+  const redirectUri = readTrimmedString(payload.redirectUri);
+  if (!redirectUri || redirectUri !== brokerCallbackUrl(brokerUrl)) {
+    throw new LinearOAuthError('Linear authorization broker returned an unexpected callback URL', 'LINEAR_BROKER_FAILED');
+  }
+  return redirectUri;
+}
+
+export async function startAuthorization({ origin } = {}) {
   const clientId = getLinearClientId();
   if (!clientId) {
     throw new LinearOAuthError(
@@ -113,12 +149,19 @@ export function startAuthorization({ origin } = {}) {
   pruneExpiredPending();
   const { verifier, challenge } = createPkcePair();
   const state = crypto.randomBytes(32).toString('base64url');
-  const redirectUri = getLinearRedirectUri();
+  const brokerUrl = getLinearBrokerUrl();
+  const configuredRedirectUri = getLinearRedirectUri();
+  const usesBroker = configuredRedirectUri === brokerCallbackUrl(brokerUrl);
+  const claimSecret = usesBroker ? crypto.randomBytes(32).toString('base64url') : null;
+  const redirectUri = usesBroker
+    ? await registerBrokerTransaction({ brokerUrl, state, claimSecret })
+    : configuredRedirectUri;
   const scope = getLinearScopes();
   pendingByState.set(state, {
     codeVerifier: verifier,
     redirectUri,
     origin: origin === 'desktop' ? 'desktop' : 'web',
+    broker: usesBroker ? { url: brokerUrl, claimSecret } : null,
     expiresAt: Date.now() + PENDING_AUTHORIZATION_TTL_MS,
   });
 
@@ -140,6 +183,62 @@ export function startAuthorization({ origin } = {}) {
   };
 }
 
+async function pollBrokerState(state, pending) {
+  const response = await fetch(`${pending.broker.url}/poll`, {
+    method: 'POST',
+    headers: { Accept: 'application/json', 'Content-Type': 'application/json' },
+    body: JSON.stringify({ state, claimSecret: pending.broker.claimSecret }),
+  });
+  if (response.status === 202) {
+    return null;
+  }
+  const payload = await readJsonResponse(response, 'Could not read Linear authorization result');
+  const status = readTrimmedString(payload.status);
+  if (status === 'complete') {
+    const result = await consumeAuthorizationCallback({ code: payload.code, state });
+    return {
+      ...result,
+      brokerReceipt: { state, ...pending.broker },
+    };
+  }
+  if (status === 'failed') {
+    return consumeAuthorizationCallback({
+      state,
+      error: payload.error,
+      errorDescription: payload.errorDescription,
+    });
+  }
+  throw new LinearOAuthError('Linear authorization broker returned an unexpected result', 'LINEAR_BROKER_FAILED');
+}
+
+export async function completeAuthorizationBroker(receipt) {
+  if (!receipt?.url || !receipt?.state || !receipt?.claimSecret) return false;
+  const response = await fetch(`${receipt.url}/complete`, {
+    method: 'POST',
+    headers: { Accept: 'application/json', 'Content-Type': 'application/json' },
+    body: JSON.stringify({ state: receipt.state, claimSecret: receipt.claimSecret }),
+  });
+  if (!response.ok) {
+    throw new LinearOAuthError(`Could not acknowledge Linear authorization result (${response.status})`, 'LINEAR_BROKER_FAILED');
+  }
+  return true;
+}
+
+export async function pollAuthorizationBroker() {
+  pruneExpiredPending();
+  for (const [state, pending] of pendingByState.entries()) {
+    if (!pending?.broker) continue;
+    let poll = brokerPollsByState.get(state);
+    if (!poll) {
+      poll = pollBrokerState(state, pending).finally(() => brokerPollsByState.delete(state));
+      brokerPollsByState.set(state, poll);
+    }
+    const result = await poll;
+    if (result) return result;
+  }
+  return null;
+}
+
 function failAuthorization(message, code, origin) {
   const error = new LinearOAuthError(message, code);
   if (origin) {
@@ -151,11 +250,9 @@ function failAuthorization(message, code, origin) {
 export async function consumeAuthorizationCallback({ code, state, error, errorDescription }) {
   pruneExpiredPending();
   const pending = readTrimmedString(state) ? pendingByState.get(state) : null;
-  if (readTrimmedString(state)) {
-    pendingByState.delete(state);
-  }
 
   if (readTrimmedString(error)) {
+    if (readTrimmedString(state)) pendingByState.delete(state);
     throw failAuthorization(
       readTrimmedString(errorDescription) || readTrimmedString(error),
       readTrimmedString(error).toUpperCase(),
@@ -163,6 +260,7 @@ export async function consumeAuthorizationCallback({ code, state, error, errorDe
     );
   }
   if (!readTrimmedString(code)) {
+    if (readTrimmedString(state)) pendingByState.delete(state);
     throw failAuthorization(
       'Linear did not return an authorization code.',
       'MISSING_CODE',
@@ -190,6 +288,7 @@ export async function consumeAuthorizationCallback({ code, state, error, errorDe
 
   try {
     const tokens = await postForm(LINEAR_TOKEN_URL, body);
+    pendingByState.delete(state);
     return {
       ...tokens,
       origin: pending.origin,
@@ -242,4 +341,5 @@ export async function revokeToken(token, tokenTypeHint) {
 
 export function clearPendingAuthorizationsForTests() {
   pendingByState.clear();
+  brokerPollsByState.clear();
 }

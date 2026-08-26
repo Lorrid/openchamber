@@ -188,6 +188,7 @@ function parseLabelColor(value: string | null | undefined): string | null {
 }
 
 function parseLabel(payload: LinearIssueLabel | null | undefined): LinearIssueLabel | null {
+  if (!payload) return null;
   const id = payload?.id?.trim();
   const name = payload?.name?.trim();
   if (!id || !name) return null;
@@ -204,6 +205,7 @@ function parseLabels(payload: LinearIssueSummary['labels']): LinearIssueLabel[] 
 }
 
 function parseIssueSummary(payload: LinearIssueSummary | null | undefined): LinearIssueSummary | null {
+  if (!payload) return null;
   const id = payload?.id?.trim();
   const identifier = payload?.identifier?.trim();
   const title = payload?.title?.trim();
