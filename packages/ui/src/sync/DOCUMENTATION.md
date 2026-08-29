@@ -414,6 +414,66 @@ The global stream can omit a directory for a session-addressed event. Resolve it
 
 ## Selector hygiene
 
+### Runtime context versus directory context
+
+`SyncProvider` publishes two contexts. `SyncRuntimeContext` (`useSyncRuntime()`)
+holds the child-store manager, message loader, SDK, runtime key, and a
+subscribable `currentDirectory` source; its value changes only on runtime
+reconfiguration. `SyncContext` (`useSyncSystem()` / `useSync()`) adds the
+current directory string, so every consumer re-renders on each directory
+switch.
+
+A hook that takes an explicit directory, or needs only runtime fields, must
+read `useSyncRuntime()`. `useDirectoryStore(directory)` reads the current
+directory through `runtime.currentDirectory` with `useSyncExternalStore`, so a
+consumer that passes its own directory gets a constant snapshot and is not
+re-rendered by a cross-project switch. This is what keeps sidebar rows
+(permissions, question counts, session lookups) out of the switch commit: a
+row must not pay for the chat changing directory.
+
+### Session switch commit
+
+The sidebar click publishes `currentSessionId`/`currentSessionDirectory`
+synchronously, and the message fetch starts before that publication so the
+request is on the wire while React renders. `ChatContainer` consumes a
+`useDeferredValue` copy of the selection: the first commit paints the cheap
+reactions (active row, URL, tabs) and the timeline for the new session renders
+in a transition behind it. Selection *policy* inside `ChatContainer` (auto-
+opening a draft when nothing is selected) reads the live store value, because
+the deferred one still names the previous session for one commit.
+
+A session whose messages are not in memory at the click keeps the previous
+timeline on screen while they load (up to 400ms), then swaps straight to the
+finished view; the skeleton appears only when loading takes longer. A session
+the user waited for fades in (100ms); one that was ready appears in the same
+frame. The sidebar prefetches the two rows on either side of the open session
+shortly after it settles, so most neighbouring switches are warm.
+
+The timeline's first paint for a session is atomic. `ChatContainer` owns a
+`TimelineRevealGate` per session key (`components/chat/timelineRevealGate.ts`):
+a markdown renderer whose first paint is provisional (blocks not yet in the
+settled cache, so code is unhighlighted) takes a hold in its layout effect,
+and the timeline root stays at opacity 0 until every hold releases, capped at
+250ms, then fades in once as a whole. A warm switch takes no holds and reveals
+in the same frame. The gate stops accepting holds after the opening commit so
+rows mounting during scroll never hide the timeline. Once the lazy markdown
+module has loaded, `MarkdownRenderer` mounts it synchronously instead of
+through `Suspense`: a suspended boundary shows its fallback for a tick and
+React then throttles later-resolving boundaries by ~300ms, which staggered
+user and assistant text on a cold open.
+
+An opened session is shown already at its end. The scroll hook holds the gate
+until the viewport is pinned; the recap note holds it until the session record
+is in memory, because it cannot decide whether it renders before that and would
+otherwise grow the footer under a pinned viewport. The reveal itself runs on
+the next frame after the last hold releases, with one exact pin against the
+final content height. Afterwards "at the end" is an invariant, not a scroll:
+while the reader sits on the end of a session that is not producing output,
+content growth re-pins with one instant write; output growth belongs to the
+follow logic, which glides only while the session is working.
+
+`bun run profile:switch` measures both moments; see `scripts/perf/DOCUMENTATION.md`.
+
 Select leaf values, not containers:
 
 ```typescript
