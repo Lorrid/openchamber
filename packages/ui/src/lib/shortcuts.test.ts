@@ -8,7 +8,7 @@ import {
 } from './shortcuts';
 
 describe('getEffectiveShortcutPrefix', () => {
-  test('falls back to the action default when unset', () => {
+  test('falls back to the action default (bare mod+alt) when unset', () => {
     expect(getEffectiveShortcutPrefix('switch_context_surface', {})).toBe('mod+alt');
   });
 
