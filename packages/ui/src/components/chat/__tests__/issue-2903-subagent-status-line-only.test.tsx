@@ -138,16 +138,23 @@ const buildMaterializedSubagentSession = () => {
   return { messages, part };
 };
 
-const syncGlobal = globalThis as unknown as {
+// SAFETY: sync-context.tsx publishes exactly these two keys on globalThis
+// (SYNC_CONTEXT_GLOBAL_KEY / SYNC_RUNTIME_CONTEXT_GLOBAL_KEY) so every module
+// instance shares one context identity; the cast only adds those two optional
+// keys to the global object type, and the guards below re-check presence.
+const syncGlobals = globalThis as {
   __openchamber_sync_context__?: React.Context<unknown>;
   __openchamber_sync_runtime_context__?: React.Context<unknown>;
 };
-const syncContext = syncGlobal.__openchamber_sync_context__;
-const syncRuntimeContext = syncGlobal.__openchamber_sync_runtime_context__;
+
+const syncContext = syncGlobals.__openchamber_sync_context__;
 
 if (!syncContext) {
   throw new Error('sync context was not published on globalThis by @/sync/sync-context');
 }
+
+const syncRuntimeContext = syncGlobals.__openchamber_sync_runtime_context__;
+
 if (!syncRuntimeContext) {
   throw new Error('sync runtime context was not published on globalThis by @/sync/sync-context');
 }
@@ -178,19 +185,17 @@ describe('issue #2903 busy embedded subagent status-line-only', () => {
       missingPartMessageIDs: [],
     });
 
-    const system = {
+    const system = { childStores, messageLoader: {}, sdk: {}, runtimeKey: 'test', directory: DIRECTORY };
+    // Mirrors SyncProvider's own nesting: system context outer, runtime inner.
+    // Directory-scoped hooks read the runtime context, so the harness must
+    // provide it with a currentDirectory source for the store lookups.
+    const runtime = {
       childStores,
       messageLoader: {},
       sdk: {},
       runtimeKey: 'test',
-      directory: DIRECTORY,
-      currentDirectory: {
-        get: () => DIRECTORY,
-        subscribe: () => () => undefined,
-      },
+      currentDirectory: { get: () => DIRECTORY, subscribe: () => () => undefined },
     };
-    const SyncProvider = syncContext.Provider as React.Provider<unknown>;
-    const SyncRuntimeProvider = syncRuntimeContext.Provider as React.Provider<unknown>;
     let inactiveCount = -1;
     let activeCount = -1;
     let enabled = false;
@@ -205,11 +210,12 @@ describe('issue #2903 busy embedded subagent status-line-only', () => {
       return null;
     };
 
-    const renderHarness = () => React.createElement(
-      SyncProvider,
-      { value: system },
-      React.createElement(SyncRuntimeProvider, { value: system }, React.createElement(Harness)),
-    );
+    const renderHarness = () =>
+      React.createElement(
+        syncContext.Provider,
+        { value: system },
+        React.createElement(syncRuntimeContext.Provider, { value: runtime }, React.createElement(Harness)),
+      );
 
     try {
       await act(async () => {
