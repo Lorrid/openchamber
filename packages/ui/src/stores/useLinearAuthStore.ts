@@ -49,11 +49,15 @@ export const useLinearAuthStore = create<LinearAuthStore>((set, get) => ({
         return payload;
       } catch (error) {
         const message = error instanceof Error ? error.message : String(error);
-        set({
-          status: { connected: false, error: message },
+        // A failed request is not an authoritative disconnect. Keep the last
+        // known status and leave `hasChecked` false so the next caller retries
+        // instead of hiding Linear for the rest of the session.
+        set((state) => ({
+          status: state.status
+            ? { ...state.status, error: message }
+            : { connected: false, error: message },
           isLoading: false,
-          hasChecked: true,
-        });
+        }));
         return null;
       }
     })().finally(() => { inFlightAuthRefresh = null; });

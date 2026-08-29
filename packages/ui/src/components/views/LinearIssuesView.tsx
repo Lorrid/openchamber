@@ -20,7 +20,8 @@ import { useRuntimeAPIs } from '@/hooks/useRuntimeAPIs';
 import { useDebouncedValue } from '@/hooks/useDebouncedValue';
 import { useLinearAuthStore } from '@/stores/useLinearAuthStore';
 import { useUIStore, LINEAR_ISSUE_LIST_ALL_TEAMS } from '@/stores/useUIStore';
-import { useI18n, getCurrentIntlLocale } from '@/lib/i18n';
+import { useI18n } from '@/lib/i18n';
+import { formatDateTimeForPreference } from '@/lib/timeFormat';
 import { openExternalUrl } from '@/lib/url';
 import { startLinearIssueSession } from '@/lib/linearStartSession';
 import type {
@@ -243,6 +244,7 @@ export const LinearIssuesView: React.FC = () => {
   const listTeamId = useUIStore((state) => state.linearIssueListTeamId);
   const listPriority = useUIStore((state) => state.linearIssueListPriority);
   const linearIssueFocus = useUIStore((state) => state.linearIssueFocus);
+  const timeFormatPreference = useUIStore((state) => state.timeFormatPreference);
   const setListStatus = useUIStore((state) => state.setLinearIssueListStatus);
   const setListAssignee = useUIStore((state) => state.setLinearIssueListAssignee);
   const setListTeamId = useUIStore((state) => state.setLinearIssueListTeamId);
@@ -275,6 +277,20 @@ export const LinearIssuesView: React.FC = () => {
 
   const directIdentifier = React.useMemo(() => parseLinearIssueQuery(query), [query]);
   const debouncedQuery = useDebouncedValue(query, 350);
+
+  // Same shape the pull request panel uses, so both context surfaces read alike.
+  const formatCommentTimestamp = React.useCallback((value: string | null) => {
+    if (!value) return '';
+    const timestamp = Date.parse(value);
+    if (!Number.isFinite(timestamp)) return '';
+    return formatDateTimeForPreference(timestamp, timeFormatPreference, {
+      year: 'numeric',
+      month: 'short',
+      day: 'numeric',
+      hour: 'numeric',
+      minute: '2-digit',
+    });
+  }, [timeFormatPreference]);
 
   const openLinearSettings = React.useCallback(() => {
     setSettingsPage('integrations');
@@ -822,30 +838,50 @@ export const LinearIssuesView: React.FC = () => {
                 {comments.length === 0 ? (
                   <p className="typography-meta text-muted-foreground">{t('contextPanel.linear.empty.noComments')}</p>
                 ) : (
-                  <ul className="space-y-3">
-                    {comments.map((comment) => {
-                      const author = comment.user?.displayName || comment.user?.name;
-                      const created = comment.createdAt ? new Date(comment.createdAt) : null;
-                      const createdLabel = created && !Number.isNaN(created.getTime())
-                        ? created.toLocaleString(getCurrentIntlLocale())
-                        : null;
+                  <div className="relative pl-3">
+                    {comments.map((comment, index) => {
+                      const author = comment.user?.displayName
+                        || comment.user?.name
+                        || t('contextPanel.linear.label.unassigned');
+                      const avatarUrl = comment.user?.avatarUrl || null;
+                      const initial = author.charAt(0).toUpperCase();
+                      const isLast = index === comments.length - 1;
+                      const createdLabel = formatCommentTimestamp(comment.createdAt);
                       return (
-                        <li key={comment.id} className="border-t border-border/60 pt-3 first:border-t-0 first:pt-0">
-                          <div className="typography-meta text-muted-foreground mb-1">
-                            {author || t('contextPanel.linear.label.unassigned')}
-                            {createdLabel ? ` · ${createdLabel}` : ''}
-                          </div>
-                          {comment.body.trim() ? (
-                            <SimpleMarkdownRenderer
-                              content={comment.body}
-                              className={LINEAR_MARKDOWN_CLASS}
-                              enableFileReferences={false}
-                            />
+                        <div key={comment.id} className="relative pl-10 pb-5 last:pb-0">
+                          {!isLast ? (
+                            <div className="absolute left-4 top-[2.375rem] bottom-[0.375rem] w-px bg-border/60" />
                           ) : null}
-                        </li>
+                          <div className="absolute left-0 top-0 z-10 flex size-8 items-center justify-center overflow-hidden rounded-full border border-border/60 bg-surface-elevated text-xs text-muted-foreground">
+                            {avatarUrl ? (
+                              <img
+                                src={avatarUrl}
+                                alt={author}
+                                className="h-full w-full object-cover"
+                                loading="lazy"
+                                referrerPolicy="no-referrer"
+                              />
+                            ) : (
+                              <span>{initial}</span>
+                            )}
+                          </div>
+                          <div className="rounded-lg bg-surface-elevated px-3 pt-0 pb-3 space-y-2">
+                            <div className="flex flex-wrap items-center gap-x-2 gap-y-1 typography-micro text-muted-foreground">
+                              <span className="text-foreground whitespace-nowrap">{author}</span>
+                              {createdLabel ? <span className="whitespace-nowrap">{createdLabel}</span> : null}
+                            </div>
+                            {comment.body.trim() ? (
+                              <SimpleMarkdownRenderer
+                                content={comment.body}
+                                className={cn('typography-markdown-body text-foreground break-words', LINEAR_MARKDOWN_CLASS)}
+                                enableFileReferences={false}
+                              />
+                            ) : null}
+                          </div>
+                        </div>
                       );
                     })}
-                  </ul>
+                  </div>
                 )}
               </div>
             </div>

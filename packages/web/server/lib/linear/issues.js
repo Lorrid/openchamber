@@ -105,7 +105,7 @@ const GET_QUERY = `
           id
           body
           createdAt
-          user { name displayName }
+          user { name displayName avatarUrl }
         }
       }
     }
@@ -140,7 +140,7 @@ const ISSUE_UPDATE = `
             id
             body
             createdAt
-            user { name displayName }
+            user { name displayName avatarUrl }
           }
         }
       }
@@ -294,6 +294,7 @@ function readComment(node) {
     ? {
       name: readTrimmedString(node.user.name) || null,
       displayName: readTrimmedString(node.user.displayName) || null,
+      avatarUrl: readTrimmedString(node.user.avatarUrl) || null,
     }
     : null;
   return {

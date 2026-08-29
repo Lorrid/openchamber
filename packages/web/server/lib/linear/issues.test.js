@@ -300,7 +300,7 @@ describe('Linear issue list/get', () => {
         issue: {
           ...issueNode,
           description: 'Users cannot sign in.',
-          comments: { nodes: [{ id: 'comment-1', body: 'Still broken', createdAt: '2026-08-24T10:00:00.000Z', user: { name: 'Ada', displayName: null } }] },
+          comments: { nodes: [{ id: 'comment-1', body: 'Still broken', createdAt: '2026-08-24T10:00:00.000Z', user: { name: 'Ada', displayName: null, avatarUrl: 'https://linear.app/avatar/ada.png' } }] },
         },
       },
     })));
@@ -314,7 +314,7 @@ describe('Linear issue list/get', () => {
       id: 'comment-1',
       body: 'Still broken',
       createdAt: '2026-08-24T10:00:00.000Z',
-      user: { name: 'Ada', displayName: null },
+      user: { name: 'Ada', displayName: null, avatarUrl: 'https://linear.app/avatar/ada.png' },
     }]);
   });
 

@@ -1,40 +1,37 @@
+import { isPlainObject, readTrimmedString } from './parse.js';
 import { postLinearSessionStatus } from './status.js';
 
+function readProperties(payload) {
+  if (!isPlainObject(payload)) return {};
+  return isPlainObject(payload.properties) ? payload.properties : {};
+}
+
+function readNested(properties, key) {
+  return isPlainObject(properties[key]) ? properties[key] : {};
+}
+
 function extractSessionId(payload) {
-  if (!payload || typeof payload !== 'object') return '';
-  const props = payload.properties && typeof payload.properties === 'object'
-    ? payload.properties
-    : {};
-  const info = props.info && typeof props.info === 'object' ? props.info : {};
-  const sessionId = info.sessionID
-    || info.sessionId
-    || props.sessionID
-    || props.sessionId
-    || props.session
-    || '';
-  return typeof sessionId === 'string' ? sessionId.trim() : '';
+  const properties = readProperties(payload);
+  const info = readNested(properties, 'info');
+  return readTrimmedString(info.sessionID)
+    || readTrimmedString(info.sessionId)
+    || readTrimmedString(properties.sessionID)
+    || readTrimmedString(properties.sessionId)
+    || readTrimmedString(properties.session);
 }
 
 function extractStatusType(payload) {
-  if (!payload || payload.type !== 'session.status') return '';
-  const props = payload.properties && typeof payload.properties === 'object'
-    ? payload.properties
-    : {};
-  const status = props.status && typeof props.status === 'object' ? props.status : {};
-  const info = props.info && typeof props.info === 'object' ? props.info : {};
-  const type = typeof status.type === 'string'
-    ? status.type
-    : (typeof info.type === 'string' ? info.type : '');
-  return type.trim();
+  if (!isPlainObject(payload) || payload.type !== 'session.status') return '';
+  const properties = readProperties(payload);
+  const status = readNested(properties, 'status');
+  const info = readNested(properties, 'info');
+  return readTrimmedString(status.type) || readTrimmedString(info.type);
 }
 
 function extractErrorName(payload) {
-  if (!payload || payload.type !== 'session.error') return '';
-  const props = payload.properties && typeof payload.properties === 'object'
-    ? payload.properties
-    : {};
-  const error = props.error && typeof props.error === 'object' ? props.error : {};
-  return typeof error.name === 'string' ? error.name.trim() : '';
+  if (!isPlainObject(payload) || payload.type !== 'session.error') return '';
+  const properties = readProperties(payload);
+  return readTrimmedString(readNested(properties, 'error').name);
 }
 
 export function createLinearSessionStatusRuntime() {
@@ -45,7 +42,7 @@ export function createLinearSessionStatusRuntime() {
     const sessionId = extractSessionId(payload);
     if (!sessionId) return;
 
-    if (payload.type === 'session.error') {
+    if (isPlainObject(payload) && payload.type === 'session.error') {
       if (extractErrorName(payload) === 'MessageAbortedError') return;
       void postLinearSessionStatus({ kind: 'failure', sessionId }).catch((error) => {
         console.warn('[linear] failed to post session failure comment:', error?.message || error);

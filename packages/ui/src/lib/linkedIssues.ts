@@ -74,7 +74,7 @@ const isLinkedIssue = (value: unknown): value is LinkedIssue => (
 export const buildLinkedIssueId = (owner: string, repo: string, number: number): string =>
   `${owner}/${repo}#${number}`;
 
-export const buildLinkedLinearIssueId = (identifier: string): string =>
+const buildLinkedLinearIssueId = (identifier: string): string =>
   `linear:${identifier}`;
 
 /**
