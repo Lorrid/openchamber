@@ -178,7 +178,17 @@ describe('issue #2903 busy embedded subagent status-line-only', () => {
       missingPartMessageIDs: [],
     });
 
-    const system = { childStores, messageLoader: {}, sdk: {}, runtimeKey: 'test', directory: DIRECTORY };
+    const system = {
+      childStores,
+      messageLoader: {},
+      sdk: {},
+      runtimeKey: 'test',
+      directory: DIRECTORY,
+      currentDirectory: {
+        get: () => DIRECTORY,
+        subscribe: () => () => undefined,
+      },
+    };
     const SyncProvider = syncContext.Provider as React.Provider<unknown>;
     const SyncRuntimeProvider = syncRuntimeContext.Provider as React.Provider<unknown>;
     let inactiveCount = -1;
