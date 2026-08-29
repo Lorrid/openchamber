@@ -113,6 +113,40 @@ describe('notification store', () => {
     expect(useNotificationStore.getState().list).toEqual([]);
   });
 
+  test('clearAll empties the current runtime bucket including hidden kinds', () => {
+    appendNotification({ title: 'Error', severity: 'error', source: 'toast' });
+    appendNotification({ title: 'Copied', severity: 'success', source: 'toast' });
+    appendNotification({ title: 'Remote', severity: 'error', source: 'toast', runtimeKey: 'other' });
+    expect(useNotificationStore.getState().list).toHaveLength(2);
+    useNotificationStore.getState().clearAll();
+    expect(useNotificationStore.getState().list).toEqual([]);
+    expect(useNotificationStore.getState().listsByRuntime.other).toHaveLength(1);
+  });
+
+  test('appending the same caller id after the window keeps unique record ids', () => {
+    const now = Date.now();
+    const first = appendNotification({
+      id: 'small-model-unavailable',
+      title: 'Small Model unavailable',
+      severity: 'error',
+      source: 'toast',
+      time: now - 60_001,
+    });
+    const second = appendNotification({
+      id: 'small-model-unavailable',
+      title: 'Small Model unavailable',
+      severity: 'error',
+      source: 'toast',
+      time: now,
+    });
+    expect(first?.id).toBe('small-model-unavailable');
+    expect(second?.id).toBeTruthy();
+    expect(second?.id).not.toBe(first?.id);
+    const ids = useNotificationStore.getState().list.map((item) => item.id);
+    expect(ids).toHaveLength(2);
+    expect(new Set(ids).size).toBe(2);
+  });
+
   test('empty runtime list is empty success', () => {
     const runtimeKey = getRuntimeKey();
     const merged = useNotificationStore.persist.getOptions().merge?.(

@@ -134,7 +134,7 @@ const NotificationList = ({
   const storedCount = useNotificationStore((state) => state.list.length);
   const markRead = useNotificationStore((state) => state.markRead);
   const markAllRead = useNotificationStore((state) => state.markAllRead);
-  const clear = useNotificationStore((state) => state.clear);
+  const clearAll = useNotificationStore((state) => state.clearAll);
   const orderRef = React.useRef<string[]>([]);
   const listRef = React.useRef<HTMLDivElement>(null);
   const pendingScrollTopRef = React.useRef<number | null>(null);
@@ -165,10 +165,10 @@ const NotificationList = ({
   const handleClearAll = (event: React.MouseEvent<HTMLButtonElement>) => {
     event.preventDefault();
     event.stopPropagation();
-    const ids = displayItems.map((item) => item.id);
-    if (ids.length === 0) return;
-    clear(ids);
-    dismissToasts(ids);
+    const stored = useNotificationStore.getState().list;
+    if (stored.length === 0) return;
+    dismissToasts(stored.map((item) => item.id));
+    clearAll();
   };
 
   const handleOpenSettings = () => {
@@ -196,21 +196,23 @@ const NotificationList = ({
       <div className="flex items-center justify-between gap-2 px-3 py-2">
         <p className="typography-ui-label font-medium text-foreground">{t('layout.notifications.title')}</p>
         <div className="flex items-center gap-0.5">
-          {displayItems.length > 0 ? (
+          {storedCount > 0 ? (
             <>
-              <Button
-                type="button"
-                variant="ghost"
-                size="icon"
-                className="size-7"
-                disabled={unreadIds.length === 0}
-                onPointerDown={(event) => event.preventDefault()}
-                onClick={handleMarkAllRead}
-                aria-label={t('layout.notifications.markAllRead')}
-                title={t('layout.notifications.markAllRead')}
-              >
-                <Icon name="check-double" className="size-4" />
-              </Button>
+              {displayItems.length > 0 ? (
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon"
+                  className="size-7"
+                  disabled={unreadIds.length === 0}
+                  onPointerDown={(event) => event.preventDefault()}
+                  onClick={handleMarkAllRead}
+                  aria-label={t('layout.notifications.markAllRead')}
+                  title={t('layout.notifications.markAllRead')}
+                >
+                  <Icon name="check-double" className="size-4" />
+                </Button>
+              ) : null}
               <Button
                 type="button"
                 variant="ghost"

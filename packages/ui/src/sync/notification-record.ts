@@ -301,18 +301,47 @@ export const normalizeNotificationAppend = (
   }, session, directory, input.action);
 };
 
+const assignUniqueNotificationId = (
+  list: NotificationRecord[],
+  incoming: NotificationRecord,
+): NotificationRecord => (
+  list.some((item) => item.id === incoming.id)
+    ? { ...incoming, id: createNotificationId() }
+    : incoming
+);
+
+const uniquifyNotificationIds = (list: NotificationRecord[]): NotificationRecord[] => {
+  const seen = new Set<string>();
+  return list.map((item) => {
+    if (!seen.has(item.id)) {
+      seen.add(item.id);
+      return item;
+    }
+    const reminted = { ...item, id: createNotificationId() };
+    seen.add(reminted.id);
+    return reminted;
+  });
+};
+
 export const pruneNotifications = (list: NotificationRecord[]): NotificationRecord[] => {
   const cutoff = Date.now() - NOTIFICATION_TTL_MS;
   const pruned = list.filter((notification) => notification.time >= cutoff);
-  if (pruned.length <= MAX_NOTIFICATIONS) return pruned;
-  return [...pruned].sort((left, right) => left.time - right.time).slice(-MAX_NOTIFICATIONS);
+  const capped = pruned.length <= MAX_NOTIFICATIONS
+    ? pruned
+    : [...pruned].sort((left, right) => left.time - right.time).slice(-MAX_NOTIFICATIONS);
+  return uniquifyNotificationIds(capped);
 };
+
+const appendWithUniqueId = (
+  list: NotificationRecord[],
+  incoming: NotificationRecord,
+): NotificationRecord[] => [...list, assignUniqueNotificationId(list, incoming)];
 
 export const mergeDedupedNotification = (
   list: NotificationRecord[],
   incoming: NotificationRecord,
 ): NotificationRecord[] => {
-  if (incoming.read) return [...list, incoming];
+  if (incoming.read) return appendWithUniqueId(list, incoming);
   const windowStart = incoming.time - NOTIFICATION_DEDUPE_WINDOW_MS;
   const existingIndex = list.findIndex((candidate) => (
     !candidate.read
@@ -320,7 +349,7 @@ export const mergeDedupedNotification = (
     && candidate.dedupeKey === incoming.dedupeKey
     && candidate.time >= windowStart
   ));
-  if (existingIndex < 0) return [...list, incoming];
+  if (existingIndex < 0) return appendWithUniqueId(list, incoming);
 
   const existing = list[existingIndex];
   const next = [...list];

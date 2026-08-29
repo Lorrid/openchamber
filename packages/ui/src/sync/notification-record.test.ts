@@ -164,6 +164,33 @@ describe('dedup and prune', () => {
     expect(mergeDedupedNotification([first], second)).toHaveLength(2);
   });
 
+  test('mints a new id when a reused caller id is appended after the window', () => {
+    const first = record({ id: 'small-model-unavailable', time: 1000, dedupeKey: 'same' });
+    const second = record({
+      id: 'small-model-unavailable',
+      time: 1000 + NOTIFICATION_DEDUPE_WINDOW_MS + 1,
+      dedupeKey: 'same',
+      title: 'Again',
+    });
+    const merged = mergeDedupedNotification([first], second);
+    expect(merged).toHaveLength(2);
+    expect(merged[0]?.id).toBe('small-model-unavailable');
+    expect(merged[1]?.id).not.toBe('small-model-unavailable');
+    expect(merged[1]?.title).toBe('Again');
+  });
+
+  test('remints colliding persisted ids while pruning', () => {
+    const now = Date.now();
+    const pruned = pruneNotifications([
+      record({ id: 'dup', time: now - 2, title: 'First' }),
+      record({ id: 'dup', time: now - 1, title: 'Second' }),
+    ]);
+    expect(pruned).toHaveLength(2);
+    expect(pruned[0]?.id).toBe('dup');
+    expect(pruned[1]?.id).not.toBe(pruned[0]?.id);
+    expect(pruned[1]?.title).toBe('Second');
+  });
+
   test('keeps the newest records when over cap', () => {
     const now = Date.now();
     const list = Array.from({ length: MAX_NOTIFICATIONS + 5 }, (_, index) => record({

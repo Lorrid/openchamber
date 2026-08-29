@@ -65,6 +65,7 @@ interface NotificationStore {
   markAllRead: (ids: readonly string[]) => void;
   remove: (id: string) => void;
   clear: (ids: readonly string[]) => void;
+  clearAll: () => void;
   markSessionViewed: (sessionId: string) => void;
   markProjectViewed: (directory: string) => void;
   activateRuntime: (runtimeKey: string) => void;
@@ -109,8 +110,13 @@ export const useNotificationStore = create<NotificationStore>()(
         const merged = mergeDedupedNotification(bucket, notification);
         set(commitRuntimeList(get().listsByRuntime, notification.runtimeKey, merged));
         const stored = get().listsByRuntime[notification.runtimeKey] ?? [];
-        return stored.find((item) => item.id === notification.id)
-          ?? stored.find((item) => item.dedupeKey === notification.dedupeKey && !item.read)
+        const newestSameKey = stored
+          .filter((item) => item.dedupeKey === notification.dedupeKey)
+          .reduce<NotificationRecord | null>((latest, item) => (
+            latest == null || item.time >= latest.time ? item : latest
+          ), null);
+        return newestSameKey
+          ?? stored.find((item) => item.id === notification.id)
           ?? notification;
       },
 
@@ -178,6 +184,14 @@ export const useNotificationStore = create<NotificationStore>()(
         const next = bucket.filter((item) => !idSet.has(item.id));
         if (next.length === bucket.length) return;
         set(commitRuntimeList(current.listsByRuntime, runtimeKey, next));
+      },
+
+      clearAll: () => {
+        const runtimeKey = getRuntimeKey();
+        const current = get();
+        const bucket = current.listsByRuntime[runtimeKey] ?? current.list;
+        if (bucket.length === 0) return;
+        set(commitRuntimeList(current.listsByRuntime, runtimeKey, []));
       },
 
       markSessionViewed: (sessionId) => {
