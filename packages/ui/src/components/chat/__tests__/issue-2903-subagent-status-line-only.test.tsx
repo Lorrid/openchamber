@@ -138,12 +138,15 @@ const buildMaterializedSubagentSession = () => {
   return { messages, part };
 };
 
-const syncContext = (globalThis as unknown as {
+const syncGlobals = globalThis as unknown as {
   __openchamber_sync_context__?: React.Context<unknown>;
-}).__openchamber_sync_context__;
+  __openchamber_sync_runtime_context__?: React.Context<unknown>;
+};
+const syncContext = syncGlobals.__openchamber_sync_context__;
+const syncRuntimeContext = syncGlobals.__openchamber_sync_runtime_context__;
 
-if (!syncContext) {
-  throw new Error('sync context was not published on globalThis by @/sync/sync-context');
+if (!syncContext || !syncRuntimeContext) {
+  throw new Error('sync contexts were not published on globalThis by @/sync/sync-context');
 }
 
 describe('issue #2903 busy embedded subagent status-line-only', () => {
@@ -172,8 +175,19 @@ describe('issue #2903 busy embedded subagent status-line-only', () => {
       missingPartMessageIDs: [],
     });
 
-    const system = { childStores, messageLoader: {}, sdk: {}, runtimeKey: 'test', directory: DIRECTORY };
+    const runtime = {
+      childStores,
+      messageLoader: {},
+      sdk: {},
+      runtimeKey: 'test',
+      currentDirectory: {
+        get: () => DIRECTORY,
+        subscribe: () => () => undefined,
+      },
+    };
+    const system = { ...runtime, directory: DIRECTORY };
     const Provider = syncContext.Provider as React.Provider<unknown>;
+    const RuntimeProvider = syncRuntimeContext.Provider as React.Provider<unknown>;
     let inactiveCount = -1;
     let activeCount = -1;
     let enabled = false;
@@ -188,15 +202,21 @@ describe('issue #2903 busy embedded subagent status-line-only', () => {
       return null;
     };
 
+    const renderHarness = () => React.createElement(
+      Provider,
+      { value: system },
+      React.createElement(RuntimeProvider, { value: runtime }, React.createElement(Harness)),
+    );
+
     try {
       await act(async () => {
-        root.render(React.createElement(Provider, { value: system }, React.createElement(Harness)));
+        root.render(renderHarness());
       });
       expect(inactiveCount).toBe(0);
 
       enabled = true;
       await act(async () => {
-        root.render(React.createElement(Provider, { value: system }, React.createElement(Harness)));
+        root.render(renderHarness());
       });
       expect(activeCount).toBe(14);
     } finally {
