@@ -1156,7 +1156,6 @@ export const settingsDict = {
   'settings.openchamber.keyboardShortcuts.action.new_mini_chat.label': 'New Mini Chat window',
   'settings.openchamber.keyboardShortcuts.action.open_help.label': 'Open keyboard shortcuts',
   'settings.openchamber.keyboardShortcuts.action.toggle_services_menu.label': 'Toggle services menu',
-  'settings.openchamber.keyboardShortcuts.action.open_notifications.label': 'Open notifications',
   'settings.openchamber.keyboardShortcuts.action.cycle_theme.label': 'Cycle theme',
   'settings.openchamber.keyboardShortcuts.action.cycle_agent.label': 'Cycle agent',
   'settings.openchamber.keyboardShortcuts.action.cycle_favorite_model_forward.label': 'Cycle favorite model forward',

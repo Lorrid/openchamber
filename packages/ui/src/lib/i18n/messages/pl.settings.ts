@@ -862,7 +862,6 @@ export const settingsDict = {
   'settings.openchamber.keyboardShortcuts.action.switch_context_surface.suffix': ' + 1…0',
   'settings.openchamber.keyboardShortcuts.action.open_settings.label': 'Otwórz ustawienia',
   'settings.openchamber.keyboardShortcuts.action.toggle_services_menu.label': 'Przełącz menu usług',
-  'settings.openchamber.keyboardShortcuts.action.open_notifications.label': 'Otwórz powiadomienia',
   'settings.openchamber.keyboardShortcuts.action.add_selection_to_chat.label': 'Dodaj zaznaczenie do czatu',
   'settings.openchamber.keyboardShortcuts.action.toggle_sidebar.label': 'Przełącz pasek boczny',
   'settings.openchamber.keyboardShortcuts.action.toggle_terminal.label': 'Przełącz dokowanie terminala',

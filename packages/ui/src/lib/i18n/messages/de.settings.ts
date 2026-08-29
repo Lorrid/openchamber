@@ -1094,7 +1094,6 @@ export const settingsDict = {
   'settings.openchamber.keyboardShortcuts.action.new_mini_chat.label': 'Neues Mini-Chat-Fenster',
   'settings.openchamber.keyboardShortcuts.action.open_help.label': 'Tastenkürzel öffnen',
   'settings.openchamber.keyboardShortcuts.action.toggle_services_menu.label': 'Dienstemenü umschalten',
-  'settings.openchamber.keyboardShortcuts.action.open_notifications.label': 'Benachrichtigungen öffnen',
   'settings.openchamber.keyboardShortcuts.action.cycle_theme.label': 'Thema wechseln',
   'settings.openchamber.keyboardShortcuts.action.cycle_agent.label': 'Agent wechseln',
   'settings.openchamber.keyboardShortcuts.action.cycle_favorite_model_forward.label': 'Favorites Modell vorwärts durchschalten',

@@ -1145,7 +1145,6 @@ export const settingsDict = {
   'settings.openchamber.keyboardShortcuts.action.new_mini_chat.label': 'Yeni Mini Sohbet penceresi',
   'settings.openchamber.keyboardShortcuts.action.open_help.label': 'Klavye kısayollarını aç',
   'settings.openchamber.keyboardShortcuts.action.toggle_services_menu.label': 'Hizmetler menüsünü aç/kapat',
-  'settings.openchamber.keyboardShortcuts.action.open_notifications.label': 'Bildirimleri aç',
   'settings.openchamber.keyboardShortcuts.action.cycle_theme.label': 'Temalar arasında geçiş yap',
   'settings.openchamber.keyboardShortcuts.action.cycle_agent.label': 'Agent\'lar arasında geçiş yap',
   'settings.openchamber.keyboardShortcuts.action.cycle_favorite_model_forward.label': 'Sonraki favori modele geç',

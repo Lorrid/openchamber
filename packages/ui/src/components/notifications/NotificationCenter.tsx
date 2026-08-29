@@ -54,8 +54,6 @@ const formatRelativeTime = (
   return t('layout.notifications.time.daysAgo', { count: days });
 };
 
-const OPEN_NOTIFICATIONS_EVENT = 'openchamber:toggle-notifications';
-
 const displayTitle = (notification: NotificationRecord, t: ReturnType<typeof useI18n>['t']): string => {
   if (notification.source === 'subtask') {
     return notification.severity === 'error'
@@ -308,13 +306,7 @@ export const NotificationCenter: React.FC<NotificationCenterProps> = ({
   const { t } = useI18n();
 
   React.useEffect(() => {
-    if (!inboxEnabled) {
-      setOpen(false);
-      return;
-    }
-    const onToggle = () => setOpen((current) => !current);
-    window.addEventListener(OPEN_NOTIFICATIONS_EVENT, onToggle);
-    return () => window.removeEventListener(OPEN_NOTIFICATIONS_EVENT, onToggle);
+    if (!inboxEnabled) setOpen(false);
   }, [inboxEnabled]);
 
   if (!inboxEnabled) return null;

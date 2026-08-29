@@ -1157,7 +1157,6 @@ export const settingsDict = {
   'settings.openchamber.keyboardShortcuts.action.new_mini_chat.label': '新しいミニチャットウィンドウ',
   'settings.openchamber.keyboardShortcuts.action.open_help.label': 'キーボードショートカットを開く',
   'settings.openchamber.keyboardShortcuts.action.toggle_services_menu.label': 'サービスメニューの切替',
-  'settings.openchamber.keyboardShortcuts.action.open_notifications.label': '通知を開く',
   'settings.openchamber.keyboardShortcuts.action.cycle_theme.label': 'テーマを順に切替',
   'settings.openchamber.keyboardShortcuts.action.cycle_agent.label': 'Agent を順に切替',
   'settings.openchamber.keyboardShortcuts.action.cycle_favorite_model_forward.label': 'お気に入りモデルを次へ',

@@ -1031,7 +1031,6 @@ export const settingsDict = {
   'settings.openchamber.keyboardShortcuts.action.new_mini_chat.label': '新建 Mini Chat 視窗',
   'settings.openchamber.keyboardShortcuts.action.open_help.label': '開啟鍵盤快速鍵',
   'settings.openchamber.keyboardShortcuts.action.toggle_services_menu.label': '切換服務選單',
-  'settings.openchamber.keyboardShortcuts.action.open_notifications.label': '開啟通知',
   'settings.openchamber.keyboardShortcuts.action.cycle_theme.label': '輪換主題',
   'settings.openchamber.keyboardShortcuts.action.cycle_agent.label': '輪換 agent',
   'settings.openchamber.keyboardShortcuts.action.cycle_favorite_model_forward.label': '向前輪換收藏模型',
