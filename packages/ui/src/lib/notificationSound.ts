@@ -58,15 +58,21 @@ export const resolveOsNotificationSilent = (
   return !useUIStore.getState().notificationSoundEnabled;
 };
 
+export type NotificationSoundContext = {
+  focused: boolean;
+  viewingSession?: boolean;
+};
+
 export const shouldPlayNotificationSound = (
   event: NotificationSoundEvent,
   settings: NotificationSoundSettings,
-  context: { focused: boolean },
+  context: NotificationSoundContext,
 ): boolean => {
   if (!settings.notificationSoundEnabled) return false;
   if (event !== 'test' && !settings.notificationInboxEnabled) return false;
   if (!isEventEnabled(event, settings)) return false;
   if (event === 'test') return true;
+  if (context.viewingSession) return false;
   if (!context.focused) return false;
   if (settings.nativeNotificationsEnabled && settings.notificationMode === 'always') {
     return false;
@@ -128,11 +134,15 @@ const bindNotificationSoundUnlock = (): void => {
   }, { once: true });
 };
 
-export const maybePlayNotificationSound = (event: NotificationSoundEvent): void => {
+export const maybePlayNotificationSound = (
+  event: NotificationSoundEvent,
+  context?: Pick<NotificationSoundContext, 'viewingSession'>,
+): void => {
   bindNotificationSoundUnlock();
   const settings = useUIStore.getState();
   if (!shouldPlayNotificationSound(event, settings, {
     focused: isNotificationSoundContextFocused(),
+    viewingSession: context?.viewingSession === true,
   })) {
     return;
   }

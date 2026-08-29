@@ -69,6 +69,29 @@ describe('shouldPlayNotificationSound', () => {
     )).toBe(true);
   });
 
+  test('stays quiet for the session the user is already watching', () => {
+    expect(shouldPlayNotificationSound(
+      'completion',
+      settings(),
+      { focused: true, viewingSession: true },
+    )).toBe(false);
+    expect(shouldPlayNotificationSound(
+      'error',
+      settings(),
+      { focused: true, viewingSession: true },
+    )).toBe(false);
+    expect(shouldPlayNotificationSound(
+      'question',
+      settings(),
+      { focused: true, viewingSession: true },
+    )).toBe(false);
+    expect(shouldPlayNotificationSound(
+      'permission',
+      settings(),
+      { focused: true, viewingSession: true },
+    )).toBe(false);
+  });
+
   test('follows the matching event toggle', () => {
     expect(shouldPlayNotificationSound(
       'completion',

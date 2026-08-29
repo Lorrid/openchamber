@@ -1503,7 +1503,7 @@ export async function resyncBlockingRequestsForDirectory(
           show: (title, options) => toast.info(title, options),
           openSession: openSessionFromToast,
         })) {
-          maybePlayNotificationSound('permission')
+          maybePlayNotificationSound('permission', { viewingSession: isViewed })
         }
       }
     }
@@ -1754,7 +1754,7 @@ export function handleEvent(
       show: (title, options) => toast.info(title, options),
       openSession: openSessionFromToast,
     })) {
-      maybePlayNotificationSound('permission')
+      maybePlayNotificationSound('permission', { viewingSession: isViewed })
     }
   }
 
@@ -1793,7 +1793,7 @@ export function handleEvent(
           onClick: () => openSessionFromToast(sessionID, resolvedDirectory),
         },
       })
-      maybePlayNotificationSound('question')
+      maybePlayNotificationSound('question', { viewingSession: isViewed })
     }
   }
 
@@ -1818,6 +1818,7 @@ export function handleEvent(
       const sessionTitle = usableSessionNotificationTitle(session?.title, sessionID)
         ?? usableSessionNotificationTitle(indexedTitle, sessionID)
       const isSubtask = Boolean(session?.parentID)
+      const viewingSession = isViewedInCurrentSession(resolvedDirectory, sessionID)
       appendNotification({
         directory: resolvedDirectory,
         session: sessionID,
@@ -1828,7 +1829,7 @@ export function handleEvent(
         ),
         subtask: isSubtask,
         time: Date.now(),
-        viewed: isViewedInCurrentSession(resolvedDirectory, sessionID),
+        viewed: viewingSession,
         ...(payload.type === "session.error"
           ? { type: "error" as const, error: props.error }
           : { type: "turn-complete" as const }),
@@ -1839,6 +1840,7 @@ export function handleEvent(
           : isSubtask
             ? "subtask"
             : "completion",
+        { viewingSession },
       )
     }
   }
