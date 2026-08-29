@@ -138,12 +138,18 @@ const buildMaterializedSubagentSession = () => {
   return { messages, part };
 };
 
-const syncContext = (globalThis as unknown as {
+const syncGlobal = globalThis as unknown as {
   __openchamber_sync_context__?: React.Context<unknown>;
-}).__openchamber_sync_context__;
+  __openchamber_sync_runtime_context__?: React.Context<unknown>;
+};
+const syncContext = syncGlobal.__openchamber_sync_context__;
+const syncRuntimeContext = syncGlobal.__openchamber_sync_runtime_context__;
 
 if (!syncContext) {
   throw new Error('sync context was not published on globalThis by @/sync/sync-context');
+}
+if (!syncRuntimeContext) {
+  throw new Error('sync runtime context was not published on globalThis by @/sync/sync-context');
 }
 
 describe('issue #2903 busy embedded subagent status-line-only', () => {
@@ -173,7 +179,8 @@ describe('issue #2903 busy embedded subagent status-line-only', () => {
     });
 
     const system = { childStores, messageLoader: {}, sdk: {}, runtimeKey: 'test', directory: DIRECTORY };
-    const Provider = syncContext.Provider as React.Provider<unknown>;
+    const SyncProvider = syncContext.Provider as React.Provider<unknown>;
+    const SyncRuntimeProvider = syncRuntimeContext.Provider as React.Provider<unknown>;
     let inactiveCount = -1;
     let activeCount = -1;
     let enabled = false;
@@ -188,15 +195,21 @@ describe('issue #2903 busy embedded subagent status-line-only', () => {
       return null;
     };
 
+    const renderHarness = () => React.createElement(
+      SyncProvider,
+      { value: system },
+      React.createElement(SyncRuntimeProvider, { value: system }, React.createElement(Harness)),
+    );
+
     try {
       await act(async () => {
-        root.render(React.createElement(Provider, { value: system }, React.createElement(Harness)));
+        root.render(renderHarness());
       });
       expect(inactiveCount).toBe(0);
 
       enabled = true;
       await act(async () => {
-        root.render(React.createElement(Provider, { value: system }, React.createElement(Harness)));
+        root.render(renderHarness());
       });
       expect(activeCount).toBe(14);
     } finally {
