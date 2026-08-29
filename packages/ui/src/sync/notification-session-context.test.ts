@@ -34,10 +34,10 @@ describe('resolveNotificationProjectLabel', () => {
 
 describe('usableSessionNotificationTitle', () => {
   test('rejects empty titles and raw session ids', () => {
-    expect(usableSessionNotificationTitle(undefined, 'ses_1')).toBeUndefined();
-    expect(usableSessionNotificationTitle('ses_1', 'ses_1')).toBeUndefined();
-    expect(usableSessionNotificationTitle('ses_abc123', 'other')).toBeUndefined();
-    expect(usableSessionNotificationTitle('session-54b733e2-6a69-45d1-98a9-4666816d3f9e', 'other')).toBeUndefined();
+    expect(usableSessionNotificationTitle(undefined, 'ses_1')).toBe(undefined);
+    expect(usableSessionNotificationTitle('ses_1', 'ses_1')).toBe(undefined);
+    expect(usableSessionNotificationTitle('ses_abc123', 'other')).toBe(undefined);
+    expect(usableSessionNotificationTitle('session-54b733e2-6a69-45d1-98a9-4666816d3f9e', 'other')).toBe(undefined);
     expect(usableSessionNotificationTitle('Fix login', 'ses_1')).toBe('Fix login');
   });
 });

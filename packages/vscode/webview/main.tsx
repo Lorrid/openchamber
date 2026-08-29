@@ -1491,7 +1491,7 @@ const claimOpenChamberNotification = async (payload: { title?: unknown; body?: u
   }
 };
 
-const showOpenChamberNotification = (payload: { title?: unknown; body?: unknown; sessionId?: unknown; tag?: unknown; directory?: unknown; requireHidden?: unknown } | undefined) => {
+const showOpenChamberNotification = (payload: { title?: unknown; body?: unknown; sessionId?: unknown; tag?: unknown; directory?: unknown; requireHidden?: unknown; silent?: unknown } | undefined) => {
   if (typeof Notification === 'undefined') {
     return false;
   }

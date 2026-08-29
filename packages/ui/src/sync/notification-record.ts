@@ -57,7 +57,8 @@ export const formatSessionNotificationContext = (
   projectLabel?: string,
 ): string => {
   const title = nonempty(sessionTitle) ?? '';
-  const project = nonempty(projectLabel) && !isSessionIdentityLabel(projectLabel) ? projectLabel.trim() : '';
+  const usableProject = nonempty(projectLabel);
+  const project = usableProject && !isSessionIdentityLabel(usableProject) ? usableProject : '';
   if (title && project && title !== project) return `${title} · ${project}`;
   return title || project;
 };
