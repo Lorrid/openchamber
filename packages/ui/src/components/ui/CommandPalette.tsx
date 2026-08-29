@@ -269,6 +269,16 @@ export const CommandPalette: React.FC = () => {
         searchText: t('commandPalette.item.openSettings'),
         onSelect: run(() => setSettingsDialogOpen(true)),
       },
+      {
+        id: 'open-notifications',
+        title: t('commandPalette.item.openNotifications'),
+        icon: <Icon name="notification-3" className="mr-2 h-4 w-4" />,
+        shortcutId: 'open_notifications',
+        searchText: t('commandPalette.item.openNotifications'),
+        onSelect: run(() => {
+          window.dispatchEvent(new CustomEvent('openchamber:toggle-notifications'));
+        }),
+      },
     ];
     list.push(
       {

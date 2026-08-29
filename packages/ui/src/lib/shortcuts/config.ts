@@ -215,6 +215,13 @@ const SHORTCUT_GROUPS = {
       settingsLabelKey:
         'settings.openchamber.keyboardShortcuts.action.toggle_services_menu.label',
     },
+    {
+      id: 'open_notifications',
+      defaultBinding: 'mod+k o',
+      customizable: true,
+      settingsLabelKey:
+        'settings.openchamber.keyboardShortcuts.action.open_notifications.label',
+    },
   ],
   navigation: [
     { id: 'save_file', defaultBinding: 'mod+s', customizable: false },

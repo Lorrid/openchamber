@@ -786,6 +786,28 @@ export const createSettingsRuntime = (deps) => {
       next.notifyOnQuestion = true;
       changed = true;
     }
+    const inbox = settings.notificationInboxFilter && typeof settings.notificationInboxFilter === 'object'
+      ? settings.notificationInboxFilter
+      : {};
+    const inboxDefaults = {
+      sessionFinished: true,
+      sessionError: true,
+      sessionSubtask: false,
+      permissionQuestion: true,
+      appErrorWarning: true,
+      info: false,
+      success: false,
+    };
+    let inboxChanged = false;
+    const nextInbox = { ...inboxDefaults };
+    for (const key of Object.keys(inboxDefaults)) {
+      if (typeof inbox[key] === 'boolean') nextInbox[key] = inbox[key];
+      else inboxChanged = true;
+    }
+    if (inboxChanged || !settings.notificationInboxFilter) {
+      next.notificationInboxFilter = nextInbox;
+      changed = true;
+    }
 
     const { templates, changed: templatesChanged } = ensureNotificationTemplateShape(settings.notificationTemplates);
     if (templatesChanged || !settings.notificationTemplates || typeof settings.notificationTemplates !== 'object') {

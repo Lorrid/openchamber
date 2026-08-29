@@ -215,6 +215,9 @@ export const useKeyboardShortcuts = () => {
       const state = useUIStore.getState();
       state.setSettingsDialogOpen(!state.isSettingsDialogOpen);
     },
+    open_notifications: () => {
+      window.dispatchEvent(new CustomEvent('openchamber:toggle-notifications'));
+    },
     add_selection_to_chat: invokeActiveSelectionAddToChat,
     toggle_sidebar: () => {
       const state = useUIStore.getState();

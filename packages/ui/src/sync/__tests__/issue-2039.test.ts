@@ -204,6 +204,7 @@ mock.module("../sync-context", () => ({
 
 mock.module("../notification-store", () => ({
   markSessionViewed: () => undefined,
+  appendNotification: () => null,
 }))
 
 mock.module("../session-navigation", () => ({

@@ -34,7 +34,7 @@ import { touchStreamingSession, updateChangedStreamingSessions, updateStreamingS
 import { countSyncPerformance } from "./performance-diagnostics"
 import { runBackgroundNetworkTask } from "@/lib/background-network"
 import { setActionRefs } from "./session-actions"
-import { setSyncRefs, getAllSyncSessions } from "./sync-refs"
+import { setSyncRefs, getAllSyncSessionMap, getAllSyncSessions } from "./sync-refs"
 import { useSessionUIStore } from "./session-ui-store"
 import { stripSessionDiffSnapshots } from "./sanitize"
 import { upsertSessionRecord } from "./session-records"
@@ -53,6 +53,9 @@ import { useTodosPersistStore } from "@/stores/useTodosPersistStore"
 import { cleanupPersistedSessionState } from "./session-deletion-cleanup"
 import { toast } from "@/components/ui"
 import { appendNotification } from "./notification-store"
+import { usableSessionNotificationTitle } from "./notification-session-context"
+import { resolveNotificationProjectLabel } from "./notification-session-context"
+import { useProjectsStore } from "@/stores/useProjectsStore"
 import {
   applyGlobalSessionStatusEvent,
   applyGlobalSessionStatusEvents,
@@ -487,6 +490,24 @@ const getQuestionToastKey = (sessionID?: string, requestID?: string) => {
   return `${sessionID}:${requestID}`
 }
 
+const permissionToastCopy = () => {
+  const dictionary = useI18nStore.getState().dictionary
+  return {
+    title: formatMessage(dictionary, 'layout.notifications.permissionNeeded'),
+    actionLabel: formatMessage(dictionary, 'layout.notifications.openSession'),
+    fallbackDescription: formatMessage(dictionary, 'layout.notifications.permissionFallback'),
+  }
+}
+
+const questionToastCopy = () => {
+  const dictionary = useI18nStore.getState().dictionary
+  return {
+    title: formatMessage(dictionary, 'layout.notifications.inputNeeded'),
+    description: formatMessage(dictionary, 'layout.notifications.questionFallback'),
+    actionLabel: formatMessage(dictionary, 'layout.notifications.openSession'),
+  }
+}
+
 type UiNotificationPayload = {
   title?: unknown
   body?: unknown
@@ -532,6 +553,10 @@ const handleUiNotificationEvent = (payload: Event, fallbackDirectory: string): b
     if (sessionId && directory) {
       toast.info(title, {
         ...options,
+        session: sessionId,
+        directory,
+        actionRecord: { type: 'open-session', sessionId, directory },
+        dedupeKey: 'opencode-restart-interrupted',
         action: {
           label: formatMessage(dictionary, "chat.toast.opencodeRestartInterrupted.openSession"),
           onClick: () => openSessionFromToast(sessionId, directory),
@@ -1379,13 +1404,19 @@ export async function resyncBlockingRequestsForDirectory(
         if (!toastKey || pendingQuestionToastIds.has(toastKey)) continue
         pendingQuestionToastIds.add(toastKey)
         const firstQuestion = question.questions?.[0]
-        const title = firstQuestion?.header?.trim() || "Input needed"
-        const description = firstQuestion?.question?.trim() || "Agent is waiting for your response"
+        const copy = questionToastCopy()
+        const title = firstQuestion?.header?.trim() || copy.title
+        const description = firstQuestion?.question?.trim() || copy.description
         toast.info(title, {
           id: `question-${toastKey}`,
           description,
+          source: 'question',
+          session: sessionId,
+          directory,
+          actionRecord: { type: 'open-session', sessionId, directory },
+          dedupeKey: `question:${toastKey}`,
           action: {
-            label: "Open session",
+            label: copy.actionLabel,
             onClick: () => openSessionFromToast(sessionId, directory),
           },
         })
@@ -1461,6 +1492,7 @@ export async function resyncBlockingRequestsForDirectory(
           directory,
           isViewed,
           pendingIds: pendingPermissionToastIds,
+          ...permissionToastCopy(),
           show: (title, options) => toast.info(title, options),
           openSession: openSessionFromToast,
         })
@@ -1709,6 +1741,7 @@ export function handleEvent(
       directory: resolvedDirectory,
       isViewed,
       pendingIds: pendingPermissionToastIds,
+      ...permissionToastCopy(),
       show: (title, options) => toast.info(title, options),
       openSession: openSessionFromToast,
     })
@@ -1733,13 +1766,19 @@ export function handleEvent(
     if (!isViewed && toastKey && !pendingQuestionToastIds.has(toastKey)) {
       pendingQuestionToastIds.add(toastKey)
       const firstQuestion = question.questions?.[0]
-      const title = firstQuestion?.header?.trim() || "Input needed"
-      const description = firstQuestion?.question?.trim() || "Agent is waiting for your response"
+      const copy = questionToastCopy()
+      const title = firstQuestion?.header?.trim() || copy.title
+      const description = firstQuestion?.question?.trim() || copy.description
       toast.info(title, {
         id: `question-${toastKey}`,
         description,
+        source: 'question',
+        session: sessionID,
+        directory: resolvedDirectory,
+        actionRecord: { type: 'open-session', sessionId: sessionID, directory: resolvedDirectory },
+        dedupeKey: `question:${toastKey}`,
         action: {
-          label: "Open session",
+          label: copy.actionLabel,
           onClick: () => openSessionFromToast(sessionID, resolvedDirectory),
         },
       })
@@ -1760,15 +1799,21 @@ export function handleEvent(
   if (payload.type === "session.idle" || payload.type === "session.error") {
     const props = payload.properties as { sessionID?: string; error?: { message?: string; code?: string } }
     const sessionID = props.sessionID
-    // Skip subtask sessions — only top-level sessions generate notifications
     const storeState = getDirectoryEventState(store, batch)
     const session = storeState.session.find((s) => s.id === sessionID)
-    if (session && (session as { parentID?: string }).parentID) {
-      // subtask — skip notification
-    } else if (sessionID) {
+    if (sessionID) {
+      const indexedTitle = getAllSyncSessionMap().get(sessionID)?.title
+      const sessionTitle = usableSessionNotificationTitle(session?.title, sessionID)
+        ?? usableSessionNotificationTitle(indexedTitle, sessionID)
       appendNotification({
         directory: resolvedDirectory,
         session: sessionID,
+        sessionTitle,
+        projectLabel: resolveNotificationProjectLabel(
+          resolvedDirectory,
+          useProjectsStore.getState().projects,
+        ),
+        subtask: Boolean((session as { parentID?: string } | undefined)?.parentID),
         time: Date.now(),
         viewed: isViewedInCurrentSession(resolvedDirectory, sessionID),
         ...(payload.type === "session.error"

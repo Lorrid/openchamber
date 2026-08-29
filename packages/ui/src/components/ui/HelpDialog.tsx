@@ -197,6 +197,12 @@ export const HelpDialog: React.FC = () => {
           keys: '',
         },
         {
+          id: 'open_notifications',
+          descriptionKey: 'helpDialog.item.openNotifications',
+          icon: "notification-3",
+          keys: '',
+        },
+        {
           id: 'open_settings',
           descriptionKey: "helpDialog.item.openSettings",
           icon: "settings-3",

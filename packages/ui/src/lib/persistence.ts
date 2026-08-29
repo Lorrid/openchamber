@@ -18,6 +18,10 @@ import { sanitizeStarterRefs } from '@/lib/draftStarters';
 import { normalizeMobileKeyboardMode, setStoredMobileKeyboardMode } from '@/lib/mobileKeyboardMode';
 import { runtimeFetch } from '@/lib/runtime-fetch';
 import { isCapacitorApp } from '@/lib/platform';
+import {
+  NOTIFICATION_INBOX_KIND_KEYS,
+  parseNotificationInboxFilter,
+} from '@/lib/notificationInboxFilter';
 import { isTerminalShell } from '@/lib/terminalShell';
 import { getRuntimeKey, subscribeRuntimeEndpointChanged, subscribeRuntimeEndpointWillChange } from '@/lib/runtime-switch';
 import { DEFAULT_DARK_THEME_ID, DEFAULT_LIGHT_THEME_ID } from '@/lib/theme/themes';
@@ -565,6 +569,7 @@ const materializeAuthoritativeUiSettings = (settings: DesktopSettings): DesktopS
     notifyOnCompletion: defaults.notifyOnCompletion,
     notifyOnError: defaults.notifyOnError,
     notifyOnQuestion: defaults.notifyOnQuestion,
+    notificationInboxFilter: defaults.notificationInboxFilter,
     notificationTemplates: defaults.notificationTemplates,
     summarizeLastMessage: defaults.summarizeLastMessage,
     summaryThreshold: defaults.summaryThreshold,
@@ -722,6 +727,13 @@ const applyDesktopUiPreferences = (settings: DesktopSettings) => {
   }
   if (typeof settings.notifyOnQuestion === 'boolean' && settings.notifyOnQuestion !== store.notifyOnQuestion) {
     store.setNotifyOnQuestion(settings.notifyOnQuestion);
+  }
+  const inboxFilter = parseNotificationInboxFilter(settings.notificationInboxFilter);
+  if (inboxFilter) {
+    const current = store.notificationInboxFilter;
+    if (NOTIFICATION_INBOX_KIND_KEYS.some((key) => inboxFilter[key] !== current[key])) {
+      store.setNotificationInboxFilter(inboxFilter);
+    }
   }
   if (settings.notificationTemplates && typeof settings.notificationTemplates === 'object') {
     store.setNotificationTemplates(settings.notificationTemplates);
@@ -1303,6 +1315,10 @@ const sanitizeWebSettings = (payload: unknown): DesktopSettings | null => {
   }
   if (typeof candidate.notifyOnQuestion === 'boolean') {
     result.notifyOnQuestion = candidate.notifyOnQuestion;
+  }
+  const inboxFilter = parseNotificationInboxFilter(candidate.notificationInboxFilter);
+  if (inboxFilter) {
+    result.notificationInboxFilter = inboxFilter;
   }
   if (candidate.notificationTemplates && typeof candidate.notificationTemplates === 'object') {
     const templates = candidate.notificationTemplates as Record<string, unknown>;

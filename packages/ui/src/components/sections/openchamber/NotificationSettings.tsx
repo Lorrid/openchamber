@@ -66,6 +66,8 @@ export const NotificationSettings: React.FC = () => {
   const setNotifyOnError = useUIStore(state => state.setNotifyOnError);
   const notifyOnQuestion = useUIStore(state => state.notifyOnQuestion);
   const setNotifyOnQuestion = useUIStore(state => state.setNotifyOnQuestion);
+  const notificationInboxFilter = useUIStore(state => state.notificationInboxFilter);
+  const setNotificationInboxFilter = useUIStore(state => state.setNotificationInboxFilter);
   const notificationTemplates = useUIStore(state => state.notificationTemplates);
   const setNotificationTemplates = useUIStore(state => state.setNotificationTemplates);
 
@@ -457,6 +459,7 @@ export const NotificationSettings: React.FC = () => {
         <SettingsSection
           settingsItem="notifications.delivery"
           title={t('settings.notifications.page.delivery.title')}
+          info={t('settings.notifications.page.delivery.info')}
           divider={false}
         >
           <div className={SETTINGS_OPTION_STACK_CLASS}>
@@ -516,6 +519,57 @@ export const NotificationSettings: React.FC = () => {
               )}
             </div>
           )}
+        </SettingsSection>
+
+        <SettingsSection
+          settingsItem="notifications.inbox"
+          title={t('settings.notifications.page.inbox.title')}
+          info={t('settings.notifications.page.inbox.info')}
+        >
+          <div className={SETTINGS_OPTION_STACK_CLASS}>
+            <SettingsCheckboxRow
+              checked={notificationInboxFilter.sessionFinished}
+              onChange={(checked) => setNotificationInboxFilter({ sessionFinished: checked })}
+              label={t('settings.notifications.page.inbox.sessionFinishedLabel')}
+              ariaLabel={t('settings.notifications.page.inbox.sessionFinishedAria')}
+            />
+            <SettingsCheckboxRow
+              checked={notificationInboxFilter.sessionError}
+              onChange={(checked) => setNotificationInboxFilter({ sessionError: checked })}
+              label={t('settings.notifications.page.inbox.sessionErrorLabel')}
+              ariaLabel={t('settings.notifications.page.inbox.sessionErrorAria')}
+            />
+            <SettingsCheckboxRow
+              checked={notificationInboxFilter.sessionSubtask}
+              onChange={(checked) => setNotificationInboxFilter({ sessionSubtask: checked })}
+              label={t('settings.notifications.page.inbox.sessionSubtaskLabel')}
+              ariaLabel={t('settings.notifications.page.inbox.sessionSubtaskAria')}
+            />
+            <SettingsCheckboxRow
+              checked={notificationInboxFilter.permissionQuestion}
+              onChange={(checked) => setNotificationInboxFilter({ permissionQuestion: checked })}
+              label={t('settings.notifications.page.inbox.permissionQuestionLabel')}
+              ariaLabel={t('settings.notifications.page.inbox.permissionQuestionAria')}
+            />
+            <SettingsCheckboxRow
+              checked={notificationInboxFilter.appErrorWarning}
+              onChange={(checked) => setNotificationInboxFilter({ appErrorWarning: checked })}
+              label={t('settings.notifications.page.inbox.appErrorWarningLabel')}
+              ariaLabel={t('settings.notifications.page.inbox.appErrorWarningAria')}
+            />
+            <SettingsCheckboxRow
+              checked={notificationInboxFilter.info}
+              onChange={(checked) => setNotificationInboxFilter({ info: checked })}
+              label={t('settings.notifications.page.inbox.infoLabel')}
+              ariaLabel={t('settings.notifications.page.inbox.infoAria')}
+            />
+            <SettingsCheckboxRow
+              checked={notificationInboxFilter.success}
+              onChange={(checked) => setNotificationInboxFilter({ success: checked })}
+              label={t('settings.notifications.page.inbox.successLabel')}
+              ariaLabel={t('settings.notifications.page.inbox.successAria')}
+            />
+          </div>
         </SettingsSection>
 
         {nativeNotificationsEnabled && canShowNotifications && (

@@ -968,7 +968,15 @@ const SETTINGS_SEARCH_ITEMS: readonly SettingsSearchItem[] = [
     id: 'notifications.delivery',
     page: 'notifications',
     titleKey: 'settings.notifications.page.delivery.title',
+    descriptionKey: 'settings.notifications.page.delivery.info',
     keywords: ['desktop notifications', 'system notifications'],
+  },
+  {
+    id: 'notifications.inbox',
+    page: 'notifications',
+    titleKey: 'settings.notifications.page.inbox.title',
+    descriptionKey: 'settings.notifications.page.inbox.info',
+    keywords: ['history', 'inbox', 'toast', 'badge', 'unread', 'subtask'],
   },
   {
     id: 'notifications.events',

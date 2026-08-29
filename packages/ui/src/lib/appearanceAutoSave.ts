@@ -4,6 +4,7 @@ import type { DesktopSettings } from '@/lib/desktop';
 import type { MonoFontOption, UiFontOption } from '@/lib/fontOptions';
 import type { MobileKeyboardMode } from '@/lib/mobileKeyboardMode';
 import type { TerminalShell } from '@/lib/api/types';
+import type { NotificationInboxFilter } from '@/lib/notificationInboxFilter';
 
 type AppearanceSlice = {
   showReasoningTraces: boolean;
@@ -23,6 +24,7 @@ type AppearanceSlice = {
   notifyOnCompletion: boolean;
   notifyOnError: boolean;
   notifyOnQuestion: boolean;
+  notificationInboxFilter: NotificationInboxFilter;
   notificationTemplates: {
     completion: { title: string; message: string };
     error: { title: string; message: string };
@@ -79,6 +81,7 @@ export const startAppearanceAutoSave = (): void => {
     notifyOnCompletion: useUIStore.getState().notifyOnCompletion,
     notifyOnError: useUIStore.getState().notifyOnError,
     notifyOnQuestion: useUIStore.getState().notifyOnQuestion,
+    notificationInboxFilter: useUIStore.getState().notificationInboxFilter,
     notificationTemplates: useUIStore.getState().notificationTemplates,
     summarizeLastMessage: useUIStore.getState().summarizeLastMessage,
     summaryThreshold: useUIStore.getState().summaryThreshold,
@@ -122,6 +125,7 @@ export const startAppearanceAutoSave = (): void => {
       notifyOnCompletion: state.notifyOnCompletion,
       notifyOnError: state.notifyOnError,
       notifyOnQuestion: state.notifyOnQuestion,
+      notificationInboxFilter: state.notificationInboxFilter,
       notificationTemplates: state.notificationTemplates,
       summarizeLastMessage: state.summarizeLastMessage,
       summaryThreshold: state.summaryThreshold,
@@ -200,6 +204,9 @@ export const startAppearanceAutoSave = (): void => {
     }
     if (current.notifyOnQuestion !== previous.notifyOnQuestion) {
       diff.notifyOnQuestion = current.notifyOnQuestion;
+    }
+    if (JSON.stringify(current.notificationInboxFilter) !== JSON.stringify(previous.notificationInboxFilter)) {
+      diff.notificationInboxFilter = current.notificationInboxFilter;
     }
     if (JSON.stringify(current.notificationTemplates) !== JSON.stringify(previous.notificationTemplates)) {
       diff.notificationTemplates = current.notificationTemplates;

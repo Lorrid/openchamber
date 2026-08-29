@@ -12,6 +12,10 @@ import type { ProjectRef } from '@/lib/projectContextApi';
 import { useFilesViewTabsStore } from './useFilesViewTabsStore';
 import { isWindowsArm64 } from '@/lib/platform';
 import { isVSCodeRuntime } from '@/lib/desktop';
+import {
+  DEFAULT_NOTIFICATION_INBOX_FILTER,
+  type NotificationInboxFilter,
+} from '@/lib/notificationInboxFilter';
 
 export type PendingDiffScope = 'working' | 'staged' | 'turn' | 'branch';
 export type ContextPanelMode = 'diff' | 'walkthrough' | 'file' | 'context' | 'plan' | 'chat' | 'browser' | 'git' | 'pr' | 'notes' | 'terminal';
@@ -800,6 +804,7 @@ interface UIStore {
   notifyOnCompletion: boolean;
   notifyOnError: boolean;
   notifyOnQuestion: boolean;
+  notificationInboxFilter: NotificationInboxFilter;
 
   // Per-event notification templates
   notificationTemplates: {
@@ -997,6 +1002,7 @@ interface UIStore {
   setNotifyOnCompletion: (value: boolean) => void;
   setNotifyOnError: (value: boolean) => void;
   setNotifyOnQuestion: (value: boolean) => void;
+  setNotificationInboxFilter: (value: Partial<NotificationInboxFilter>) => void;
   setNotificationTemplates: (
     templates: UIStore['notificationTemplates'] | ((current: UIStore['notificationTemplates']) => UIStore['notificationTemplates']),
   ) => void;
@@ -1152,6 +1158,7 @@ export const useUIStore = create<UIStore>()(
         notifyOnCompletion: true,
         notifyOnError: true,
         notifyOnQuestion: true,
+        notificationInboxFilter: { ...DEFAULT_NOTIFICATION_INBOX_FILTER },
         notificationTemplates: {
           completion: { ...EMPTY_NOTIFICATION_TEMPLATES.completion },
           error: { ...EMPTY_NOTIFICATION_TEMPLATES.error },
@@ -2355,6 +2362,11 @@ export const useUIStore = create<UIStore>()(
         setNotifyOnCompletion: (value) => { set({ notifyOnCompletion: value }); },
         setNotifyOnError: (value) => { set({ notifyOnError: value }); },
         setNotifyOnQuestion: (value) => { set({ notifyOnQuestion: value }); },
+        setNotificationInboxFilter: (value) => {
+          set((state) => ({
+            notificationInboxFilter: { ...state.notificationInboxFilter, ...value },
+          }));
+        },
         setNotificationTemplates: (templates) => {
           set((state) => ({
             notificationTemplates: typeof templates === 'function'
@@ -2798,6 +2810,7 @@ export const useUIStore = create<UIStore>()(
           notifyOnCompletion: state.notifyOnCompletion,
           notifyOnError: state.notifyOnError,
           notifyOnQuestion: state.notifyOnQuestion,
+          notificationInboxFilter: state.notificationInboxFilter,
           notificationTemplates: state.notificationTemplates,
           summarizeLastMessage: state.summarizeLastMessage,
           summaryThreshold: state.summaryThreshold,
