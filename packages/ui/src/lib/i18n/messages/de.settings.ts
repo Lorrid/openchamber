@@ -1738,7 +1738,7 @@ export const settingsDict = {
   'settings.notifications.page.inbox.enableAria': 'Verlauf in der App aktivieren',
   'settings.notifications.page.inbox.soundLabel': 'Ton abspielen',
   'settings.notifications.page.inbox.soundAria': 'Ton für das Benachrichtigungscenter abspielen',
-  'settings.notifications.page.inbox.soundInfo': 'Ein kurzer Ton, wenn ein Eintrag in der Liste landet und dieses Fenster vorn ist. Derselbe Schalter stellt auch Systembanner stumm.',
+  'settings.notifications.page.inbox.soundInfo': 'Ein kurzer Ton, wenn ein Eintrag in der Liste landet und dieses Fenster vorn ist.',
   'settings.notifications.page.inbox.sessionFinishedLabel': 'Sitzung abgeschlossen',
   'settings.notifications.page.inbox.sessionFinishedAria': 'Abgeschlossene Sitzungen im In-App-Verlauf anzeigen',
   'settings.notifications.page.inbox.sessionErrorLabel': 'Sitzungsfehler',

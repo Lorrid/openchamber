@@ -1688,7 +1688,7 @@ export const settingsDict = {
   'settings.notifications.page.inbox.enableAria': '啟用應用程式內紀錄',
   'settings.notifications.page.inbox.soundLabel': '播放聲音',
   'settings.notifications.page.inbox.soundAria': '為通知中心播放聲音',
-  'settings.notifications.page.inbox.soundInfo': '項目進入清單且此視窗在前景時會響一聲。同一個開關也會關掉系統橫幅的聲音。',
+  'settings.notifications.page.inbox.soundInfo': '項目進入清單且此視窗在前景時會響一聲。',
   'settings.notifications.page.inbox.sessionFinishedLabel': '工作階段已結束',
   'settings.notifications.page.inbox.sessionFinishedAria': '在應用程式內紀錄中顯示已結束的工作階段',
   'settings.notifications.page.inbox.sessionErrorLabel': '工作階段錯誤',

@@ -1781,7 +1781,7 @@ export const settingsDict = {
   'settings.notifications.page.inbox.enableAria': '앱 내 기록 사용',
   'settings.notifications.page.inbox.soundLabel': '소리 재생',
   'settings.notifications.page.inbox.soundAria': '알림 센터에서 소리 재생',
-  'settings.notifications.page.inbox.soundInfo': '목록에 항목이 들어오고 이 창이 앞에 있을 때 짧은 소리가 납니다. 같은 스위치가 시스템 배너 소리도 끕니다.',
+  'settings.notifications.page.inbox.soundInfo': '목록에 항목이 들어오고 이 창이 앞에 있을 때 짧은 소리가 납니다.',
   'settings.notifications.page.inbox.sessionFinishedLabel': '세션 완료',
   'settings.notifications.page.inbox.sessionFinishedAria': '완료된 세션을 앱 내 기록에 표시',
   'settings.notifications.page.inbox.sessionErrorLabel': '세션 오류',

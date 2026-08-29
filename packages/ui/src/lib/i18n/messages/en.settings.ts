@@ -1804,7 +1804,7 @@ export const settingsDict = {
   'settings.notifications.page.inbox.enableAria': 'Enable in-app history',
   'settings.notifications.page.inbox.soundLabel': 'Play Sound',
   'settings.notifications.page.inbox.soundAria': 'Play a sound for the notification center',
-  'settings.notifications.page.inbox.soundInfo': 'A short chime when a notice lands in the list and this window is in front. The same switch also silences system banners.',
+  'settings.notifications.page.inbox.soundInfo': 'A short chime when a notice lands in the list and this window is in front.',
   'settings.notifications.page.inbox.sessionFinishedLabel': 'Session finished',
   'settings.notifications.page.inbox.sessionFinishedAria': 'Show session finished in the in-app history',
   'settings.notifications.page.inbox.sessionErrorLabel': 'Session errors',

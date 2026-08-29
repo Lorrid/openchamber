@@ -1814,7 +1814,7 @@ export const settingsDict = {
   'settings.notifications.page.inbox.enableAria': 'アプリ内の履歴を有効化',
   'settings.notifications.page.inbox.soundLabel': '音を鳴らす',
   'settings.notifications.page.inbox.soundAria': '通知センターで音を鳴らす',
-  'settings.notifications.page.inbox.soundInfo': '一覧に項目が入り、このウィンドウが手前のときに短い音が鳴ります。同じスイッチでシステム通知の音も切れます。',
+  'settings.notifications.page.inbox.soundInfo': '一覧に項目が入り、このウィンドウが手前のときに短い音が鳴ります。',
   'settings.notifications.page.inbox.sessionFinishedLabel': 'セッション完了',
   'settings.notifications.page.inbox.sessionFinishedAria': '完了したセッションをアプリ内履歴に表示する',
   'settings.notifications.page.inbox.sessionErrorLabel': 'セッションエラー',

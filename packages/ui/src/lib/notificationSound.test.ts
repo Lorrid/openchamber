@@ -122,8 +122,9 @@ describe('shouldPlayNotificationSound', () => {
 });
 
 describe('resolveOsNotificationSilent', () => {
-  test('honors an explicit payload flag', () => {
+  test('only honors an explicit silent payload', () => {
     expect(resolveOsNotificationSilent({ silent: true })).toBe(true);
     expect(resolveOsNotificationSilent({ silent: false })).toBe(false);
+    expect(resolveOsNotificationSilent(undefined)).toBe(false);
   });
 });

@@ -52,11 +52,7 @@ const isNotificationSoundContextFocused = (): boolean => {
 
 export const resolveOsNotificationSilent = (
   payload: { silent?: boolean } | undefined,
-): boolean => {
-  if (payload?.silent === true) return true;
-  if (payload?.silent === false) return false;
-  return !useUIStore.getState().notificationSoundEnabled;
-};
+): boolean => payload?.silent === true;
 
 export type NotificationSoundContext = {
   focused: boolean;

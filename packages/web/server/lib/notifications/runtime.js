@@ -410,7 +410,6 @@ export const createNotificationTriggerRuntime = (deps) => {
             sessionId,
             directory: notificationDirectory,
             requireHidden: settings.notificationMode !== 'always',
-            silent: settings.notificationSoundEnabled === false,
           };
           const desktopNotificationDelivered = emitDesktopNotification(notificationPayload);
           broadcastUiNotification(notificationPayload, { desktopNotificationDelivered });
@@ -481,7 +480,6 @@ export const createNotificationTriggerRuntime = (deps) => {
             sessionId,
             directory: notificationDirectory,
             requireHidden: settings.notificationMode !== 'always',
-            silent: settings.notificationSoundEnabled === false,
           };
           const desktopNotificationDelivered = emitDesktopNotification(notificationPayload);
           broadcastUiNotification(notificationPayload, { desktopNotificationDelivered });
@@ -561,7 +559,6 @@ export const createNotificationTriggerRuntime = (deps) => {
             sessionId,
             directory: notificationDirectory,
             requireHidden: settings.notificationMode !== 'always',
-            silent: settings.notificationSoundEnabled === false,
           };
           const desktopNotificationDelivered = emitDesktopNotification(notificationPayload);
           broadcastUiNotification(notificationPayload, { desktopNotificationDelivered });
@@ -681,7 +678,6 @@ export const createNotificationTriggerRuntime = (deps) => {
             sessionId,
             directory: notificationDirectory,
             requireHidden: settings.notificationMode !== 'always',
-            silent: settings.notificationSoundEnabled === false,
           };
           const desktopNotificationDelivered = emitDesktopNotification(notificationPayload);
           broadcastUiNotification(notificationPayload, { desktopNotificationDelivered });

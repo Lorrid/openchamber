@@ -1781,7 +1781,7 @@ export const settingsDict = {
   "settings.notifications.page.inbox.enableAria": "Увімкнути історію в застосунку",
   "settings.notifications.page.inbox.soundLabel": "Звук дзвіночка",
   "settings.notifications.page.inbox.soundAria": "Відтворювати звук у центрі сповіщень",
-  "settings.notifications.page.inbox.soundInfo": "Короткий сигнал, коли рядок з'являється в списку і це вікно попереду. Той самий перемикач вимикає і звук системних банерів.",
+  "settings.notifications.page.inbox.soundInfo": "Короткий сигнал, коли рядок з'являється в списку і це вікно попереду.",
   "settings.notifications.page.inbox.sessionFinishedLabel": "Сесію завершено",
   "settings.notifications.page.inbox.sessionFinishedAria": "Показувати завершені сесії в історії застосунку",
   "settings.notifications.page.inbox.sessionErrorLabel": "Помилки сесії",
