@@ -675,7 +675,7 @@ export const settingsDict = {
   'settings.notifications.page.inbox.enableAria': 'Włącz historię w aplikacji',
   'settings.notifications.page.inbox.soundLabel': 'Odtwarzaj dźwięk',
   'settings.notifications.page.inbox.soundAria': 'Odtwarzaj dźwięk centrum powiadomień',
-  'settings.notifications.page.inbox.soundInfo': 'Krótki dźwięk, gdy pozycja trafia na listę i to okno jest na wierzchu.',
+  'settings.notifications.page.inbox.soundInfo': 'Krótki dźwięk, gdy pozycja trafia na listę, także gdy to okno jest w tle. Jeśli baner systemowy też dźwięczy, ten dźwięk milczy.',
   'settings.notifications.page.inbox.sessionFinishedLabel': 'Sesja zakończona',
   'settings.notifications.page.inbox.sessionFinishedAria': 'Pokazuj zakończone sesje w historii w aplikacji',
   'settings.notifications.page.inbox.sessionErrorLabel': 'Błędy sesji',

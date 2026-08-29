@@ -1780,7 +1780,7 @@ export const settingsDict = {
   "settings.notifications.page.inbox.enableAria": "Ativar o histórico no app",
   "settings.notifications.page.inbox.soundLabel": "Reproduzir som",
   "settings.notifications.page.inbox.soundAria": "Reproduzir um som no centro de notificações",
-  "settings.notifications.page.inbox.soundInfo": "Um toque curto quando um aviso entra na lista e esta janela está na frente.",
+  "settings.notifications.page.inbox.soundInfo": "Um toque curto quando um aviso entra na lista, inclusive com esta janela em segundo plano. Se um banner do sistema também tocar, o toque fica quieto.",
   "settings.notifications.page.inbox.sessionFinishedLabel": "Sessão concluída",
   "settings.notifications.page.inbox.sessionFinishedAria": "Mostrar sessões concluídas no histórico do app",
   "settings.notifications.page.inbox.sessionErrorLabel": "Erros da sessão",

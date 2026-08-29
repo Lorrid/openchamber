@@ -989,7 +989,7 @@ const SETTINGS_SEARCH_ITEMS: readonly SettingsSearchItem[] = [
     page: 'notifications',
     titleKey: 'settings.notifications.page.inbox.soundLabel',
     descriptionKey: 'settings.notifications.page.inbox.soundInfo',
-    keywords: ['sound', 'chime', 'audio', 'beep', 'tone', 'bell', 'center'],
+    keywords: ['sound', 'chime', 'audio', 'beep', 'tone', 'bell', 'center', 'background'],
   },
   {
     id: 'notifications.events',

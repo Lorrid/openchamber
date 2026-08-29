@@ -68,11 +68,10 @@ export const shouldPlayNotificationSound = (
   if (event !== 'test' && !settings.notificationInboxEnabled) return false;
   if (!isEventEnabled(event, settings)) return false;
   if (event === 'test') return true;
-  if (context.viewingSession) return false;
-  if (!context.focused) return false;
-  if (settings.nativeNotificationsEnabled && settings.notificationMode === 'always') {
-    return false;
-  }
+  if (context.viewingSession && context.focused) return false;
+  const osBannerWouldSound = settings.nativeNotificationsEnabled
+    && (settings.notificationMode === 'always' || !context.focused);
+  if (osBannerWouldSound) return false;
   return true;
 };
 

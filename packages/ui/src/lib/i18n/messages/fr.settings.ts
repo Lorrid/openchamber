@@ -1698,7 +1698,7 @@ export const settingsDict = {
   'settings.notifications.page.inbox.enableAria': 'Activer l\'historique dans l\'app',
   'settings.notifications.page.inbox.soundLabel': 'Jouer un son',
   'settings.notifications.page.inbox.soundAria': 'Jouer un son pour le centre de notifications',
-  'settings.notifications.page.inbox.soundInfo': 'Un signal court quand un avis arrive dans la liste et que cette fenêtre est au premier plan.',
+  'settings.notifications.page.inbox.soundInfo': 'Un signal court quand un avis arrive dans la liste, y compris lorsque cette fenêtre est en arrière-plan. Si une bannière système sonne déjà, le signal reste muet.',
   'settings.notifications.page.inbox.sessionFinishedLabel': 'Session terminée',
   'settings.notifications.page.inbox.sessionFinishedAria': 'Afficher les sessions terminées dans l\'historique de l\'app',
   'settings.notifications.page.inbox.sessionErrorLabel': 'Erreurs de session',

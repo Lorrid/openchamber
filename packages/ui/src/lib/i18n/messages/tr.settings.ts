@@ -1728,7 +1728,7 @@ export const settingsDict = {
   'settings.notifications.page.inbox.enableAria': 'Uygulama içi geçmişi aç',
   'settings.notifications.page.inbox.soundLabel': 'Ses çal',
   'settings.notifications.page.inbox.soundAria': 'Bildirim merkezi için ses çal',
-  'settings.notifications.page.inbox.soundInfo': 'Listeye bir kayıt düşüp bu pencere öndeyken kısa bir ses çalar.',
+  'settings.notifications.page.inbox.soundInfo': 'Listeye bir kayıt düşünce kısa bir ses çalar, bu pencere arkadayken de. Sistem bildirimi de ses çıkarıyorsa bu ses susar.',
   'settings.notifications.page.inbox.sessionFinishedLabel': 'Oturum bitti',
   'settings.notifications.page.inbox.sessionFinishedAria': 'Biten oturumları uygulama içi geçmişte göster',
   'settings.notifications.page.inbox.sessionErrorLabel': 'Oturum hataları',

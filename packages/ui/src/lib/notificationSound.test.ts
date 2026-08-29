@@ -43,8 +43,21 @@ describe('shouldPlayNotificationSound', () => {
     )).toBe(false);
   });
 
-  test('stays quiet when the window is in the background', () => {
-    expect(shouldPlayNotificationSound('completion', settings(), { focused: false })).toBe(false);
+  test('plays when the window is in the background and OS banners stay quiet', () => {
+    expect(shouldPlayNotificationSound('completion', settings(), { focused: false })).toBe(true);
+    expect(shouldPlayNotificationSound(
+      'completion',
+      settings(),
+      { focused: false, viewingSession: true },
+    )).toBe(true);
+  });
+
+  test('stays quiet in the background when an OS banner would also sound', () => {
+    expect(shouldPlayNotificationSound(
+      'completion',
+      settings({ nativeNotificationsEnabled: true, notificationMode: 'hidden-only' }),
+      { focused: false },
+    )).toBe(false);
   });
 
   test('lets the OS banner own the sound while focused and always-notify is on', () => {

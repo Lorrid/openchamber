@@ -1780,7 +1780,7 @@ export const settingsDict = {
   'settings.notifications.page.inbox.enableAria': '启用应用内记录',
   'settings.notifications.page.inbox.soundLabel': '播放声音',
   'settings.notifications.page.inbox.soundAria': '为通知中心播放声音',
-  'settings.notifications.page.inbox.soundInfo': '条目进入列表且此窗口在前台时会响一声。',
+  'settings.notifications.page.inbox.soundInfo': '条目进入列表时会响一声，此窗口在后台时也会响。系统横幅已经出声时则保持安静。',
   'settings.notifications.page.inbox.sessionFinishedLabel': '会话已结束',
   'settings.notifications.page.inbox.sessionFinishedAria': '在应用内记录中显示已结束的会话',
   'settings.notifications.page.inbox.sessionErrorLabel': '会话错误',
