@@ -14,7 +14,9 @@ function isHttpOrigin(value: string): boolean {
 /**
  * Origin Linear comments should open. Packaged desktop UI lives on
  * `openchamber-ui://`, which is not a URL a browser can load from Linear, so
- * prefer the loopback origin the local server actually listens on.
+ * report the http origin the local server actually listens on instead. The
+ * server decides whether that origin is reachable by anyone else; a comment is
+ * only posted when it is.
  */
 export function resolveLinearSessionOrigin(): string | undefined {
   if (typeof window === 'undefined') return undefined;
@@ -23,7 +25,7 @@ export function resolveLinearSessionOrigin(): string | undefined {
     if (localOrigin && isHttpOrigin(localOrigin)) {
       return new URL(localOrigin).origin;
     }
-    return 'openchamber:';
+    return undefined;
   }
   const origin = window.location.origin.trim();
   return origin || undefined;
@@ -31,7 +33,7 @@ export function resolveLinearSessionOrigin(): string | undefined {
 
 export function postLinearSessionStarted(
   linear: LinearAPI | undefined,
-  args: { sessionId: string; issueIdentifier: string; sessionTitle?: string },
+  args: { sessionId: string; issueIdentifier: string },
 ): void {
   if (!linear?.sessionStatusPost) return;
   void linear.sessionStatusPost({
@@ -39,6 +41,5 @@ export function postLinearSessionStarted(
     sessionId: args.sessionId,
     issueIdentifier: args.issueIdentifier,
     sessionOrigin: resolveLinearSessionOrigin(),
-    sessionTitle: args.sessionTitle,
   }).catch(() => undefined);
 }

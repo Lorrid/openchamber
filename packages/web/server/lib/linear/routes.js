@@ -345,7 +345,6 @@ export function registerLinearRoutes(app) {
           sessionId: req.body?.sessionId,
           issueIdentifier: req.body?.issueIdentifier,
           sessionOrigin: req.body?.sessionOrigin,
-          sessionTitle: req.body?.sessionTitle,
         });
         return res.json(result);
       } catch (error) {
@@ -360,6 +359,30 @@ export function registerLinearRoutes(app) {
     } catch (error) {
       console.error('Failed to post Linear session status:', error);
       return res.status(500).json({ error: error.message || 'Failed to post Linear session status' });
+    }
+  });
+
+  app.get('/api/linear/preferences', async (_req, res) => {
+    try {
+      const { getLinearSessionCommentsEnabled } = await getLinearLibraries();
+      return res.json({ sessionComments: getLinearSessionCommentsEnabled() });
+    } catch (error) {
+      console.error('Failed to load Linear preferences:', error);
+      return res.status(500).json({ error: error.message || 'Failed to load Linear preferences' });
+    }
+  });
+
+  app.put('/api/linear/preferences', parseJsonBody, async (req, res) => {
+    try {
+      const sessionComments = req.body?.sessionComments;
+      if (sessionComments !== true && sessionComments !== false) {
+        return res.status(400).json({ error: 'sessionComments must be a boolean' });
+      }
+      const { setLinearSessionCommentsEnabled } = await getLinearLibraries();
+      return res.json({ sessionComments: setLinearSessionCommentsEnabled(sessionComments) });
+    } catch (error) {
+      console.error('Failed to save Linear preferences:', error);
+      return res.status(500).json({ error: error.message || 'Failed to save Linear preferences' });
     }
   });
 

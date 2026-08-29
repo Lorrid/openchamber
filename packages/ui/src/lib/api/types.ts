@@ -1233,7 +1233,7 @@ export type LinearIssueComment = {
   id: string;
   body: string;
   createdAt: string | null;
-  user?: { name: string | null; displayName: string | null } | null;
+  user?: { name: string | null; displayName: string | null; avatarUrl?: string | null } | null;
 };
 
 export type LinearIssue = LinearIssueSummary & {
@@ -1306,13 +1306,21 @@ export type LinearSessionStatusPostInput = {
   sessionId: string;
   issueIdentifier?: string;
   sessionOrigin?: string;
-  sessionTitle?: string;
 };
 
 export type LinearSessionStatusPostResult =
   | { connected: false }
   | { connected: true; posted: true; commentId: string | null }
-  | { connected: true; posted: false; skipped: 'already-posted' | 'issue-not-found' | 'not-started' };
+  | {
+    connected: true;
+    posted: false;
+    skipped: 'already-posted' | 'issue-not-found' | 'not-started' | 'disabled' | 'origin-not-public';
+  };
+
+export type LinearPreferences = {
+  /** Status comments are off until the user opts in. */
+  sessionComments: boolean;
+};
 
 export interface LinearAPI {
   authStatus(): Promise<LinearAuthStatus>;
@@ -1326,6 +1334,8 @@ export interface LinearAPI {
   mappingGet(): Promise<LinearMappingResult>;
   mappingSet(mapping: LinearMappingWrite): Promise<LinearMappingResult>;
   sessionStatusPost(input: LinearSessionStatusPostInput): Promise<LinearSessionStatusPostResult>;
+  preferencesGet(): Promise<LinearPreferences>;
+  preferencesSet(preferences: LinearPreferences): Promise<LinearPreferences>;
 }
 
 export interface GitHubAPI {

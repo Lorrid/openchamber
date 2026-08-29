@@ -34,7 +34,7 @@ describe('resolveLinearSessionOrigin', () => {
     expect(resolveLinearSessionOrigin()).toBe('http://127.0.0.1:3001');
   });
 
-  test('falls back to the desktop deep-link scheme when loopback is not http', () => {
+  test('reports no origin when the desktop shell has no http loopback', () => {
     Object.defineProperty(globalThis, 'window', {
       configurable: true,
       value: {
@@ -43,6 +43,8 @@ describe('resolveLinearSessionOrigin', () => {
         __OPENCHAMBER_LOCAL_ORIGIN__: 'openchamber-ui://app',
       },
     });
-    expect(resolveLinearSessionOrigin()).toBe('openchamber:');
+    // A deep link is unopenable for everyone but this machine, so the server
+    // gets no origin and posts no comment.
+    expect(resolveLinearSessionOrigin()).toBe(undefined);
   });
 });

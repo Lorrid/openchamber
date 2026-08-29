@@ -169,7 +169,6 @@ export async function startLinearIssueSession(args: {
     postLinearSessionStarted(linear, {
       sessionId,
       issueIdentifier: issue.identifier,
-      sessionTitle,
     });
 
     const configState = useConfigStore.getState();

@@ -13,9 +13,9 @@ export {
   getLinearRedirectUri,
   isLinearAccessTokenStale,
   getLinearAuthFilePath,
+  getLinearSessionCommentsEnabled,
+  setLinearSessionCommentsEnabled,
   DEFAULT_LINEAR_CLIENT_ID_VALUE,
-  DEFAULT_LINEAR_SCOPES_VALUE,
-  DEFAULT_LINEAR_BROKER_URL_VALUE,
 } from './auth.js';
 
 export {
@@ -56,5 +56,6 @@ export {
 
 export {
   LinearSessionStatusError,
+  isPublicSessionOrigin,
   postLinearSessionStatus,
 } from './status.js';

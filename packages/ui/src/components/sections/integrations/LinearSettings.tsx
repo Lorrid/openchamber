@@ -11,6 +11,7 @@ import { focusDesktopWindow, isDesktopShell } from '@/lib/desktop';
 import { Icon } from '@/components/icon/Icon';
 import { SettingsSection } from '@/components/sections/shared/SettingsSection';
 import { LinearProjectMapping } from './LinearProjectMapping';
+import { LinearSessionComments } from './LinearSessionComments';
 
 const AUTHORIZATION_WATCH_MS = 3 * 60_000;
 const AUTHORIZATION_POLL_MS = 1_500;
@@ -260,6 +261,7 @@ export const LinearSettings: React.FC = () => {
                     connected={connected}
                     organizationId={organization?.id ?? null}
                   />
+                  <LinearSessionComments linear={runtimeLinear} connected={connected} />
                   {otherWorkspaces.length > 0 ? (
                     <div className="space-y-2">
                       <p className="typography-micro text-muted-foreground">

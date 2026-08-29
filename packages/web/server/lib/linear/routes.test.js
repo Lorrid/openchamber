@@ -5,7 +5,7 @@ import fs from 'fs';
 import os from 'os';
 import path from 'path';
 import { registerLinearRoutes } from './routes.js';
-import { setLinearAuth } from './auth.js';
+import { setLinearAuth, setLinearSessionCommentsEnabled } from './auth.js';
 
 const makeTempDir = () => fs.mkdtempSync(path.join(os.tmpdir(), 'openchamber-linear-routes-'));
 
@@ -578,6 +578,7 @@ describe('Linear auth routes', () => {
   });
 
   it('posts a session status comment and never leaks the token', async () => {
+    setLinearSessionCommentsEnabled(true);
     setLinearAuth({
       accessToken: 'access-1',
       refreshToken: 'refresh-1',
@@ -632,6 +633,20 @@ describe('Linear auth routes', () => {
       commentId: 'comment-1',
     });
     expect(JSON.stringify(posted.body)).not.toContain('access-1');
+  });
+
+  it('reads and writes the session-comment preference', async () => {
+    const app = createApp();
+    const initial = await request(app).get('/api/linear/preferences').expect(200);
+    expect(initial.body).toEqual({ sessionComments: false });
+
+    const invalid = await request(app).put('/api/linear/preferences').send({ sessionComments: 'yes' }).expect(400);
+    expect(invalid.body.error).toBe('sessionComments must be a boolean');
+
+    const enabled = await request(app).put('/api/linear/preferences').send({ sessionComments: true }).expect(200);
+    expect(enabled.body).toEqual({ sessionComments: true });
+    const reread = await request(app).get('/api/linear/preferences').expect(200);
+    expect(reread.body).toEqual({ sessionComments: true });
   });
 
   it('returns disconnected session-status when Linear is not connected', async () => {

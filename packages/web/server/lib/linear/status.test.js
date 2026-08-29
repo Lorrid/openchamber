@@ -2,11 +2,13 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import fs from 'fs';
 import os from 'os';
 import path from 'path';
-import { setLinearAuth, clearLinearAuth } from './auth.js';
+import { setLinearAuth, clearLinearAuth, setLinearSessionCommentsEnabled } from './auth.js';
 import {
   buildLinearSessionOpenUrl,
   buildLinearSessionStatusComment,
+  isPublicSessionOrigin,
   postLinearSessionStatus,
+  pruneSessionStatusRecords,
   readSessionOrigin,
 } from './status.js';
 
@@ -69,6 +71,7 @@ describe('Linear session status comments', () => {
       expiresAt: Date.now() + 86_400_000,
       scope: 'read,write,comments:create',
     });
+    setLinearSessionCommentsEnabled(true);
   });
 
   afterEach(() => {
@@ -92,30 +95,103 @@ describe('Linear session status comments', () => {
     expect(readSessionOrigin('http://127.0.0.1:3001/')).toBe('http://127.0.0.1:3001');
     expect(readSessionOrigin('javascript:alert(1)')).toBe('');
     expect(readSessionOrigin('https://app.example.com/secret')).toBe('');
-    expect(readSessionOrigin('openchamber:')).toBe('openchamber:');
+    expect(readSessionOrigin('openchamber:')).toBe('');
     expect(buildLinearSessionOpenUrl('ses_1', 'https://app.example.com'))
       .toBe('https://app.example.com/?session=ses_1');
-    expect(buildLinearSessionOpenUrl('ses_1', '')).toBe('http://127.0.0.1:3001/?session=ses_1');
-    expect(buildLinearSessionOpenUrl('ses_1', 'openchamber:'))
-      .toBe('openchamber://session/ses_1');
+    expect(buildLinearSessionOpenUrl('ses_1', '')).toBe('');
   });
 
-  it('names the comment with status and session title as the open link', () => {
+  it('treats only externally reachable origins as public', () => {
+    expect(isPublicSessionOrigin('https://chamber.example.com')).toBe(true);
+    expect(isPublicSessionOrigin('http://chamber.example.com:8080')).toBe(true);
+    expect(isPublicSessionOrigin('https://203.0.113.10')).toBe(true);
+
+    expect(isPublicSessionOrigin('http://localhost:3001')).toBe(false);
+    expect(isPublicSessionOrigin('http://127.0.0.1:3001')).toBe(false);
+    expect(isPublicSessionOrigin('http://[::1]:3001')).toBe(false);
+    expect(isPublicSessionOrigin('http://192.168.1.20:3001')).toBe(false);
+    expect(isPublicSessionOrigin('http://10.0.0.5:3001')).toBe(false);
+    expect(isPublicSessionOrigin('http://172.20.1.4:3001')).toBe(false);
+    expect(isPublicSessionOrigin('http://169.254.10.1:3001')).toBe(false);
+    expect(isPublicSessionOrigin('http://100.101.102.103:3001')).toBe(false);
+    expect(isPublicSessionOrigin('http://macbook.local:3001')).toBe(false);
+    expect(isPublicSessionOrigin('http://macbook:3001')).toBe(false);
+    expect(isPublicSessionOrigin('http://[fd00::1]:3001')).toBe(false);
+    expect(isPublicSessionOrigin('openchamber:')).toBe(false);
+    expect(isPublicSessionOrigin('')).toBe(false);
+  });
+
+  it('posts nothing while session comments are turned off', async () => {
+    setLinearSessionCommentsEnabled(false);
+    const graphql = vi.fn();
+    vi.stubGlobal('fetch', graphql);
+    await expect(postLinearSessionStatus({
+      kind: 'started',
+      sessionId: 'ses_1',
+      issueIdentifier: 'ENG-12',
+      sessionOrigin: 'https://app.example.com',
+    })).resolves.toEqual({ connected: true, posted: false, skipped: 'disabled' });
+    expect(graphql).not.toHaveBeenCalled();
+  });
+
+  it('posts nothing when the session origin only the author can reach', async () => {
+    const graphql = vi.fn();
+    vi.stubGlobal('fetch', graphql);
+    await expect(postLinearSessionStatus({
+      kind: 'started',
+      sessionId: 'ses_1',
+      issueIdentifier: 'ENG-12',
+      sessionOrigin: 'http://127.0.0.1:3001',
+    })).resolves.toEqual({ connected: true, posted: false, skipped: 'origin-not-public' });
+    await expect(postLinearSessionStatus({
+      kind: 'started',
+      sessionId: 'ses_2',
+      issueIdentifier: 'ENG-12',
+    })).resolves.toEqual({ connected: true, posted: false, skipped: 'origin-not-public' });
+    expect(graphql).not.toHaveBeenCalled();
+  });
+
+  it('keeps the newest dedupe records and drops the oldest', () => {
+    const records = {};
+    for (let index = 0; index < 5; index += 1) {
+      records[`ses_${index}`] = { issueIdentifier: 'ENG-12', started: true };
+    }
+    expect(Object.keys(pruneSessionStatusRecords(records, 3))).toEqual(['ses_2', 'ses_3', 'ses_4']);
+    expect(Object.keys(pruneSessionStatusRecords(records, 10))).toHaveLength(5);
+  });
+
+  it('makes the whole status line one link and carries no title', () => {
     expect(buildLinearSessionStatusComment({
       kind: 'started',
       sessionUrl: 'https://app.example.com/?session=ses_1',
-      sessionTitle: 'ENG-12 Broken login',
-    })).toBe('[OpenChamber session started: ENG-12 Broken login](https://app.example.com/?session=ses_1)');
+    })).toBe('[OpenChamber session started](https://app.example.com/?session=ses_1)');
     expect(buildLinearSessionStatusComment({
       kind: 'completed',
       sessionUrl: 'https://app.example.com/?session=ses_1',
-      sessionTitle: 'ENG-12 Broken login',
-    })).toBe('[OpenChamber session completed: ENG-12 Broken login](https://app.example.com/?session=ses_1)');
+    })).toBe('[OpenChamber session completed](https://app.example.com/?session=ses_1)');
     expect(buildLinearSessionStatusComment({
       kind: 'failure',
       sessionUrl: 'https://app.example.com/?session=ses_1',
-      sessionTitle: 'ENG-12 Broken login',
-    })).toBe('[OpenChamber session failed: ENG-12 Broken login](https://app.example.com/?session=ses_1)');
+    })).toBe('[OpenChamber session failed](https://app.example.com/?session=ses_1)');
+  });
+
+  it('cannot be broken by brackets in the issue title', async () => {
+    const graphql = stubLinearGraphql();
+    vi.stubGlobal('fetch', graphql);
+    await postLinearSessionStatus({
+      kind: 'started',
+      sessionId: 'ses_1',
+      issueIdentifier: 'ENG-12',
+      sessionOrigin: 'https://app.example.com',
+    });
+    const commentCalls = graphql.mock.calls.filter(([, options]) => {
+      return JSON.parse(options.body).query.includes('mutation CommentCreate');
+    });
+    const body = JSON.parse(commentCalls[0][1].body).variables.input.body;
+    // One balanced pair of brackets, so a title like "[Bug] …" can never leak in
+    // and split the link across the renderer.
+    expect(body.match(/\[/g)).toHaveLength(1);
+    expect(body.match(/\]/g)).toHaveLength(1);
   });
 
   it('returns disconnected without calling Linear when there is no auth', async () => {
@@ -139,7 +215,6 @@ describe('Linear session status comments', () => {
       sessionId: 'ses_1',
       issueIdentifier: 'ENG-12',
       sessionOrigin: 'https://app.example.com',
-      sessionTitle: 'ENG-12 Broken login',
     });
     expect(first).toEqual({ connected: true, posted: true, commentId: 'comment-1' });
 
@@ -156,7 +231,7 @@ describe('Linear session status comments', () => {
     });
     expect(commentCalls).toHaveLength(1);
     const body = JSON.parse(commentCalls[0][1].body).variables.input.body;
-    expect(body).toBe('[OpenChamber session started: ENG-12 Broken login](https://app.example.com/?session=ses_1)');
+    expect(body).toBe('[OpenChamber session started](https://app.example.com/?session=ses_1)');
     expect(JSON.stringify(first)).not.toContain('access-1');
   });
 
@@ -177,7 +252,6 @@ describe('Linear session status comments', () => {
       sessionId: 'ses_1',
       issueIdentifier: 'ENG-12',
       sessionOrigin: 'https://app.example.com',
-      sessionTitle: 'ENG-12 Broken login',
     });
 
     const graphql = stubLinearGraphql({ commentId: 'comment-done' });
@@ -192,6 +266,6 @@ describe('Linear session status comments', () => {
     });
     expect(commentCalls).toHaveLength(1);
     const body = JSON.parse(commentCalls[0][1].body).variables.input.body;
-    expect(body).toBe('[OpenChamber session completed: ENG-12 Broken login](https://app.example.com/?session=ses_1)');
+    expect(body).toBe('[OpenChamber session completed](https://app.example.com/?session=ses_1)');
   });
 });

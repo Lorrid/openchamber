@@ -547,7 +547,6 @@ export function NewWorktreeDialog({
       postLinearSessionStarted(linear, {
         sessionId: args.sessionId,
         issueIdentifier: issue.identifier,
-        sessionTitle: `${issue.identifier} ${issue.title}`.trim(),
       });
 
       await useSessionUIStore.getState().sendMessage(

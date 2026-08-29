@@ -20,6 +20,7 @@ import type {
   LinearMappingResult,
   LinearMappingWrite,
   LinearOrganizationSummary,
+  LinearPreferences,
   LinearSessionStatusPostInput,
   LinearSessionStatusPostResult,
   LinearTeamMapping,
@@ -49,6 +50,7 @@ type LinearJson = {
   posted?: boolean;
   skipped?: string;
   commentId?: string | null;
+  sessionComments?: boolean;
 };
 
 async function readLinearJson(response: Response): Promise<LinearJson | null> {
@@ -236,6 +238,7 @@ function parseComment(payload: LinearIssueComment | null | undefined): LinearIss
       ? {
         name: payload.user.name?.trim() || null,
         displayName: payload.user.displayName?.trim() || null,
+        avatarUrl: payload.user.avatarUrl?.trim() || null,
       }
       : null,
   };
@@ -338,11 +341,28 @@ function toMapping(payload: LinearJson | null): LinearMappingResult | null {
   };
 }
 
-function parseSkipped(value: string | undefined): 'already-posted' | 'issue-not-found' | 'not-started' | null {
-  if (value === 'already-posted' || value === 'issue-not-found' || value === 'not-started') {
-    return value;
+type LinearSessionStatusSkipped = Extract<
+  LinearSessionStatusPostResult,
+  { posted: false }
+>['skipped'];
+
+const SESSION_STATUS_SKIPPED: readonly LinearSessionStatusSkipped[] = [
+  'already-posted',
+  'issue-not-found',
+  'not-started',
+  'disabled',
+  'origin-not-public',
+];
+
+function parseSkipped(value: string | undefined): LinearSessionStatusSkipped | null {
+  return SESSION_STATUS_SKIPPED.find((entry) => entry === value) ?? null;
+}
+
+function toPreferences(payload: LinearJson | null): LinearPreferences | null {
+  if (payload?.sessionComments !== true && payload?.sessionComments !== false) {
+    return null;
   }
-  return null;
+  return { sessionComments: payload.sessionComments };
 }
 
 function toSessionStatusPost(payload: LinearJson | null): LinearSessionStatusPostResult | null {
@@ -547,13 +567,42 @@ export const createWebLinearAPI = (): LinearAPI => ({
         sessionId: input.sessionId,
         issueIdentifier: input.issueIdentifier,
         sessionOrigin: input.sessionOrigin,
-        sessionTitle: input.sessionTitle,
       }),
     });
     const payload = await readLinearJson(response);
     const result = toSessionStatusPost(payload);
     if (!response.ok || !result) {
       throw new Error(readErrorMessage(payload, response.statusText || 'Failed to post Linear session status'));
+    }
+    return result;
+  },
+
+  async preferencesGet(): Promise<LinearPreferences> {
+    const response = await runtimeFetch('/api/linear/preferences', {
+      method: 'GET',
+      headers: { Accept: 'application/json' },
+    });
+    const payload = await readLinearJson(response);
+    const result = toPreferences(payload);
+    if (!response.ok || !result) {
+      throw new Error(readErrorMessage(payload, response.statusText || 'Failed to load Linear preferences'));
+    }
+    return result;
+  },
+
+  async preferencesSet(preferences: LinearPreferences): Promise<LinearPreferences> {
+    const response = await runtimeFetch('/api/linear/preferences', {
+      method: 'PUT',
+      headers: {
+        'Content-Type': 'application/json',
+        Accept: 'application/json',
+      },
+      body: JSON.stringify({ sessionComments: preferences.sessionComments }),
+    });
+    const payload = await readLinearJson(response);
+    const result = toPreferences(payload);
+    if (!response.ok || !result) {
+      throw new Error(readErrorMessage(payload, response.statusText || 'Failed to save Linear preferences'));
     }
     return result;
   },

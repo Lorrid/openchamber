@@ -8,6 +8,7 @@ const DEFAULT_LINEAR_SCOPES = 'read,write,comments:create';
 const DEFAULT_LINEAR_BROKER_URL = 'https://api.openchamber.dev/v1/oauth/linear';
 const ACCESS_TOKEN_REFRESH_SKEW_MS = 2 * 60_000;
 const LEGACY_WORKSPACE_ID = 'legacy';
+const SESSION_COMMENTS_SETTING_KEY = 'linearSessionComments';
 
 function resolveDataDir() {
   const fromEnv = readEnv('OPENCHAMBER_DATA_DIR');
@@ -209,6 +210,10 @@ function readSettings() {
   return readJsonFile(settingsFile()) || {};
 }
 
+function writeSettings(settings) {
+  writeJsonFile(settingsFile(), settings);
+}
+
 function readSettingString(key) {
   const stored = readSettings()[key];
   return readTrimmedString(stored);
@@ -401,22 +406,6 @@ export function getLinearBrokerUrl() {
   return DEFAULT_LINEAR_BROKER_URL;
 }
 
-function readPositivePort(value) {
-  const trimmed = readTrimmedString(value);
-  if (!/^\d+$/.test(trimmed)) return null;
-  const port = Number(trimmed);
-  if (!Number.isInteger(port) || port <= 0 || port > 65535) {
-    return null;
-  }
-  return port;
-}
-
-function readArgPort() {
-  const index = process.argv.indexOf('--port');
-  if (index < 0) return null;
-  return readPositivePort(process.argv[index + 1]);
-}
-
 export function getLinearRedirectUri() {
   const fromEnv = readEnv('OPENCHAMBER_LINEAR_REDIRECT_URI');
   if (fromEnv) return fromEnv;
@@ -425,9 +414,23 @@ export function getLinearRedirectUri() {
   return `${getLinearBrokerUrl()}/callback`;
 }
 
+/**
+ * Status comments are opt-in: they are written into a Linear workspace other
+ * people read, so nothing is posted until the user turns them on.
+ */
+export function getLinearSessionCommentsEnabled() {
+  return readSettings()[SESSION_COMMENTS_SETTING_KEY] === true;
+}
+
+export function setLinearSessionCommentsEnabled(enabled) {
+  const next = enabled === true;
+  const settings = readSettings();
+  settings[SESSION_COMMENTS_SETTING_KEY] = next;
+  writeSettings(settings);
+  return next;
+}
+
 export function getLinearAuthFilePath() {
   return storageFile();
 }
 export const DEFAULT_LINEAR_CLIENT_ID_VALUE = DEFAULT_LINEAR_CLIENT_ID;
-export const DEFAULT_LINEAR_SCOPES_VALUE = DEFAULT_LINEAR_SCOPES;
-export const DEFAULT_LINEAR_BROKER_URL_VALUE = DEFAULT_LINEAR_BROKER_URL;

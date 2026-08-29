@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import fs from 'fs';
 import os from 'os';
 import path from 'path';
-import { setLinearAuth, clearLinearAuth } from './auth.js';
+import { setLinearAuth, clearLinearAuth, setLinearSessionCommentsEnabled } from './auth.js';
 import { createLinearSessionStatusRuntime } from './status-runtime.js';
 
 const makeTempDir = () => fs.mkdtempSync(path.join(os.tmpdir(), 'openchamber-linear-status-runtime-'));
@@ -62,6 +62,7 @@ describe('Linear session status runtime', () => {
       expiresAt: Date.now() + 86_400_000,
       scope: 'read,write,comments:create',
     });
+    setLinearSessionCommentsEnabled(true);
   });
 
   afterEach(() => {
@@ -117,6 +118,7 @@ describe('Linear session status runtime', () => {
       kind: 'started',
       sessionId: 'ses_1',
       issueIdentifier: 'ENG-12',
+      sessionOrigin: 'https://app.example.com',
     });
 
     const graphql = stubLinearGraphql({ commentId: 'fail' });
@@ -145,7 +147,7 @@ describe('Linear session status runtime', () => {
       });
       expect(commentCalls).toHaveLength(1);
       const body = JSON.parse(commentCalls[0][1].body).variables.input.body;
-      expect(body).toContain('OpenChamber session failed:');
+      expect(body).toContain('OpenChamber session failed');
     });
     runtime.stop();
   });
