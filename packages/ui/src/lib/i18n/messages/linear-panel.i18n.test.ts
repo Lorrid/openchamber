@@ -30,6 +30,8 @@ const requiredKeys = [
   'contextPanel.linear.filter.teamAria',
   'contextPanel.linear.filter.priorityAria',
   'contextPanel.linear.filter.searchAria',
+  'contextPanel.linear.filter.clear',
+  'contextPanel.linear.filter.clearAria',
   'contextPanel.linear.filter.status.all',
   'contextPanel.linear.filter.status.backlog',
   'contextPanel.linear.filter.status.todo',

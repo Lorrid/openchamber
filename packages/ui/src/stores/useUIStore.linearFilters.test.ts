@@ -38,6 +38,20 @@ describe('linear issue list filters', () => {
     expect(useUIStore.getState().linearIssueListPriority).toBe('urgent');
   });
 
+  test('resets status, assignee, team, and priority together', () => {
+    useUIStore.getState().setLinearIssueListStatus('todo');
+    useUIStore.getState().setLinearIssueListAssignee('me');
+    useUIStore.getState().setLinearIssueListTeamId('team-eng');
+    useUIStore.getState().setLinearIssueListPriority('urgent');
+
+    useUIStore.getState().resetLinearIssueListFilters();
+
+    expect(useUIStore.getState().linearIssueListStatus).toBe('all');
+    expect(useUIStore.getState().linearIssueListAssignee).toBe('any');
+    expect(useUIStore.getState().linearIssueListTeamId).toBe(LINEAR_ISSUE_LIST_ALL_TEAMS);
+    expect(useUIStore.getState().linearIssueListPriority).toBe('all');
+  });
+
   test('treats a blank team id as all teams', () => {
     useUIStore.getState().setLinearIssueListTeamId('team-eng');
     useUIStore.getState().setLinearIssueListTeamId('   ');

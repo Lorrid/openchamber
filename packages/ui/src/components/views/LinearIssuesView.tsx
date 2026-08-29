@@ -154,8 +154,9 @@ const LinearFilterMenu: React.FC<{
   items: Array<{ value: string; label: string }>;
   disabled?: boolean;
   compact?: boolean;
+  active?: boolean;
   onValueChange: (value: string) => void;
-}> = ({ icon, label, ariaLabel, value, items, disabled, compact, onValueChange }) => {
+}> = ({ icon, label, ariaLabel, value, items, disabled, compact, active, onValueChange }) => {
   const [open, setOpen] = React.useState(false);
 
   return (
@@ -169,11 +170,12 @@ const LinearFilterMenu: React.FC<{
         <button
           type="button"
           disabled={disabled}
+          aria-pressed={active === true}
           className={compact ? FILTER_COMPACT_TRIGGER_CLASS : FILTER_TRIGGER_CLASS}
           aria-label={ariaLabel}
           title={compact ? label : undefined}
         >
-          <Icon name={icon} className="size-3.5 shrink-0 text-muted-foreground" />
+          <Icon name={icon} className={cn('size-3.5 shrink-0', active ? 'text-primary' : 'text-muted-foreground')} />
           {!compact ? (
             <>
               <span className="min-w-0 truncate">{label}</span>
@@ -245,6 +247,7 @@ export const LinearIssuesView: React.FC = () => {
   const setListAssignee = useUIStore((state) => state.setLinearIssueListAssignee);
   const setListTeamId = useUIStore((state) => state.setLinearIssueListTeamId);
   const setListPriority = useUIStore((state) => state.setLinearIssueListPriority);
+  const resetListFilters = useUIStore((state) => state.resetLinearIssueListFilters);
   const setLinearIssueFocus = useUIStore((state) => state.setLinearIssueFocus);
 
   const [query, setQuery] = React.useState('');
@@ -579,6 +582,7 @@ export const LinearIssuesView: React.FC = () => {
   // than rendering a compact filter row for one frame on every open.
   const compactFilters = panelWidth > 0 && panelWidth < FILTER_COMPACT_WIDTH;
   const searchActive = query.trim().length > 0;
+  const hasActiveFilters = !usingDefaultFilters || searchActive;
   const showSearchField = !compactFilters || searchOpen || searchActive;
 
   const closeCompactSearch = React.useCallback(() => {
@@ -871,7 +875,7 @@ export const LinearIssuesView: React.FC = () => {
       <div className="px-3 pt-3 space-y-2">
         {showSearchField ? (
           <div className="relative">
-            <Icon name="search" className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+            <Icon name="search" className={cn('absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4', searchActive ? 'text-primary' : 'text-muted-foreground')} />
             <Input
               ref={searchInputRef}
               placeholder={t('session.linearIssuePicker.searchPlaceholder')}
@@ -908,6 +912,7 @@ export const LinearIssuesView: React.FC = () => {
               label={t((STATUS_FILTER_ITEMS.find((item) => item.value === listStatus) ?? STATUS_FILTER_ITEMS[0]).labelKey)}
               ariaLabel={t('contextPanel.linear.filter.statusAria')}
               value={listStatus}
+              active={listStatus !== 'all'}
               disabled={filtersDisabled}
               items={STATUS_FILTER_ITEMS.map((item) => ({
                 value: item.value,
@@ -926,6 +931,7 @@ export const LinearIssuesView: React.FC = () => {
               label={t((PRIORITY_FILTER_ITEMS.find((item) => item.value === listPriority) ?? PRIORITY_FILTER_ITEMS[0]).labelKey)}
               ariaLabel={t('contextPanel.linear.filter.priorityAria')}
               value={listPriority}
+              active={listPriority !== 'all'}
               disabled={filtersDisabled}
               items={PRIORITY_FILTER_ITEMS.map((item) => ({
                 value: item.value,
@@ -948,6 +954,7 @@ export const LinearIssuesView: React.FC = () => {
               }
               ariaLabel={t('contextPanel.linear.filter.assigneeAria')}
               value={listAssignee}
+              active={listAssignee !== 'any'}
               disabled={filtersDisabled}
               items={[
                 { value: 'any', label: t('contextPanel.linear.filter.assignee.any') },
@@ -971,6 +978,7 @@ export const LinearIssuesView: React.FC = () => {
                 }
                 ariaLabel={t('contextPanel.linear.filter.teamAria')}
                 value={listTeamId}
+                active={listTeamId !== LINEAR_ISSUE_LIST_ALL_TEAMS}
                 disabled={filtersDisabled}
                 items={[
                   { value: LINEAR_ISSUE_LIST_ALL_TEAMS, label: t('contextPanel.linear.filter.team.all') },
@@ -996,6 +1004,28 @@ export const LinearIssuesView: React.FC = () => {
                   void switchWorkspace(value);
                 }}
               />
+            ) : null}
+
+            {hasActiveFilters ? (
+              <button
+                type="button"
+                className={cn(
+                  compactFilters ? FILTER_COMPACT_TRIGGER_CLASS : FILTER_TRIGGER_CLASS,
+                  !compactFilters && 'flex-none',
+                )}
+                aria-label={t('contextPanel.linear.filter.clearAria')}
+                title={t('contextPanel.linear.filter.clearAria')}
+                disabled={filtersDisabled}
+                onClick={() => {
+                  resetListFilters();
+                  closeCompactSearch();
+                }}
+              >
+                <Icon name="close" className="size-3.5 shrink-0 text-muted-foreground" />
+                {!compactFilters ? (
+                  <span className="min-w-0 truncate">{t('contextPanel.linear.filter.clear')}</span>
+                ) : null}
+              </button>
             ) : null}
               </>
             ) : null}

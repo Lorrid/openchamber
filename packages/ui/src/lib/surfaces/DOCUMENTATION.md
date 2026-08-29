@@ -64,8 +64,11 @@ the `openContext*` actions in `useUIStore`.
   disconnect closes the panel. The surface lists
   issues with status (All, Backlog, To Do, In Progress, In Review, Done, Canceled, Duplicate), assignee, team, and priority filters, can switch
   the current workspace, and keeps Start session in a footer on the issue card.
-  Those filters restore from `useUIStore` when the surface remounts. Work-status
-  Context sources can open a specific issue here through `linearIssueFocus`. Below 520px
+  Those filters restore from `useUIStore` when the surface remounts. Non-default
+  status, assignee, team, priority, and search tint the filter icon `text-primary`,
+  same as the context rail; one control clears them. Workspace switch is not a
+  filter. Work-status Context sources
+  can open a specific issue here through `linearIssueFocus`. Below 520px
   search and the filters other than status drop to icons; status keeps its label. The card
   shows priority and labels. Changing filters keeps the previous list
   until the next page arrives.
