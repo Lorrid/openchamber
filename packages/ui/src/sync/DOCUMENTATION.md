@@ -203,6 +203,22 @@ Rules:
 
 Initial loads use smaller pages on constrained VS Code/mobile surfaces. Prefetch resolves only the initial renderable page; it does not eagerly download older history. The mounted chat timeline requests older pages when its viewport is underfilled or the user scrolls toward history, while mobile uses its explicit load-older action. Timeline caches, pending work, prepend snapshots, and stale checks use runtime + directory + session identity so equal session IDs in different worktrees cannot share lifecycle state. Older pages are fetched through the same loader and merged with optimistic records before publication. The same chronology contract applies in the VS Code webview because it consumes this shared loader and sync store; the extension bridge must transport OpenCode records without introducing its own ID-based ordering.
 
+## Failed-turn diagnostics
+
+A `session.error` event is the only account of a turn OpenCode stopped, and
+it can arrive with no assistant message to attach to. `session-error-log.ts`
+keeps the last 20 of them in memory (`recordSessionError`, fed from the
+event pipeline next to the error notification) and `summarizeOpenCodeError`
+reads the `{ name, data: { message } }` payload. The chat shows the newest
+error for the open session under its last message while that turn is the
+latest one (`SessionErrorNotice`), and also names a user message that an idle
+session has left unanswered for five seconds, since an accepted send that
+produced neither a message nor an error would otherwise look like nothing
+happened. Both buffers — session errors and rejected sends — appear in the
+status report (`buildOpenCodeStatusReport`, Ctrl/Cmd+Shift+L or
+`__opencodeDebug.statusReport()`) together with the managed OpenCode
+process's last error and stderr tail and the expected log file locations.
+
 ## Loading diagnostics
 
 Session loading instrumentation is disabled by default. Set `localStorage.openchamber_session_load_perf` to `"1"`, reproduce the interaction, then inspect `window.__openchamberSessionLoadPerformance.events`.
@@ -488,7 +504,7 @@ Same applies to `useStreamingStore` — select `.get(key)` not the Map itself.
 
 ## Notification history
 
-`notification-store.ts` owns the in-app history. Session idle/error (top-level and child/subtask), permission/question toasts, and every call through `packages/ui/src/components/ui/toast.ts` append a sanitized record: plain title and body, truncated, with credentials and raw error objects dropped. Session rows store the session title and project label in the body, never a raw session id. The list rewrites an id-shaped stored title to the live session name, or untitled if the session still has no name. Subtask rows use `source === 'subtask'` and do not feed the sidebar/dock session-attention index. Records persist locally as `openchamber-notifications.v1` via deferred safe JSON storage, partitioned by `runtimeKey`. Switching runtime shows that runtime's list and leaves other namespaces on disk.
+`notification-store.ts` owns the in-app history. Session idle/error (top-level and child/subtask), permission/question toasts, and every call through `packages/ui/src/components/ui/toast.ts` append a sanitized record: plain title and body, truncated, with credentials and raw error objects dropped. A session error row also keeps the OpenCode name and message so `useLatestSessionError` can show the newest one under the last message. Session rows store the session title and project label in the body, never a raw session id. The list rewrites an id-shaped stored title to the live session name, or untitled if the session still has no name. Subtask rows use `source === 'subtask'` and do not feed the sidebar/dock session-attention index. Records persist locally as `openchamber-notifications.v1` via deferred safe JSON storage, partitioned by `runtimeKey`. Switching runtime shows that runtime's list and leaves other namespaces on disk.
 
 A new row starts unread. Toast timeout leaves it unread. OK, Copy, a stored action, or swipe-dismiss marks that row read and keeps it. Clear all empties the current runtime's stored list, including kinds the inbox filter is hiding, and dismisses matching live toasts. Other runtime buckets stay. Mark-all-read also dismisses matching live toasts. Opening the related session still runs `markSessionViewed` for `source === 'session'` rows, which is what sidebar dots and the dock badge use. The header bell shows a dot when any unread row passes `notificationInboxFilter`. The accessible label still carries the unread count. `notificationInboxEnabled` defaults on. Turning it off hides the bell, the list, and the badge. Stored rows stay. Unchecking a kind hides it from the center and badge immediately; the stored rows stay. Subtasks start hidden in the inbox; the OS Events toggle for subtasks is separate. The in-app sound switch lives under In-app history and only controls the chime. It plays for those same Events even when the window is in the background. It stays quiet when a system banner would also sound, and when the user is already watching that session in a focused window. System banners keep their own OS sound.
 

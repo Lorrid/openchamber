@@ -3,6 +3,7 @@ import { getRuntimeKey } from '@/lib/runtime-switch';
 import {
   appendNotification,
   emptyNotificationIndex,
+  latestSessionErrorFromList,
   useNotificationStore,
 } from './notification-store';
 
@@ -145,6 +146,26 @@ describe('notification store', () => {
     const ids = useNotificationStore.getState().list.map((item) => item.id);
     expect(ids).toHaveLength(2);
     expect(new Set(ids).size).toBe(2);
+  });
+
+  test('latest session error keeps the OpenCode name and message', () => {
+    const now = Date.now();
+    appendNotification({
+      type: 'error',
+      session: 's1',
+      directory: '/proj',
+      time: now - 1,
+      error: { name: 'ProviderAuthError', message: 'Invalid API key' },
+    });
+    appendNotification({
+      type: 'turn-complete',
+      session: 's1',
+      directory: '/proj',
+      time: now,
+    });
+    const latest = latestSessionErrorFromList(useNotificationStore.getState().list, 's1');
+    expect(latest?.type).toBe('error');
+    expect(latest?.error).toEqual({ name: 'ProviderAuthError', message: 'Invalid API key' });
   });
 
   test('empty runtime list is empty success', () => {

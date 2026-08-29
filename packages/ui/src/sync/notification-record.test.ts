@@ -50,6 +50,7 @@ describe('normalizeNotificationAppend', () => {
     expect(next.severity).toBe('error');
     expect(next.session).toBe('s1');
     expect(next.body).toBe('boom');
+    expect(next.error).toEqual({ name: null, message: 'boom' });
     expect(next.read).toBe(false);
     expect(next.action).toEqual({ type: 'open-session', sessionId: 's1', directory: '/project' });
     expect(inboxKindOf(next)).toBe('sessionError');

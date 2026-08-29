@@ -14,6 +14,15 @@ import {
 
 export type { NotificationAction, NotificationRecord, NotificationSeverity, NotificationSource } from './notification-record';
 
+export type ErrorNotification = {
+  directory?: string;
+  session?: string;
+  time: number;
+  viewed: boolean;
+  type: 'error';
+  error?: { name: string | null; message: string | null };
+};
+
 type NotificationIndex = {
   session: {
     unseenCount: Record<string, number>;
@@ -272,4 +281,30 @@ export function activateNotificationRuntime(runtimeKey: string): void {
 
 export function useSessionUnseenCount(sessionId: string): number {
   return useNotificationStore((state) => state.index.session.unseenCount[sessionId] ?? 0);
+}
+
+/** The newest error OpenCode reported for this session, viewed or not. */
+export const latestSessionErrorFromList = (
+  list: NotificationRecord[],
+  sessionId: string,
+): ErrorNotification | null => {
+  if (!sessionId) return null;
+  for (let index = list.length - 1; index >= 0; index -= 1) {
+    const notification = list[index];
+    if (notification.session !== sessionId || notification.severity !== 'error') continue;
+    if (notification.source !== 'session' && notification.source !== 'subtask') continue;
+    return {
+      session: notification.session,
+      directory: notification.directory,
+      time: notification.time,
+      viewed: notification.read,
+      type: 'error',
+      error: notification.error ?? { name: null, message: notification.body || null },
+    };
+  }
+  return null;
+};
+
+export function useLatestSessionError(sessionId: string): ErrorNotification | null {
+  return useNotificationStore((state) => latestSessionErrorFromList(state.list, sessionId));
 }

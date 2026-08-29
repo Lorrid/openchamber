@@ -57,6 +57,7 @@ import { appendNotification } from "./notification-store"
 import { usableSessionNotificationTitle } from "./notification-session-context"
 import { resolveNotificationProjectLabel } from "./notification-session-context"
 import { useProjectsStore } from "@/stores/useProjectsStore"
+import { recordSessionError, summarizeOpenCodeError, type OpenCodeSessionErrorPayload } from "./session-error-log"
 import {
   applyGlobalSessionStatusEvent,
   applyGlobalSessionStatusEvents,
@@ -1822,8 +1823,12 @@ export function handleEvent(
   // Notification dispatch for session turn-complete and error events.
   // These are NOT handled by the event reducer — only the notification store.
   if (payload.type === "session.idle" || payload.type === "session.error") {
-    const props = payload.properties as { sessionID?: string; error?: { message?: string; code?: string } }
+    const props = payload.properties as { sessionID?: string; error?: OpenCodeSessionErrorPayload }
     const sessionID = props.sessionID
+    const errorSummary = payload.type === "session.error" ? summarizeOpenCodeError(props.error) : null
+    if (errorSummary && sessionID) {
+      recordSessionError({ sessionId: sessionID, directory: resolvedDirectory ?? null, ...errorSummary })
+    }
     const storeState = getDirectoryEventState(store, batch)
     const session = storeState.session.find((s) => s.id === sessionID)
     if (sessionID) {
@@ -1843,8 +1848,8 @@ export function handleEvent(
         subtask: isSubtask,
         time: Date.now(),
         viewed: viewingSession,
-        ...(payload.type === "session.error"
-          ? { type: "error" as const, error: props.error }
+        ...(errorSummary
+          ? { type: "error" as const, error: errorSummary }
           : { type: "turn-complete" as const }),
       })
       maybePlayNotificationSound(

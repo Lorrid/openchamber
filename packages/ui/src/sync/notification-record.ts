@@ -12,6 +12,11 @@ export type NotificationAction = {
   directory: string;
 };
 
+export type NotificationSessionError = {
+  name: string | null;
+  message: string | null;
+};
+
 export type NotificationRecord = {
   id: string;
   runtimeKey: string;
@@ -24,6 +29,7 @@ export type NotificationRecord = {
   session?: string;
   directory?: string;
   action?: NotificationAction;
+  error?: NotificationSessionError;
   dedupeKey: string;
   count: number;
 };
@@ -49,7 +55,7 @@ type SessionAttentionInput = {
   subtask?: boolean;
   time?: number;
   viewed?: boolean;
-  error?: { message?: string; code?: string };
+  error?: { name?: string | null; message?: string | null; code?: string };
 };
 
 export const formatSessionNotificationContext = (
@@ -190,15 +196,27 @@ const parseAction = (value: unknown): NotificationAction | undefined => {
   return { type: 'open-session', sessionId, directory };
 };
 
+const parseSessionError = (value: unknown): NotificationSessionError | undefined => {
+  if (!isPlainObject(value)) return undefined;
+  const name = readTrimmedString(value, 'name') ?? null;
+  const message = sanitizeNotificationText(readTrimmedString(value, 'message') ?? '')
+    || sanitizeNotificationText(readTrimmedString(value, 'code') ?? '')
+    || null;
+  if (!name && !message) return undefined;
+  return { name, message };
+};
+
 const attachOptionalIdentity = (
   record: NotificationRecord,
   session: string | undefined,
   directory: string | undefined,
   action: NotificationAction | undefined,
+  error?: NotificationSessionError,
 ): NotificationRecord => {
   if (session) record.session = session;
   if (directory) record.directory = directory;
   if (action) record.action = action;
+  if (error) record.error = error;
   return record;
 };
 
@@ -216,14 +234,12 @@ export const parseNotificationRecord = (value: unknown, fallbackRuntimeKey: stri
   const severity = parseSeverity(Reflect.get(value, 'severity'))
     ?? (legacyType === 'error' ? 'error' : 'info');
 
-  const legacyErrorValue = Reflect.get(value, 'error');
-  const legacyError = isPlainObject(legacyErrorValue) ? legacyErrorValue : null;
+  const error = parseSessionError(Reflect.get(value, 'error'));
   const title = sanitizeNotificationText(readTrimmedString(value, 'title') ?? '')
     || (legacyType === 'error' ? 'Session error' : '')
     || (legacyType === 'turn-complete' ? 'Session finished' : '');
   const body = sanitizeNotificationText(readTrimmedString(value, 'body') ?? '')
-    || sanitizeNotificationText(legacyError ? readTrimmedString(legacyError, 'message') ?? '' : '')
-    || sanitizeNotificationText(legacyError ? readTrimmedString(legacyError, 'code') ?? '' : '');
+    || sanitizeNotificationText(error?.message ?? '');
 
   const countValue = readFiniteNumber(value, 'count');
   const count = countValue != null && Number.isSafeInteger(countValue) && countValue > 0 ? countValue : 1;
@@ -248,7 +264,7 @@ export const parseNotificationRecord = (value: unknown, fallbackRuntimeKey: stri
     dedupeKey: readTrimmedString(value, 'dedupeKey')
       ?? `${source}:${severity}:${session ?? ''}:${directory ?? ''}:${title}:${body}`,
     count,
-  }, session, directory, action);
+  }, session, directory, action, error);
 };
 
 export const normalizeNotificationAppend = (
@@ -262,8 +278,8 @@ export const normalizeNotificationAppend = (
       ? { type: 'open-session' as const, sessionId: session, directory }
       : undefined;
     const context = formatSessionNotificationContext(input.sessionTitle, input.projectLabel);
-    const errorBody = sanitizeNotificationText(input.error?.message)
-      || sanitizeNotificationText(input.error?.code);
+    const error = parseSessionError(input.error);
+    const errorBody = error?.message ?? '';
     const body = context && errorBody ? `${context}\n${errorBody}` : context || errorBody;
     const source: NotificationSource = input.subtask === true ? 'subtask' : 'session';
     return attachOptionalIdentity({
@@ -279,7 +295,7 @@ export const normalizeNotificationAppend = (
       source,
       dedupeKey: `${source}:${input.type}:${session ?? ''}:${directory ?? ''}`,
       count: 1,
-    }, session, directory, action);
+    }, session, directory, action, error);
   }
 
   const session = nonempty(input.session);
