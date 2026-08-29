@@ -19,6 +19,8 @@ type AppearanceSlice = {
   collapsibleThinkingBlocks: boolean;
   showDeletionDialog: boolean;
   nativeNotificationsEnabled: boolean;
+  notificationSoundEnabled: boolean;
+  notificationInboxEnabled: boolean;
   notificationMode: 'always' | 'hidden-only';
   notifyOnSubtasks: boolean;
   notifyOnCompletion: boolean;
@@ -76,6 +78,8 @@ export const startAppearanceAutoSave = (): void => {
     collapsibleThinkingBlocks: useUIStore.getState().collapsibleThinkingBlocks,
     showDeletionDialog: useUIStore.getState().showDeletionDialog,
     nativeNotificationsEnabled: useUIStore.getState().nativeNotificationsEnabled,
+    notificationSoundEnabled: useUIStore.getState().notificationSoundEnabled,
+    notificationInboxEnabled: useUIStore.getState().notificationInboxEnabled,
     notificationMode: useUIStore.getState().notificationMode,
     notifyOnSubtasks: useUIStore.getState().notifyOnSubtasks,
     notifyOnCompletion: useUIStore.getState().notifyOnCompletion,
@@ -120,6 +124,8 @@ export const startAppearanceAutoSave = (): void => {
       collapsibleThinkingBlocks: state.collapsibleThinkingBlocks,
       showDeletionDialog: state.showDeletionDialog,
       nativeNotificationsEnabled: state.nativeNotificationsEnabled,
+      notificationSoundEnabled: state.notificationSoundEnabled,
+      notificationInboxEnabled: state.notificationInboxEnabled,
       notificationMode: state.notificationMode,
       notifyOnSubtasks: state.notifyOnSubtasks,
       notifyOnCompletion: state.notifyOnCompletion,
@@ -189,6 +195,12 @@ export const startAppearanceAutoSave = (): void => {
     }
     if (current.nativeNotificationsEnabled !== previous.nativeNotificationsEnabled) {
       diff.nativeNotificationsEnabled = current.nativeNotificationsEnabled;
+    }
+    if (current.notificationSoundEnabled !== previous.notificationSoundEnabled) {
+      diff.notificationSoundEnabled = current.notificationSoundEnabled;
+    }
+    if (current.notificationInboxEnabled !== previous.notificationInboxEnabled) {
+      diff.notificationInboxEnabled = current.notificationInboxEnabled;
     }
     if (current.notificationMode !== previous.notificationMode) {
       diff.notificationMode = current.notificationMode;

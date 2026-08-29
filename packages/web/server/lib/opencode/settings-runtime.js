@@ -770,6 +770,14 @@ export const createSettingsRuntime = (deps) => {
     let changed = false;
     const next = { ...settings };
 
+    if (typeof settings.notificationSoundEnabled !== 'boolean') {
+      next.notificationSoundEnabled = true;
+      changed = true;
+    }
+    if (typeof settings.notificationInboxEnabled !== 'boolean') {
+      next.notificationInboxEnabled = true;
+      changed = true;
+    }
     if (typeof settings.notifyOnSubtasks !== 'boolean') {
       next.notifyOnSubtasks = true;
       changed = true;

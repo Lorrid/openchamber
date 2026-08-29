@@ -7,13 +7,16 @@ import { useNotificationStore } from './notification-store';
 const notificationMatchesInboxFilter = (
   notification: NotificationRecord,
   filter: NotificationInboxFilter,
-): boolean => isInboxKindEnabled(filter, inboxKindOf(notification));
+  inboxEnabled = true,
+): boolean => isInboxKindEnabled(filter, inboxKindOf(notification), inboxEnabled);
 
 export const selectInboxNotifications = (
   list: NotificationRecord[],
   filter: NotificationInboxFilter,
+  inboxEnabled = true,
 ): NotificationRecord[] => {
-  const visible = list.filter((notification) => notificationMatchesInboxFilter(notification, filter));
+  if (!inboxEnabled) return [];
+  const visible = list.filter((notification) => notificationMatchesInboxFilter(notification, filter, inboxEnabled));
   return [...visible].sort((left, right) => {
     if (left.read !== right.read) return left.read ? 1 : -1;
     return right.time - left.time;
@@ -42,24 +45,32 @@ export const stabilizeInboxOrder = (
 export const countInboxUnread = (
   list: NotificationRecord[],
   filter: NotificationInboxFilter,
-): number => list.reduce((count, notification) => {
-  if (notification.read) return count;
-  if (!notificationMatchesInboxFilter(notification, filter)) return count;
-  return count + 1;
-}, 0);
-
-const useNotificationInboxFilter = (): NotificationInboxFilter => (
-  useUIStore((state) => state.notificationInboxFilter)
-);
+  inboxEnabled = true,
+): number => {
+  if (!inboxEnabled) return 0;
+  return list.reduce((count, notification) => {
+    if (notification.read) return count;
+    if (!notificationMatchesInboxFilter(notification, filter, inboxEnabled)) return count;
+    return count + 1;
+  }, 0);
+};
 
 export const useInboxNotifications = (): NotificationRecord[] => {
   const list = useNotificationStore((state) => state.list);
-  const filter = useNotificationInboxFilter();
-  return useMemo(() => selectInboxNotifications(list, filter), [filter, list]);
+  const filter = useUIStore((state) => state.notificationInboxFilter);
+  const inboxEnabled = useUIStore((state) => state.notificationInboxEnabled);
+  return useMemo(
+    () => selectInboxNotifications(list, filter, inboxEnabled),
+    [filter, inboxEnabled, list],
+  );
 };
 
 export const useInboxUnreadCount = (): number => {
   const list = useNotificationStore((state) => state.list);
-  const filter = useNotificationInboxFilter();
-  return useMemo(() => countInboxUnread(list, filter), [filter, list]);
+  const filter = useUIStore((state) => state.notificationInboxFilter);
+  const inboxEnabled = useUIStore((state) => state.notificationInboxEnabled);
+  return useMemo(
+    () => countInboxUnread(list, filter, inboxEnabled),
+    [filter, inboxEnabled, list],
+  );
 };

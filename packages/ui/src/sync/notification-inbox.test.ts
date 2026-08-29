@@ -55,6 +55,14 @@ describe('inbox filter', () => {
       .toEqual(['parent', 'child']);
   });
 
+  test('hides every row when in-app history is off', () => {
+    const stored = [
+      row({ id: 'error', severity: 'error', source: 'toast', title: 'Failed', time: 1 }),
+    ];
+    expect(selectInboxNotifications(stored, DEFAULT_NOTIFICATION_INBOX_FILTER, false)).toEqual([]);
+    expect(countInboxUnread(stored, DEFAULT_NOTIFICATION_INBOX_FILTER, false)).toBe(0);
+  });
+
   test('sorts unread ahead of read', () => {
     const stored = [
       row({ id: 'old-unread', read: false, severity: 'error', time: 1 }),

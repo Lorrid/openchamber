@@ -107,6 +107,7 @@ const notifyWithServiceWorker = async (payload?: NotificationPayload): Promise<b
     await registration.showNotification(payload?.title ?? 'OpenChamber', {
       body: payload?.body,
       tag: payload?.tag,
+      silent: payload?.silent === true,
       data: {
         url: sessionId ? `/?session=${encodeURIComponent(sessionId)}` : '/',
         sessionId,
@@ -179,6 +180,7 @@ const notifyWithWebAPI = async (payload?: NotificationPayload): Promise<boolean>
     const notification = new Notification(payload?.title ?? 'OpenChamber', {
       body: payload?.body,
       tag: payload?.tag,
+      silent: payload?.silent === true,
     });
     notification.onclick = () => {
       window.focus();
@@ -214,6 +216,7 @@ const notifyWithDesktop = async (payload?: NotificationPayload): Promise<boolean
         sessionId: payload?.sessionId,
         directory: payload?.directory,
         requireHidden: payload?.requireHidden,
+        silent: payload?.silent === true,
       },
     });
     return true;

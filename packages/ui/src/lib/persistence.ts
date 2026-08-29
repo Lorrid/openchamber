@@ -564,6 +564,8 @@ const materializeAuthoritativeUiSettings = (settings: DesktopSettings): DesktopS
     followUpBehavior: DEFAULT_FOLLOW_UP_BEHAVIOR,
     showDeletionDialog: defaults.showDeletionDialog,
     nativeNotificationsEnabled: defaults.nativeNotificationsEnabled,
+    notificationSoundEnabled: defaults.notificationSoundEnabled,
+    notificationInboxEnabled: defaults.notificationInboxEnabled,
     notificationMode: defaults.notificationMode,
     notifyOnSubtasks: defaults.notifyOnSubtasks,
     notifyOnCompletion: defaults.notifyOnCompletion,
@@ -710,6 +712,12 @@ const applyDesktopUiPreferences = (settings: DesktopSettings) => {
   }
   if (typeof settings.nativeNotificationsEnabled === 'boolean' && settings.nativeNotificationsEnabled !== store.nativeNotificationsEnabled) {
     store.setNativeNotificationsEnabled(settings.nativeNotificationsEnabled);
+  }
+  if (typeof settings.notificationSoundEnabled === 'boolean' && settings.notificationSoundEnabled !== store.notificationSoundEnabled) {
+    store.setNotificationSoundEnabled(settings.notificationSoundEnabled);
+  }
+  if (typeof settings.notificationInboxEnabled === 'boolean' && settings.notificationInboxEnabled !== store.notificationInboxEnabled) {
+    store.setNotificationInboxEnabled(settings.notificationInboxEnabled);
   }
   if (typeof settings.notificationMode === 'string' && (settings.notificationMode === 'always' || settings.notificationMode === 'hidden-only')) {
     if (settings.notificationMode !== store.notificationMode) {
@@ -1300,6 +1308,12 @@ const sanitizeWebSettings = (payload: unknown): DesktopSettings | null => {
   }
   if (typeof candidate.nativeNotificationsEnabled === 'boolean') {
     result.nativeNotificationsEnabled = candidate.nativeNotificationsEnabled;
+  }
+  if (typeof candidate.notificationSoundEnabled === 'boolean') {
+    result.notificationSoundEnabled = candidate.notificationSoundEnabled;
+  }
+  if (typeof candidate.notificationInboxEnabled === 'boolean') {
+    result.notificationInboxEnabled = candidate.notificationInboxEnabled;
   }
   if (typeof candidate.notificationMode === 'string' && (candidate.notificationMode === 'always' || candidate.notificationMode === 'hidden-only')) {
     result.notificationMode = candidate.notificationMode;

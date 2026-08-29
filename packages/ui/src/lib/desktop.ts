@@ -81,6 +81,8 @@ export type DesktopSettings = {
   collapsibleThinkingBlocks?: boolean;
   showDeletionDialog?: boolean;
   nativeNotificationsEnabled?: boolean;
+  notificationSoundEnabled?: boolean;
+  notificationInboxEnabled?: boolean;
   notificationMode?: 'always' | 'hidden-only';
   notifyOnSubtasks?: boolean;
 

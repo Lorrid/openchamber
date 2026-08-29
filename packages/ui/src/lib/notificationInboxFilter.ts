@@ -57,4 +57,5 @@ export const parseNotificationInboxFilter = (value: unknown): NotificationInboxF
 export const isInboxKindEnabled = (
   filter: NotificationInboxFilter,
   kind: NotificationInboxKind,
-): boolean => filter[kind] === true;
+  inboxEnabled = true,
+): boolean => inboxEnabled && filter[kind] === true;

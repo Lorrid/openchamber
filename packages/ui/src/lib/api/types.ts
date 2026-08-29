@@ -684,6 +684,8 @@ export interface SettingsPayload {
   collapsibleThinkingBlocks?: boolean;
   showDeletionDialog?: boolean;
   nativeNotificationsEnabled?: boolean;
+  notificationSoundEnabled?: boolean;
+  notificationInboxEnabled?: boolean;
   notificationMode?: 'always' | 'hidden-only';
   autoDeleteEnabled?: boolean;
   autoSaveEnabled?: boolean;
@@ -774,6 +776,7 @@ export interface NotificationPayload {
   sessionId?: string;
   directory?: string;
   requireHidden?: boolean;
+  silent?: boolean;
 }
 
 export interface NotificationsAPI {

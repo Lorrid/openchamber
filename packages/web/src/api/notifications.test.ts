@@ -157,6 +157,7 @@ describe('web notifications API', () => {
     })).resolves.toBe(true);
 
     expect(showNotification).toHaveBeenCalledWith('Ready', expect.objectContaining({
+      silent: false,
       data: {
         url: '/?session=s1',
         sessionId: 's1',

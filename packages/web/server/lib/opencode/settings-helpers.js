@@ -346,6 +346,12 @@ export const createSettingsHelpers = (dependencies) => {
     if (typeof candidate.nativeNotificationsEnabled === 'boolean') {
       result.nativeNotificationsEnabled = candidate.nativeNotificationsEnabled;
     }
+    if (typeof candidate.notificationSoundEnabled === 'boolean') {
+      result.notificationSoundEnabled = candidate.notificationSoundEnabled;
+    }
+    if (typeof candidate.notificationInboxEnabled === 'boolean') {
+      result.notificationInboxEnabled = candidate.notificationInboxEnabled;
+    }
     if (typeof candidate.notificationMode === 'string') {
       const mode = candidate.notificationMode.trim();
       if (mode === 'always' || mode === 'hidden-only') {

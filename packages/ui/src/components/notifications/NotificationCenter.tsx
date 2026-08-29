@@ -304,13 +304,20 @@ export const NotificationCenter: React.FC<NotificationCenterProps> = ({
 }) => {
   const [open, setOpen] = React.useState(false);
   const unreadCount = useInboxUnreadCount();
+  const inboxEnabled = useUIStore((state) => state.notificationInboxEnabled !== false);
   const { t } = useI18n();
 
   React.useEffect(() => {
+    if (!inboxEnabled) {
+      setOpen(false);
+      return;
+    }
     const onToggle = () => setOpen((current) => !current);
     window.addEventListener(OPEN_NOTIFICATIONS_EVENT, onToggle);
     return () => window.removeEventListener(OPEN_NOTIFICATIONS_EVENT, onToggle);
-  }, []);
+  }, [inboxEnabled]);
+
+  if (!inboxEnabled) return null;
   const trigger = (
     <NotificationBellButton
       className={triggerClassName}

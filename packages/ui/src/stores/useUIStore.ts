@@ -795,6 +795,8 @@ interface UIStore {
   isPromptNavigatorPanelOpen: boolean;
   isImagePreviewOpen: boolean;
   nativeNotificationsEnabled: boolean;
+  notificationSoundEnabled: boolean;
+  notificationInboxEnabled: boolean;
   notificationMode: 'always' | 'hidden-only';
   notifyOnSubtasks: boolean;
   // Desktop dock badge showing the count of sessions with unseen activity (macOS).
@@ -994,6 +996,8 @@ interface UIStore {
   togglePromptNavigatorPanel: () => void;
   setImagePreviewOpen: (open: boolean) => void;
   setNativeNotificationsEnabled: (value: boolean) => void;
+  setNotificationSoundEnabled: (value: boolean) => void;
+  setNotificationInboxEnabled: (value: boolean) => void;
   setNotificationMode: (mode: 'always' | 'hidden-only') => void;
   setShowTerminalQuickKeysOnDesktop: (value: boolean) => void;
   setSessionTabsEnabled: (value: boolean) => void;
@@ -1150,6 +1154,8 @@ export const useUIStore = create<UIStore>()(
         isPromptNavigatorPanelOpen: false,
         isImagePreviewOpen: false,
         nativeNotificationsEnabled: false,
+        notificationSoundEnabled: true,
+        notificationInboxEnabled: true,
         notificationMode: 'hidden-only',
         notifyOnSubtasks: true,
         dockBadgeEnabled: true,
@@ -2339,6 +2345,14 @@ export const useUIStore = create<UIStore>()(
           set({ nativeNotificationsEnabled: value });
         },
 
+        setNotificationSoundEnabled: (value) => {
+          set({ notificationSoundEnabled: value });
+        },
+
+        setNotificationInboxEnabled: (value) => {
+          set({ notificationInboxEnabled: value });
+        },
+
         setNotificationMode: (mode) => {
           set({ notificationMode: mode });
         },
@@ -2738,6 +2752,10 @@ export const useUIStore = create<UIStore>()(
             ? (state.contextRailOrder as unknown[]).filter((id): id is string => typeof id === 'string' && id.trim() !== '')
             : [];
 
+          if (typeof state.notificationInboxEnabled !== 'boolean') {
+            state.notificationInboxEnabled = true;
+          }
+
           return state;
         },
         partialize: (state) => ({
@@ -2802,6 +2820,8 @@ export const useUIStore = create<UIStore>()(
           walkthroughTocWidth: state.walkthroughTocWidth,
           gitChangesViewMode: state.gitChangesViewMode,
           nativeNotificationsEnabled: state.nativeNotificationsEnabled,
+          notificationSoundEnabled: state.notificationSoundEnabled,
+          notificationInboxEnabled: state.notificationInboxEnabled,
           notificationMode: state.notificationMode,
           showTerminalQuickKeysOnDesktop: state.showTerminalQuickKeysOnDesktop,
           sessionTabsEnabled: state.sessionTabsEnabled,

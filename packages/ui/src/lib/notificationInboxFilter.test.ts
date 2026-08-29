@@ -1,6 +1,7 @@
 import { describe, expect, test } from 'bun:test';
 import {
   DEFAULT_NOTIFICATION_INBOX_FILTER,
+  isInboxKindEnabled,
   parseNotificationInboxFilter,
 } from './notificationInboxFilter';
 
@@ -29,5 +30,10 @@ describe('parseNotificationInboxFilter', () => {
       sessionFinished: false,
       info: true,
     });
+  });
+
+  test('master off hides every kind', () => {
+    expect(isInboxKindEnabled(DEFAULT_NOTIFICATION_INBOX_FILTER, 'sessionError')).toBe(true);
+    expect(isInboxKindEnabled(DEFAULT_NOTIFICATION_INBOX_FILTER, 'sessionError', false)).toBe(false);
   });
 });

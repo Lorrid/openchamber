@@ -1519,7 +1519,7 @@ const showOpenChamberNotification = (payload: { title?: unknown; body?: unknown;
       return false;
     }
 
-    const notification = new Notification(title, { body });
+    const notification = new Notification(title, { body, silent: payload?.silent === true });
     notification.onclick = () => {
       if (sessionId) {
         window.dispatchEvent(new CustomEvent('openchamber:open-session', {

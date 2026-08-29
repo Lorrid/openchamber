@@ -52,6 +52,7 @@ import { useConfigStore } from "@/stores/useConfigStore"
 import { useTodosPersistStore } from "@/stores/useTodosPersistStore"
 import { cleanupPersistedSessionState } from "./session-deletion-cleanup"
 import { toast } from "@/components/ui"
+import { maybePlayNotificationSound, resolveOsNotificationSilent } from "@/lib/notificationSound"
 import { appendNotification } from "./notification-store"
 import { usableSessionNotificationTitle } from "./notification-session-context"
 import { resolveNotificationProjectLabel } from "./notification-session-context"
@@ -516,6 +517,7 @@ type UiNotificationPayload = {
   sessionId?: unknown
   directory?: unknown
   requireHidden?: unknown
+  silent?: unknown
   desktopNotificationDelivered?: unknown
   desktopStdoutActive?: unknown
 }
@@ -584,6 +586,11 @@ const handleUiNotificationEvent = (payload: Event, fallbackDirectory: string): b
     sessionId,
     directory: directory || undefined,
     requireHidden: notification.requireHidden === true,
+    silent: resolveOsNotificationSilent(
+      notification.silent === true || notification.silent === false
+        ? { silent: notification.silent }
+        : undefined,
+    ),
   }).catch((error) => {
     console.warn("[notifications] failed to dispatch UI notification", error)
   })
@@ -1487,7 +1494,7 @@ export async function resyncBlockingRequestsForDirectory(
       if (isViewed) continue
       for (const permission of permissions) {
         if (knownIds.has(permission.id)) continue
-        showPermissionNeededToast({
+        if (showPermissionNeededToast({
           permission,
           directory,
           isViewed,
@@ -1495,7 +1502,9 @@ export async function resyncBlockingRequestsForDirectory(
           ...permissionToastCopy(),
           show: (title, options) => toast.info(title, options),
           openSession: openSessionFromToast,
-        })
+        })) {
+          maybePlayNotificationSound('permission')
+        }
       }
     }
 
@@ -1736,7 +1745,7 @@ export function handleEvent(
     }
 
     const isViewed = isViewedInCurrentSession(resolvedDirectory, permission.sessionID)
-    showPermissionNeededToast({
+    if (showPermissionNeededToast({
       permission,
       directory: resolvedDirectory,
       isViewed,
@@ -1744,7 +1753,9 @@ export function handleEvent(
       ...permissionToastCopy(),
       show: (title, options) => toast.info(title, options),
       openSession: openSessionFromToast,
-    })
+    })) {
+      maybePlayNotificationSound('permission')
+    }
   }
 
   if (payload.type === "permission.replied") {
@@ -1782,6 +1793,7 @@ export function handleEvent(
           onClick: () => openSessionFromToast(sessionID, resolvedDirectory),
         },
       })
+      maybePlayNotificationSound('question')
     }
   }
 
@@ -1805,6 +1817,7 @@ export function handleEvent(
       const indexedTitle = getAllSyncSessionMap().get(sessionID)?.title
       const sessionTitle = usableSessionNotificationTitle(session?.title, sessionID)
         ?? usableSessionNotificationTitle(indexedTitle, sessionID)
+      const isSubtask = Boolean(session?.parentID)
       appendNotification({
         directory: resolvedDirectory,
         session: sessionID,
@@ -1813,13 +1826,20 @@ export function handleEvent(
           resolvedDirectory,
           useProjectsStore.getState().projects,
         ),
-        subtask: Boolean((session as { parentID?: string } | undefined)?.parentID),
+        subtask: isSubtask,
         time: Date.now(),
         viewed: isViewedInCurrentSession(resolvedDirectory, sessionID),
         ...(payload.type === "session.error"
           ? { type: "error" as const, error: props.error }
           : { type: "turn-complete" as const }),
       })
+      maybePlayNotificationSound(
+        payload.type === "session.error"
+          ? "error"
+          : isSubtask
+            ? "subtask"
+            : "completion",
+      )
     }
   }
 

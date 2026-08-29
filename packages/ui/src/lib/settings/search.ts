@@ -979,6 +979,19 @@ const SETTINGS_SEARCH_ITEMS: readonly SettingsSearchItem[] = [
     keywords: ['history', 'inbox', 'toast', 'badge', 'unread', 'subtask'],
   },
   {
+    id: 'notifications.inbox.enable',
+    page: 'notifications',
+    titleKey: 'settings.notifications.page.inbox.enableLabel',
+    keywords: ['inbox', 'history', 'enable', 'disable', 'off'],
+  },
+  {
+    id: 'notifications.sound',
+    page: 'notifications',
+    titleKey: 'settings.notifications.page.inbox.soundLabel',
+    descriptionKey: 'settings.notifications.page.inbox.soundInfo',
+    keywords: ['sound', 'chime', 'audio', 'beep', 'tone', 'bell', 'center'],
+  },
+  {
     id: 'notifications.events',
     page: 'notifications',
     titleKey: 'settings.notifications.page.events.title',
