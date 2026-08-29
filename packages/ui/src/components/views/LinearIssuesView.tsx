@@ -380,12 +380,15 @@ export const LinearIssuesView: React.FC = () => {
     if (isLoadingMore || isLoading) return;
     if (!hasMore || !cursor) return;
 
+    const requestId = listRequestId.current + 1;
+    listRequestId.current = requestId;
     setIsLoadingMore(true);
     try {
       const next = await linear.issuesList({
         ...listQuery,
         cursor,
       });
+      if (requestId !== listRequestId.current) return;
       setConnected(next.connected !== false);
       if (next.connected === false) {
         return;
@@ -394,10 +397,13 @@ export const LinearIssuesView: React.FC = () => {
       setCursor(next.cursor ?? null);
       setHasMore(Boolean(next.hasMore));
     } catch (e) {
+      if (requestId !== listRequestId.current) return;
       const message = e instanceof Error ? e.message : String(e);
       toast.error(t('session.linearIssuePicker.toast.loadMoreFailed'), { description: message });
     } finally {
-      setIsLoadingMore(false);
+      if (requestId === listRequestId.current) {
+        setIsLoadingMore(false);
+      }
     }
   }, [cursor, hasMore, isLoading, isLoadingMore, linear, listQuery, t]);
 

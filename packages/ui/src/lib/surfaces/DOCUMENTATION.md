@@ -59,7 +59,9 @@ the `openContext*` actions in `useUIStore`.
   mobile shell have their own layouts and do not consume this registry.
   Linear is a desktop/web singleton on this rail. VS Code and mobile omit it
   (no this registry, and VS Code has no `RuntimeAPIs.linear`). The Linear
-  rail icon is hidden until a Linear workspace is connected. The surface lists
+  rail icon is hidden until a Linear workspace is connected. A persisted Linear
+  tab stays open across reload until auth has resolved; only a confirmed
+  disconnect closes the panel. The surface lists
   issues with status (All, Backlog, To Do, In Progress, In Review, Done, Canceled, Duplicate), assignee, team, and priority filters, can switch
   the current workspace, and keeps Start session in a footer on the issue card.
   Those filters restore from `useUIStore` when the surface remounts. Work-status

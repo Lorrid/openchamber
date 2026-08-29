@@ -40,7 +40,6 @@
 - Chat: Cmd/Ctrl+Shift+T now cycles through every thinking level offered by the selected model instead of skipping levels after reaching the end (thanks to @nimobeeren).
 - Chat: OpenCode notices now share one style.
 - Chat: the timeline dialog now fits small windows instead of squeezing the message list to a couple of rows (thanks to @gaojunran).
-- Settings: on Integrations, the experimental warning now sits under Third-party integrations.
 
 ## [1.20.0] - 2026-08-23
 

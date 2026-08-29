@@ -70,6 +70,7 @@ export function LinearIssuePickerDialog({
   const [createInWorktree, setCreateInWorktree] = React.useState(false);
   const [mapping, setMapping] = React.useState<LinearMappingResult | null>(null);
   const [mappingError, setMappingError] = React.useState<string | null>(null);
+  const listRequestId = React.useRef(0);
 
   const directIdentifier = React.useMemo(() => parseLinearIssueQuery(query), [query]);
   const debouncedQuery = useDebouncedValue(query, 350);
@@ -89,18 +90,24 @@ export function LinearIssuePickerDialog({
       return;
     }
 
+    const requestId = listRequestId.current + 1;
+    listRequestId.current = requestId;
     setIsLoading(true);
     setError(null);
     try {
       const next = await linear.issuesList(search ? { query: search } : undefined);
+      if (requestId !== listRequestId.current) return;
       setConnected(next.connected !== false);
       setIssues(next.issues ?? []);
       setCursor(next.cursor ?? null);
       setHasMore(Boolean(next.hasMore));
     } catch (e) {
+      if (requestId !== listRequestId.current) return;
       setError(e instanceof Error ? e.message : String(e));
     } finally {
-      setIsLoading(false);
+      if (requestId === listRequestId.current) {
+        setIsLoading(false);
+      }
     }
   }, [linear, linearAuthChecked, linearAuthStatus, t]);
 
@@ -160,6 +167,8 @@ export function LinearIssuePickerDialog({
     if (isLoadingMore || isLoading) return;
     if (!hasMore || !cursor) return;
 
+    const requestId = listRequestId.current + 1;
+    listRequestId.current = requestId;
     setIsLoadingMore(true);
     try {
       const search = debouncedQuery.trim();
@@ -167,15 +176,19 @@ export function LinearIssuePickerDialog({
         query: search || undefined,
         cursor,
       });
+      if (requestId !== listRequestId.current) return;
       setConnected(next.connected !== false);
       setIssues((prev) => [...prev, ...(next.issues ?? [])]);
       setCursor(next.cursor ?? null);
       setHasMore(Boolean(next.hasMore));
     } catch (e) {
+      if (requestId !== listRequestId.current) return;
       const message = e instanceof Error ? e.message : String(e);
       toast.error(t('session.linearIssuePicker.toast.loadMoreFailed'), { description: message });
     } finally {
-      setIsLoadingMore(false);
+      if (requestId === listRequestId.current) {
+        setIsLoadingMore(false);
+      }
     }
   }, [cursor, debouncedQuery, hasMore, isLoading, isLoadingMore, linear, t]);
 

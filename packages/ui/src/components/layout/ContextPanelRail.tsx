@@ -169,6 +169,7 @@ export const ContextPanelRail: React.FC = () => {
   const closeContextPanel = useUIStore((state) => state.closeContextPanel);
   const shortcutOverrides = useUIStore((state) => state.shortcutOverrides);
   const planModeEnabled = useFeatureFlagsStore((state) => state.planModeEnabled);
+  const linearAuthChecked = useLinearAuthStore((state) => state.hasChecked);
   const linearConnected = useLinearAuthStore((state) => state.status?.connected === true);
   const { screenWidth } = useDeviceInfo();
   const gitStatus = useGitStatus(directoryKey || null);
@@ -271,11 +272,11 @@ export const ContextPanelRail: React.FC = () => {
   }, [contextRailHiddenSurfaces, contextRailOrder, linearConnected, planModeEnabled, screenWidth, tabs]);
 
   React.useEffect(() => {
-    if (!directoryKey || linearConnected || activeMode !== 'linear') {
+    if (!directoryKey || !linearAuthChecked || linearConnected || activeMode !== 'linear') {
       return;
     }
     closeContextPanel(directoryKey);
-  }, [activeMode, closeContextPanel, directoryKey, linearConnected]);
+  }, [activeMode, closeContextPanel, directoryKey, linearAuthChecked, linearConnected]);
 
   const [isSurfacesDialogOpen, setIsSurfacesDialogOpen] = React.useState(false);
 

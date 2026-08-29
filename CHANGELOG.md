@@ -4,14 +4,7 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
-- **Settings/Integrations:** connect one or more Linear workspaces. The logins live on this OpenChamber server, so web, desktop, and a phone paired to it share them. Switch between workspaces in Settings. After connecting, map that workspace's default and each Linear team to an OpenChamber project.
 - **Chat:** switching sessions is now near-instant. The clicked session highlights at once, and its conversation appears as one finished view — text, tool cards, and the recap together — instead of arriving in pieces with a moment of unstyled code blocks and links. Header session tabs switch without a crossfade, and the tab title no longer jumps when a tab becomes active.
-- Linear: the right-hand panel lists issues from the current workspace. Its rail icon only appears after Linear is connected. Filter by status (All, Backlog, To Do, In Progress, In Review, Done, Canceled, or Duplicate), priority, assignee, or team, and switch workspace there. On a narrow panel, search and the filters other than status show as icons. They stay when you switch to another right-hand tool, and they no longer flash while the list reloads. Open an issue to see priority and labels, change its status, or close it. The status menu on the card follows Linear's order: Backlog, Todo, In Progress, In Review, Done, Canceled, Duplicate. Start session stays in a footer while you scroll the card. Issue and comment images show in the card. Hidden in VS Code.
-- Chat: attach a Linear issue from the composer attach menu. It rides the next send as context and stays on the work-status card. Clicking it there opens the Linear panel. Exclusive with a linked GitHub issue or PR. Hidden in VS Code.
-- Git: when creating a worktree, start from a Linear issue the same way you already can from a GitHub issue. It stays in the current project, names the branch from the issue, and seeds the new session. Hidden in VS Code.
-- Linear: sessions started from an issue post started, completed, and failed comments on that issue, named like `OpenChamber session started: Session title`, each a link that opens the session.
-- Settings: Linear issue review has its own Magic Prompts templates, separate from GitHub issue review.
-- Settings: on Integrations, the experimental warning now sits under Third-party integrations.
 - Chat: command and skill autocomplete in a Chat (a session that belongs to no project) lists that chat's own commands and skills instead of the project last selected in the sidebar, and file mentions in a new chat draft no longer search the previous project.
 - Files: Ctrl/Cmd+F opens the find bar in the Markdown preview even when nothing inside the preview has focus.
 
