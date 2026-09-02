@@ -607,6 +607,7 @@ export const MobileChangesSurface: React.FC<MobileChangesSurfaceProps> = ({ onCl
             remotes={effectiveRemotes}
             disabled={isLoadingStatus}
             directory={currentDirectory}
+            switchBlockedNotice={(status?.files?.length ?? 0) > 0 ? t('gitView.branch.switchBlockedNotice') : null}
           />
         </div>
         <SyncActions
@@ -662,13 +663,32 @@ export const MobileChangesSurface: React.FC<MobileChangesSurfaceProps> = ({ onCl
         onOpenChange={(open) => { if (!open) setPendingDirtySwitchBranch(null); }}
         targetBranch={pendingDirtySwitchBranch ?? ''}
         changedFileCount={status?.files?.length ?? 0}
-        onCommitAndSwitch={async (message) => {
+        onCommitAndSwitch={async (message, pushAfter) => {
           const branch = pendingDirtySwitchBranch;
           if (!branch || !currentDirectory) return;
           const sourceBranch = status?.current ?? null;
           await git.createGitCommit(currentDirectory, message, { addAll: true });
+          let pushedRemoteName: string | null = null;
+          if (pushAfter) {
+            const trackingRemoteName = status?.tracking?.split('/')[0];
+            const remote = effectiveRemotes.find((entry) => entry.name === trackingRemoteName) ?? effectiveRemotes[0];
+            try {
+              if (!remote) throw new Error(t('mobile.changes.noRemote'));
+              await git.gitPush(currentDirectory, status?.tracking
+                ? { remote: remote.name }
+                : { remote: remote.name, branch: sourceBranch ?? undefined, options: ['--set-upstream'] });
+              pushedRemoteName = remote.name;
+            } catch {
+              toast.error(t('gitView.dirtySwitch.pushFailed'));
+              await refreshStatusAndBranches();
+              setPendingDirtySwitchBranch(null);
+              return;
+            }
+          }
           toast.success(sourceBranch
-            ? t('gitView.dirtySwitch.committedNotPushed', { branch: sourceBranch })
+            ? pushedRemoteName
+              ? t('gitView.toast.pushedToUpstream', { name: pushedRemoteName })
+              : t('gitView.dirtySwitch.committedNotPushed', { branch: sourceBranch })
             : t('gitView.toast.commitCreated'));
           await refreshStatusAndBranches();
           setPendingDirtySwitchBranch(null);
