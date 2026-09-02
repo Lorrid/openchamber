@@ -1,6 +1,13 @@
 import { toast } from 'sonner';
-import type { StartSessionRequest } from '@openchamber/sdk';
-import { clampStartSessionRequest } from '@openchamber/sdk';
+import type {
+  AttachIssueRequest,
+  HostRequestErrorCode,
+  PromptRequest,
+  PromptResult,
+  StartSessionRequest,
+  StartSessionResult,
+} from '@openchamber/sdk';
+import { clampAttachRequest, clampPromptRequest, clampStartSessionRequest } from '@openchamber/sdk';
 
 import type { I18nKey, I18nParams } from '@/lib/i18n';
 import { generateBranchSlug } from '@/lib/git/branchNameGenerator';
@@ -194,15 +201,152 @@ const sendGuestFirstMessage = async (
   }
 };
 
+type GuestActionFailure = {
+  ok: false;
+  code: HostRequestErrorCode;
+  message: string;
+};
+
+type LinkGuestPlan =
+  | { ok: false; code: HostRequestErrorCode; message: string; toastKey: I18nKey }
+  | { ok: true; sessionId: string; directory: string; linked: LinkedGuestIssue };
+
+export const planLinkGuestSession = (
+  request: AttachIssueRequest,
+  sessionId: string | null,
+  directory: string | null,
+  now: number,
+): LinkGuestPlan => {
+  const folder = directory?.trim() ?? '';
+  if (!folder) {
+    return {
+      ok: false,
+      code: 'HOST_REJECTED',
+      message: 'Open a project first.',
+      toastKey: 'contextPanel.plugin.startSession.noProject',
+    };
+  }
+  const id = sessionId?.trim() ?? '';
+  if (!id) {
+    return {
+      ok: false,
+      code: 'NO_SESSION',
+      message: 'No open session.',
+      toastKey: 'contextPanel.plugin.sessionLink.noSession',
+    };
+  }
+  const plan = planStartGuestSession(request, folder, now);
+  if (!plan.ok) {
+    return {
+      ok: false,
+      code: 'HOST_REJECTED',
+      message: 'Open a project first.',
+      toastKey: 'contextPanel.plugin.startSession.noProject',
+    };
+  }
+  return { ok: true, sessionId: id, directory: folder, linked: plan.linked };
+};
+
+export const linkGuestSession = async (args: {
+  request: AttachIssueRequest;
+  sessionId: string | null;
+  directory: string | null;
+  t: TranslateFn;
+}): Promise<{ ok: true } | GuestActionFailure> => {
+  const plan = planLinkGuestSession(args.request, args.sessionId, args.directory, Date.now());
+  if (!plan.ok) {
+    toast.error(args.t(plan.toastKey));
+    return { ok: false, code: plan.code, message: plan.message };
+  }
+  try {
+    await sessionActions.setLinkedIssue(plan.sessionId, plan.directory, plan.linked, true);
+    toast.success(args.t('contextPanel.plugin.sessionLink.linked'));
+    return { ok: true };
+  } catch {
+    toast.error(args.t('contextPanel.plugin.sessionLink.failed'));
+    return { ok: false, code: 'HOST_REJECTED', message: 'Could not link that item.' };
+  }
+};
+
+type PromptGuestPlan =
+  | { ok: false; code: HostRequestErrorCode; message: string; toastKey: I18nKey }
+  | { ok: true; action: 'compose'; text: string }
+  | { ok: true; action: 'send'; text: string; sessionId: string; directory: string };
+
+export const planPromptGuestSession = (args: {
+  request: PromptRequest;
+  sessionId: string | null;
+  directory: string | null;
+  busy: boolean;
+}): PromptGuestPlan => {
+  const clamped = clampPromptRequest(args.request);
+  const sessionId = args.sessionId?.trim() ?? '';
+  if (!sessionId) {
+    return {
+      ok: false,
+      code: 'NO_SESSION',
+      message: 'No open session.',
+      toastKey: 'contextPanel.plugin.prompt.noSession',
+    };
+  }
+  if (!clamped.send) {
+    return { ok: true, action: 'compose', text: clamped.text };
+  }
+  if (args.busy) {
+    return {
+      ok: false,
+      code: 'SESSION_BUSY',
+      message: 'Session is busy.',
+      toastKey: 'contextPanel.plugin.prompt.busy',
+    };
+  }
+  const folder = args.directory?.trim() ?? '';
+  if (!folder) {
+    return {
+      ok: false,
+      code: 'HOST_REJECTED',
+      message: 'Open a project first.',
+      toastKey: 'contextPanel.plugin.startSession.noProject',
+    };
+  }
+  return { ok: true, action: 'send', text: clamped.text, sessionId, directory: folder };
+};
+
+export const promptGuestSession = async (args: {
+  request: PromptRequest;
+  sessionId: string | null;
+  directory: string | null;
+  busy: boolean;
+  compose: (text: string, mode: 'replace' | 'append') => void;
+  t: TranslateFn;
+}): Promise<{ ok: true; result: PromptResult } | GuestActionFailure> => {
+  const plan = planPromptGuestSession(args);
+  if (!plan.ok) {
+    toast.error(args.t(plan.toastKey));
+    return { ok: false, code: plan.code, message: plan.message };
+  }
+  if (plan.action === 'compose') {
+    args.compose(plan.text, 'replace');
+    return { ok: true, result: { sent: 'skipped' } };
+  }
+  const sent = await sendGuestFirstMessage(plan.sessionId, plan.directory, plan.text);
+  if (sent === 'no-model') {
+    toast.error(args.t('contextPanel.plugin.prompt.noModel'));
+  } else if (sent === 'failed') {
+    toast.error(args.t('contextPanel.plugin.prompt.sendFailed'));
+  }
+  return { ok: true, result: { sent } };
+};
+
 export const startGuestSession = async (args: {
   request: StartSessionRequest;
   directory: string | null;
   t: TranslateFn;
-}): Promise<boolean> => {
+}): Promise<StartSessionResult | null> => {
   const plan = planStartGuestSession(args.request, args.directory, Date.now());
   if (!plan.ok) {
     toast.error(args.t('contextPanel.plugin.startSession.noProject'));
-    return false;
+    return null;
   }
 
   const result = await runStartGuestSession(plan, {
@@ -244,16 +388,14 @@ export const startGuestSession = async (args: {
 
   if (!result.ok) {
     toast.error(args.t('contextPanel.plugin.startSession.failed'));
-    return false;
+    return null;
   }
   if (result.sent === 'no-model') {
     toast.error(args.t('contextPanel.plugin.startSession.noModel'));
-    return true;
-  }
-  if (result.sent === 'failed') {
+  } else if (result.sent === 'failed') {
     toast.error(args.t('contextPanel.plugin.startSession.sendFailed'));
-    return true;
+  } else {
+    toast.success(args.t('contextPanel.plugin.startSession.created'));
   }
-  toast.success(args.t('contextPanel.plugin.startSession.created'));
-  return true;
+  return { sessionId: result.sessionId, sent: result.sent };
 };

@@ -3,6 +3,7 @@ import { describe, expect, test } from 'bun:test';
 import { OPENCHAMBER_SDK_API_VERSION, OPENCHAMBER_SDK_CHANNEL } from './api-version.ts';
 import {
   clampAttachRequest,
+  clampPromptRequest,
   clampStartSessionRequest,
   GUEST_ATTACH_TITLE_MAX,
   GUEST_COMPOSE_TEXT_MAX,
@@ -32,7 +33,7 @@ const readyPayload = {
   },
   locale: 'uk',
   directory: '/repo',
-  session: { id: 'ses-1', title: 'Hello' },
+  session: { id: 'ses-1', title: 'Hello', busy: false },
   surface: 'panel',
   connection: { connected: false, account: '' },
   settings: {},
@@ -176,6 +177,81 @@ describe('parseHostMessage', () => {
       type: 'result',
       ok: false,
       code: 'HOST_REJECTED',
+    });
+  });
+
+  test('defaults missing session busy to false and keeps model and agent', () => {
+    const message = parseHostMessage({
+      channel: OPENCHAMBER_SDK_CHANNEL,
+      v: 1,
+      type: 'session',
+      payload: {
+        session: {
+          id: 'ses-1',
+          title: 'Hello',
+          model: 'anthropic/claude',
+          agent: 'build',
+        },
+      },
+    });
+    expect(message).toMatchObject({
+      type: 'session',
+      payload: {
+        session: {
+          id: 'ses-1',
+          title: 'Hello',
+          busy: false,
+          model: 'anthropic/claude',
+          agent: 'build',
+        },
+      },
+    });
+  });
+
+  test('accepts a session-lifecycle push', () => {
+    const message = parseHostMessage({
+      channel: OPENCHAMBER_SDK_CHANNEL,
+      v: 1,
+      type: 'session-lifecycle',
+      payload: { sessionId: 'ses-1', phase: 'started' },
+    });
+    expect(message).toEqual({
+      channel: OPENCHAMBER_SDK_CHANNEL,
+      v: 1,
+      type: 'session-lifecycle',
+      payload: { sessionId: 'ses-1', phase: 'started' },
+    });
+  });
+
+  test('accepts a start-session result payload', () => {
+    const message = parseHostMessage({
+      channel: OPENCHAMBER_SDK_CHANNEL,
+      v: 1,
+      type: 'result',
+      id: 'oc-1',
+      ok: true,
+      payload: { sessionId: 'ses-9', sent: 'no-model' },
+    });
+    expect(message).toMatchObject({
+      type: 'result',
+      ok: true,
+      payload: { sessionId: 'ses-9', sent: 'no-model' },
+    });
+  });
+
+  test('accepts a prompt result payload', () => {
+    const message = parseHostMessage({
+      channel: OPENCHAMBER_SDK_CHANNEL,
+      v: 1,
+      type: 'result',
+      id: 'oc-1',
+      ok: true,
+      payload: { sent: 'sent' },
+    });
+    expect(message).toMatchObject({
+      type: 'result',
+      ok: true,
+      payload: { sent: 'sent' },
     });
   });
 
@@ -399,6 +475,35 @@ describe('parseGuestMessage', () => {
       url: 'https://gitlab.com/acme/app/-/issues/12',
       worktree: false,
     }).worktree).toBeUndefined();
+  });
+
+  test('accepts prompt and session-link', () => {
+    expect(parseGuestMessage({
+      channel: OPENCHAMBER_SDK_CHANNEL,
+      v: 1,
+      type: 'prompt',
+      id: 'oc-20',
+      payload: { text: 'Fix the login', send: true },
+    })?.type).toBe('prompt');
+    expect(parseGuestMessage({
+      channel: OPENCHAMBER_SDK_CHANNEL,
+      v: 1,
+      type: 'session-link',
+      id: 'oc-21',
+      payload: {
+        providerId: 'gitlab',
+        id: '!12',
+        title: 'Fix login',
+        url: 'https://gitlab.com/acme/app/-/merge_requests/12',
+      },
+    })?.type).toBe('session-link');
+    expect(clampPromptRequest({
+      text: `  ${'x'.repeat(GUEST_COMPOSE_TEXT_MAX + 20)}  `,
+      send: false,
+    })).toEqual({
+      text: 'x'.repeat(GUEST_COMPOSE_TEXT_MAX),
+    });
+    expect(clampPromptRequest({ text: 'Send this', send: true }).send).toBe(true);
   });
 
   test('drops attach without an http url shape the host will accept later', () => {

@@ -3,8 +3,18 @@ import fs from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 
+import { spawnSync } from 'node:child_process';
+
 import { listInstalledGuests } from './catalog.js';
-import { installGuestFromPath, parseInstallRequest, uninstallGuest } from './install.js';
+import { buildStoreZip } from './extract-zip.test.js';
+import {
+  installGuestFromGitSource,
+  installGuestFromPath,
+  installGuestFromUrl,
+  parseInstallRequest,
+  uninstallGuest,
+} from './install.js';
+import { guestCopiesDir } from './persist.js';
 
 const writeGuest = async (root, id) => {
   await fs.mkdir(path.join(root, 'panel'), { recursive: true });
@@ -28,7 +38,11 @@ describe('installGuestFromPath', () => {
     await writeGuest(guestRoot, 'clone-hello');
 
     expect(parseInstallRequest({ path: guestRoot })).toEqual({ path: guestRoot });
+    expect(parseInstallRequest({ url: 'https://github.com/acme/panel.git' })).toEqual({
+      url: 'https://github.com/acme/panel.git',
+    });
     expect(parseInstallRequest({})).toBeNull();
+    expect(parseInstallRequest({ path: guestRoot, url: 'https://github.com/acme/panel.git' })).toBeNull();
 
     const installed = await installGuestFromPath(guestRoot, persistPath);
     expect(installed.ok).toBe(true);
@@ -104,5 +118,96 @@ describe('installGuestFromPath', () => {
     expect((await listInstalledGuests({ persistPath: persistA })).some((guest) => guest.id === 'clone-hello')).toBe(true);
 
     await fs.rm(parent, { recursive: true, force: true });
+  });
+
+  test('installs a zip and deletes the copy on uninstall', async () => {
+    const dir = await fs.mkdtemp(path.join(os.tmpdir(), 'oc-ext-'));
+    const persistPath = path.join(dir, 'extensions.json');
+    const zipPath = path.join(dir, 'panel.zip');
+    await fs.writeFile(zipPath, buildStoreZip([
+      { name: 'package.json', data: JSON.stringify({
+        name: '@openchamber/zip-hello',
+        openchamber: {
+          apiVersion: 1,
+          contributes: {
+            panel: { id: 'zip-hello', name: 'Zip', icon: 'window', entry: 'panel/index.html' },
+          },
+        },
+      }) },
+      { name: 'panel/index.html', data: '<html></html>' },
+    ]));
+
+    const installed = await installGuestFromPath(zipPath, persistPath);
+    expect(installed.ok).toBe(true);
+    if (!installed.ok) {
+      throw new Error('expected zip install');
+    }
+    expect(installed.guest.id).toBe('zip-hello');
+    expect(installed.guest.source).toBe('zip');
+    const copy = path.join(guestCopiesDir(persistPath), 'zip-hello');
+    expect(await fs.stat(copy).then((stat) => stat.isDirectory())).toBe(true);
+
+    const removed = await uninstallGuest('zip-hello', persistPath);
+    expect(removed).toEqual({ ok: true });
+    expect(await fs.stat(copy).then(() => true).catch(() => false)).toBe(false);
+    expect(await fs.stat(zipPath).then((stat) => stat.isFile())).toBe(true);
+
+    await fs.rm(dir, { recursive: true, force: true });
+  });
+});
+
+describe('installGuestFromUrl', () => {
+  test('refuses a non-https url', async () => {
+    const dir = await fs.mkdtemp(path.join(os.tmpdir(), 'oc-ext-'));
+    const persistPath = path.join(dir, 'extensions.json');
+    expect(await installGuestFromUrl('http://example.com/panel.git', persistPath)).toEqual({
+      ok: false,
+      code: 'invalid-url',
+    });
+    expect(await installGuestFromUrl('ftp://example.com/panel.git', persistPath)).toEqual({
+      ok: false,
+      code: 'invalid-url',
+    });
+    await fs.rm(dir, { recursive: true, force: true });
+  });
+});
+
+describe('installGuestFromGitSource', () => {
+  test('clones a local repo and deletes the copy on uninstall', async () => {
+    const dir = await fs.mkdtemp(path.join(os.tmpdir(), 'oc-ext-'));
+    const persistPath = path.join(dir, 'extensions.json');
+    const repo = path.join(dir, 'repo');
+    await writeGuest(repo, 'git-hello');
+    const git = (args) => {
+      const result = spawnSync('git', args, {
+        cwd: repo,
+        encoding: 'utf8',
+        env: { ...process.env, GIT_TERMINAL_PROMPT: '0' },
+      });
+      if (result.status !== 0) {
+        throw new Error(result.stderr || 'git failed');
+      }
+    };
+    git(['init', '--template=']);
+    git(['add', '.']);
+    git(['-c', 'user.name=test', '-c', 'user.email=test@example.com', 'commit', '-m', 'init']);
+
+    const installed = await installGuestFromGitSource(repo, persistPath);
+    expect(installed.ok).toBe(true);
+    if (!installed.ok) {
+      throw new Error('expected git install');
+    }
+    expect(installed.guest.id).toBe('git-hello');
+    expect(installed.guest.source).toBe('git');
+    const copy = path.join(guestCopiesDir(persistPath), 'git-hello');
+    expect(await fs.stat(copy).then((stat) => stat.isDirectory())).toBe(true);
+    expect(await fs.stat(path.join(repo, 'package.json')).then((stat) => stat.isFile())).toBe(true);
+
+    const removed = await uninstallGuest('git-hello', persistPath);
+    expect(removed).toEqual({ ok: true });
+    expect(await fs.stat(copy).then(() => true).catch(() => false)).toBe(false);
+    expect(await fs.stat(path.join(repo, 'package.json')).then((stat) => stat.isFile())).toBe(true);
+
+    await fs.rm(dir, { recursive: true, force: true });
   });
 });

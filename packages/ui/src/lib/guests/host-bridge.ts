@@ -1,17 +1,24 @@
 import {
+  GUEST_SESSION_AGENT_MAX,
+  GUEST_SESSION_MODEL_MAX,
   OPENCHAMBER_SDK_API_VERSION,
   OPENCHAMBER_SDK_CHANNEL,
   type AttachIssueRequest,
+  type PromptRequest,
+  type PromptResult,
+  type SessionLifecycleEvent,
+  type SessionLifecyclePhase,
   type StartSessionRequest,
   type GuestConnection,
   type GuestMessage,
   type GuestRequest,
-  type GuestRequestResult,
   type GuestSettings,
   type HostMessage,
   type HostReadyContext,
   type HostRequestErrorCode,
+  type HostResultPayload,
   type SessionSnapshot,
+  type StartSessionResult,
   type ToastKind,
 } from '@openchamber/sdk';
 
@@ -26,7 +33,15 @@ type HostBridgeEffects = {
   writeClipboard: (text: string) => Promise<boolean>;
   compose: (text: string, mode: 'replace' | 'append') => void;
   attach: (issue: AttachIssueRequest) => void;
-  startSession: (request: StartSessionRequest) => Promise<boolean>;
+  startSession: (request: StartSessionRequest) => Promise<StartSessionResult | null>;
+  prompt: (request: PromptRequest) => Promise<
+    | { ok: true; result: PromptResult }
+    | { ok: false; code: HostRequestErrorCode; message: string }
+  >;
+  sessionLink: (issue: AttachIssueRequest) => Promise<
+    | { ok: true }
+    | { ok: false; code: HostRequestErrorCode; message: string }
+  >;
   close: () => void;
   oauthStart: () => Promise<boolean>;
   oauthDisconnect: () => Promise<boolean>;
@@ -68,15 +83,63 @@ export const buildSettingsMessage = (settings: GuestSettings): HostMessage => ({
   payload: { settings },
 });
 
+export const buildSessionLifecycleMessage = (event: SessionLifecycleEvent): HostMessage => ({
+  channel: OPENCHAMBER_SDK_CHANNEL,
+  v: OPENCHAMBER_SDK_API_VERSION,
+  type: 'session-lifecycle',
+  payload: event,
+});
+
+export const guestSessionLifecyclePhase = (
+  status: { type?: string } | null | undefined,
+): SessionLifecyclePhase | null => {
+  if (status?.type === 'busy' || status?.type === 'retry') {
+    return 'started';
+  }
+  if (status?.type === 'idle') {
+    return 'completed';
+  }
+  if (status?.type) {
+    return 'failure';
+  }
+  return null;
+};
+
+export type GuestSessionSource = {
+  id: string;
+  title?: string | null;
+  busy?: boolean;
+  model?: string | null;
+  agent?: string | null;
+};
+
+export const guestSessionModelId = (
+  model: { providerID?: string | null; id?: string | null } | null | undefined,
+): string | undefined => {
+  const provider = model?.providerID?.trim();
+  const id = model?.id?.trim();
+  if (!provider || !id) return undefined;
+  return `${provider}/${id}`;
+};
+
 export const toGuestSessionSnapshot = (
-  session: { id: string; title?: string | null } | null | undefined,
+  session: GuestSessionSource | null | undefined,
 ): SessionSnapshot | null => {
   if (!session?.id) return null;
   const title = session.title?.trim();
-  return { id: session.id, title: title || session.id };
+  const snapshot: SessionSnapshot = {
+    id: session.id,
+    title: title || session.id,
+    busy: Boolean(session.busy),
+  };
+  const model = session.model?.trim().slice(0, GUEST_SESSION_MODEL_MAX);
+  if (model) snapshot.model = model;
+  const agent = session.agent?.trim().slice(0, GUEST_SESSION_AGENT_MAX);
+  if (agent) snapshot.agent = agent;
+  return snapshot;
 };
 
-const okResult = (id: string, payload?: GuestRequestResult): HostMessage => {
+const okResult = (id: string, payload?: HostResultPayload): HostMessage => {
   if (payload) {
     return {
       channel: OPENCHAMBER_SDK_CHANNEL,
@@ -158,7 +221,26 @@ export const answerGuestMessage = async (
         return errorResult(message.id, 'URL must be http or https.');
       }
       const started = await effects.startSession(message.payload);
-      return started ? okResult(message.id) : errorResult(message.id, 'Could not start that session.');
+      return started
+        ? okResult(message.id, started)
+        : errorResult(message.id, 'Could not start that session.');
+    }
+    case 'prompt': {
+      const prompted = await effects.prompt(message.payload);
+      if (!prompted.ok) {
+        return errorResult(message.id, prompted.message, prompted.code);
+      }
+      return okResult(message.id, prompted.result);
+    }
+    case 'session-link': {
+      if (!isHttpUrl(message.payload.url)) {
+        return errorResult(message.id, 'URL must be http or https.');
+      }
+      const linked = await effects.sessionLink(message.payload);
+      if (!linked.ok) {
+        return errorResult(message.id, linked.message, linked.code);
+      }
+      return okResult(message.id);
     }
     case 'close':
       effects.close();

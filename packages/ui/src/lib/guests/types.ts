@@ -1,6 +1,6 @@
 import type { AttachContribution, PublicIntegration } from '@openchamber/sdk';
 
-export type GuestSource = 'bundled' | 'path';
+export type GuestSource = 'bundled' | 'path' | 'zip' | 'git';
 
 export type InstalledGuest = {
   id: string;

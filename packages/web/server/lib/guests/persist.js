@@ -1,9 +1,13 @@
+import fsSync from 'node:fs';
 import fs from 'node:fs/promises';
 import path from 'node:path';
 import { z } from 'zod';
 
+const GUEST_SOURCES = ['path', 'zip', 'git'];
+
 const storeSchema = z.object({
   paths: z.array(z.string().min(1).refine((entry) => !entry.includes('\0'))),
+  sources: z.record(z.string(), z.enum(GUEST_SOURCES)).optional(),
 });
 
 const parseStore = (raw) => {
@@ -26,25 +30,65 @@ export const extensionsPersistPath = (dataDir) => {
   return path.join(parsed.data, 'extensions.json');
 };
 
-export const readExtensionPaths = async (persistPath) => {
+export const guestCopiesDir = (persistPath) => path.join(path.dirname(persistPath), 'guests');
+
+const realOrResolved = (value) => {
+  try {
+    return fsSync.realpathSync(value);
+  } catch {
+    return path.resolve(value);
+  }
+};
+
+export const isCopiedGuestRoot = (root, persistPath) => {
+  const copies = realOrResolved(guestCopiesDir(persistPath));
+  const resolved = realOrResolved(root);
+  return resolved === copies || resolved.startsWith(`${copies}${path.sep}`);
+};
+
+export const readExtensionStore = async (persistPath) => {
   try {
     const raw = await fs.readFile(persistPath, 'utf8');
     const parsed = parseStore(raw);
     if (!parsed) {
       throw new Error('Invalid extensions store');
     }
-    return parsed.paths;
+    return { paths: parsed.paths, sources: parsed.sources ?? {} };
   } catch (error) {
     if (error instanceof Error && 'code' in error && error.code === 'ENOENT') {
-      return [];
+      return { paths: [], sources: {} };
     }
     throw error;
   }
 };
 
-export const writeExtensionPaths = async (paths, persistPath) => {
+export const writeExtensionStore = async (persistPath, { paths, sources = {} }) => {
+  const cleaned = {};
+  for (const entry of paths) {
+    const source = sources[entry];
+    if (source && source !== 'path') {
+      cleaned[entry] = source;
+    }
+  }
+  const payload = Object.keys(cleaned).length > 0 ? { paths, sources: cleaned } : { paths };
   await fs.mkdir(path.dirname(persistPath), { recursive: true });
   const tmp = `${persistPath}.tmp-${process.pid}`;
-  await fs.writeFile(tmp, `${JSON.stringify({ paths }, null, 2)}\n`, 'utf8');
+  await fs.writeFile(tmp, `${JSON.stringify(payload, null, 2)}\n`, 'utf8');
   await fs.rename(tmp, persistPath);
+};
+
+export const readExtensionPaths = async (persistPath) => {
+  const store = await readExtensionStore(persistPath);
+  return store.paths;
+};
+
+export const writeExtensionPaths = async (paths, persistPath) => {
+  const current = await readExtensionStore(persistPath);
+  const sources = {};
+  for (const entry of paths) {
+    if (current.sources[entry]) {
+      sources[entry] = current.sources[entry];
+    }
+  }
+  await writeExtensionStore(persistPath, { paths, sources });
 };

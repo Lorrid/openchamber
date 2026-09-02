@@ -4,7 +4,7 @@ import path from 'node:path';
 import { parseManifestJson, resolveAttachMode, toPublicIntegration } from '@openchamber/sdk';
 
 import { listRelativeGuestScriptHrefs, resolveGuestHtmlRelativePath } from './html-tokens.js';
-import { readExtensionPaths } from './persist.js';
+import { readExtensionStore } from './persist.js';
 
 const PANEL_ID = /^[a-z][a-z0-9-]*$/;
 
@@ -187,8 +187,8 @@ export const listInstalledGuests = async ({ persistPath }) => {
   const guests = [];
   const seen = new Set();
 
-  const stored = await readExtensionPaths(persistPath);
-  for (const storedPath of stored) {
+  const stored = await readExtensionStore(persistPath);
+  for (const storedPath of stored.paths) {
     const root = await resolveGuestPackageRoot(storedPath);
     if (!root) {
       continue;
@@ -198,7 +198,8 @@ export const listInstalledGuests = async ({ persistPath }) => {
       continue;
     }
     seen.add(guest.id);
-    guests.push(withSource(guest, 'path', root));
+    const source = stored.sources[root] ?? stored.sources[storedPath] ?? 'path';
+    guests.push(withSource(guest, source, root));
   }
 
   return guests;

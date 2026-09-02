@@ -3,6 +3,12 @@
   "version": "1.0.0",
   "description": "Contract for OpenChamber guests: manifest parse and iframe host bridge.",
   "private": false,
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/openchamber/openchamber.git",
+    "directory": "packages/sdk"
+  },
   "type": "module",
   "main": "src/index.ts",
   "types": "src/index.ts",
@@ -22,6 +28,7 @@
   },
   "files": [
     "src",
+    "!src/**/*.test.ts",
     "scripts/bundle-guest.ts",
     "README.md",
     "DOCUMENTATION.md"

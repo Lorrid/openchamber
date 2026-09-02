@@ -2,7 +2,12 @@ import { describe, expect, test } from 'bun:test';
 
 import { OPENCHAMBER_SDK_CHANNEL, type GuestMessage, type GuestRequest } from '@openchamber/sdk';
 
-import { answerGuestMessage, toGuestSessionSnapshot } from './host-bridge.ts';
+import {
+  answerGuestMessage,
+  guestSessionLifecyclePhase,
+  guestSessionModelId,
+  toGuestSessionSnapshot,
+} from './host-bridge.ts';
 
 const toast: GuestMessage = {
   channel: OPENCHAMBER_SDK_CHANNEL,
@@ -19,7 +24,17 @@ const effects = (overrides: {
   writeClipboard?: (text: string) => Promise<boolean>;
   compose?: (text: string, mode: 'replace' | 'append') => void;
   attach?: (issue: { providerId: string; id: string; title: string; url: string; kind?: string; author?: string }) => void;
-  startSession?: (request: { providerId: string; id: string; title: string; url: string; worktree?: boolean }) => Promise<boolean>;
+  startSession?: (request: { providerId: string; id: string; title: string; url: string; worktree?: boolean }) => Promise<
+    { sessionId: string; sent: 'sent' | 'no-model' | 'skipped' | 'failed' } | null
+  >;
+  prompt?: (request: { text: string; send?: boolean }) => Promise<
+    | { ok: true; result: { sent: 'sent' | 'no-model' | 'skipped' | 'failed' } }
+    | { ok: false; code: 'HOST_REJECTED' | 'NO_SESSION' | 'SESSION_BUSY'; message: string }
+  >;
+  sessionLink?: (issue: { providerId: string; id: string; title: string; url: string }) => Promise<
+    | { ok: true }
+    | { ok: false; code: 'HOST_REJECTED' | 'NO_SESSION'; message: string }
+  >;
   close?: () => void;
   oauthStart?: () => Promise<boolean>;
   oauthDisconnect?: () => Promise<boolean>;
@@ -34,7 +49,9 @@ const effects = (overrides: {
   writeClipboard: overrides.writeClipboard ?? (async () => true),
   compose: overrides.compose ?? (() => {}),
   attach: overrides.attach ?? (() => {}),
-  startSession: overrides.startSession ?? (async () => true),
+  startSession: overrides.startSession ?? (async () => ({ sessionId: 'ses-1', sent: 'skipped' })),
+  prompt: overrides.prompt ?? (async () => ({ ok: true, result: { sent: 'skipped' } })),
+  sessionLink: overrides.sessionLink ?? (async () => ({ ok: true })),
   close: overrides.close ?? (() => {}),
   oauthStart: overrides.oauthStart ?? (async () => true),
   oauthDisconnect: overrides.oauthDisconnect ?? (async () => true),
@@ -208,17 +225,129 @@ describe('answerGuestMessage', () => {
     }, effects({
       startSession: async (request) => {
         seen.push({ id: request.id, worktree: request.worktree });
-        return true;
+        return { sessionId: 'ses-9', sent: 'sent' };
       },
     }));
     expect(seen).toEqual([{ id: '!12', worktree: true }]);
-    expect(ok && ok.type === 'result' && ok.ok).toBe(true);
+    expect(ok).toEqual({
+      channel: OPENCHAMBER_SDK_CHANNEL,
+      v: 1,
+      type: 'result',
+      id: 'oc-12',
+      ok: true,
+      payload: { sessionId: 'ses-9', sent: 'sent' },
+    });
 
     const bad = await answerGuestMessage({
       channel: OPENCHAMBER_SDK_CHANNEL,
       v: 1,
       type: 'start-session',
       id: 'oc-13',
+      payload: {
+        providerId: 'gitlab',
+        id: '!12',
+        title: 'Fix login',
+        url: 'file:///tmp/secret',
+      },
+    }, effects());
+    expect(bad && bad.type === 'result' && bad.ok).toBe(false);
+  });
+
+  test('prompts and forwards a busy refusal', async () => {
+    const seen: Array<{ text: string; send?: boolean }> = [];
+    const ok = await answerGuestMessage({
+      channel: OPENCHAMBER_SDK_CHANNEL,
+      v: 1,
+      type: 'prompt',
+      id: 'oc-14',
+      payload: { text: 'Fix the login', send: true },
+    }, effects({
+      prompt: async (request) => {
+        seen.push(request);
+        return { ok: true, result: { sent: 'sent' } };
+      },
+    }));
+    expect(seen).toEqual([{ text: 'Fix the login', send: true }]);
+    expect(ok).toEqual({
+      channel: OPENCHAMBER_SDK_CHANNEL,
+      v: 1,
+      type: 'result',
+      id: 'oc-14',
+      ok: true,
+      payload: { sent: 'sent' },
+    });
+
+    const busy = await answerGuestMessage({
+      channel: OPENCHAMBER_SDK_CHANNEL,
+      v: 1,
+      type: 'prompt',
+      id: 'oc-15',
+      payload: { text: 'Wait', send: true },
+    }, effects({
+      prompt: async () => ({ ok: false, code: 'SESSION_BUSY', message: 'Session is busy.' }),
+    }));
+    expect(busy).toEqual({
+      channel: OPENCHAMBER_SDK_CHANNEL,
+      v: 1,
+      type: 'result',
+      id: 'oc-15',
+      ok: false,
+      error: 'Session is busy.',
+      code: 'SESSION_BUSY',
+    });
+  });
+
+  test('links the current session and rejects a file url', async () => {
+    const seen: string[] = [];
+    const ok = await answerGuestMessage({
+      channel: OPENCHAMBER_SDK_CHANNEL,
+      v: 1,
+      type: 'session-link',
+      id: 'oc-16',
+      payload: {
+        providerId: 'gitlab',
+        id: '!12',
+        title: 'Fix login',
+        url: 'https://gitlab.com/acme/app/-/merge_requests/12',
+      },
+    }, effects({
+      sessionLink: async (issue) => {
+        seen.push(issue.id);
+        return { ok: true };
+      },
+    }));
+    expect(seen).toEqual(['!12']);
+    expect(ok && ok.type === 'result' && ok.ok).toBe(true);
+
+    const missing = await answerGuestMessage({
+      channel: OPENCHAMBER_SDK_CHANNEL,
+      v: 1,
+      type: 'session-link',
+      id: 'oc-17',
+      payload: {
+        providerId: 'gitlab',
+        id: '!12',
+        title: 'Fix login',
+        url: 'https://gitlab.com/acme/app/-/merge_requests/12',
+      },
+    }, effects({
+      sessionLink: async () => ({ ok: false, code: 'NO_SESSION', message: 'No open session.' }),
+    }));
+    expect(missing).toEqual({
+      channel: OPENCHAMBER_SDK_CHANNEL,
+      v: 1,
+      type: 'result',
+      id: 'oc-17',
+      ok: false,
+      error: 'No open session.',
+      code: 'NO_SESSION',
+    });
+
+    const bad = await answerGuestMessage({
+      channel: OPENCHAMBER_SDK_CHANNEL,
+      v: 1,
+      type: 'session-link',
+      id: 'oc-18',
       payload: {
         providerId: 'gitlab',
         id: '!12',
@@ -310,11 +439,38 @@ describe('toGuestSessionSnapshot', () => {
     expect(toGuestSessionSnapshot({ id: 'ses-1', title: 'Hello' })).toEqual({
       id: 'ses-1',
       title: 'Hello',
+      busy: false,
     });
-    expect(toGuestSessionSnapshot({ id: 'ses-1', title: '  ' })).toEqual({
+    expect(toGuestSessionSnapshot({
+      id: 'ses-1',
+      title: '  ',
+      busy: true,
+      model: 'anthropic/claude',
+      agent: 'build',
+    })).toEqual({
       id: 'ses-1',
       title: 'ses-1',
+      busy: true,
+      model: 'anthropic/claude',
+      agent: 'build',
     });
     expect(toGuestSessionSnapshot(null)).toBeNull();
+  });
+
+  test('joins provider and model id', () => {
+    expect(guestSessionModelId({ providerID: 'anthropic', id: 'claude' })).toBe('anthropic/claude');
+    expect(guestSessionModelId({ providerID: '  ', id: 'claude' })).toBe(undefined);
+    expect(guestSessionModelId(undefined)).toBe(undefined);
+  });
+});
+
+describe('guestSessionLifecyclePhase', () => {
+  test('maps live status and treats unknown as failure', () => {
+    expect(guestSessionLifecyclePhase({ type: 'busy' })).toBe('started');
+    expect(guestSessionLifecyclePhase({ type: 'retry' })).toBe('started');
+    expect(guestSessionLifecyclePhase({ type: 'idle' })).toBe('completed');
+    expect(guestSessionLifecyclePhase({ type: 'error' })).toBe('failure');
+    expect(guestSessionLifecyclePhase({})).toBeNull();
+    expect(guestSessionLifecyclePhase(null)).toBeNull();
   });
 });

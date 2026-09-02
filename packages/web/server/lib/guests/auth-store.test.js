@@ -46,10 +46,27 @@ describe('guest auth store', () => {
     await fs.promises.rm(dir, { recursive: true, force: true });
   });
 
+  test('treats a blank file as an empty store', async () => {
+    const dir = await fs.promises.mkdtemp(path.join(os.tmpdir(), 'oc-guest-auth-'));
+    const file = guestAuthPersistPath(dir);
+    await fs.promises.writeFile(file, '', 'utf8');
+    expect(await readGuestAuthStore(file)).toEqual({ guests: {} });
+    await fs.promises.writeFile(file, '\uFEFF\n', 'utf8');
+    expect(await readGuestAuthStore(file)).toEqual({ guests: {} });
+    await fs.promises.rm(dir, { recursive: true, force: true });
+  });
+
   test('refuses a corrupt store', async () => {
     const dir = await fs.promises.mkdtemp(path.join(os.tmpdir(), 'oc-guest-auth-'));
     const file = guestAuthPersistPath(dir);
     await fs.promises.writeFile(file, '{"guests":[]}', 'utf8');
+    try {
+      await readGuestAuthStore(file);
+      throw new Error('should have thrown');
+    } catch (error) {
+      expect(String(error)).toContain('Invalid guest auth store');
+    }
+    await fs.promises.writeFile(file, '{', 'utf8');
     try {
       await readGuestAuthStore(file);
       throw new Error('should have thrown');

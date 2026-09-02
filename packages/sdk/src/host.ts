@@ -2,10 +2,14 @@ import { OPENCHAMBER_SDK_API_VERSION, OPENCHAMBER_SDK_CHANNEL } from './api-vers
 import {
   GUEST_REQUEST_TIMEOUT_MS,
   clampAttachRequest,
+  clampPromptRequest,
   clampStartSessionRequest,
   hostMessageSchema,
   type AttachIssueRequest,
   type ComposeRequest,
+  type PromptRequest,
+  type PromptResult,
+  type SessionLifecycleEvent,
   type StartSessionRequest,
   type GuestConnection,
   type GuestMessage,
@@ -14,8 +18,12 @@ import {
   type GuestSettings,
   type HostReadyContext,
   type HostRequestErrorCode,
+  type HostResultPayload,
   type SessionSnapshot,
+  type StartSessionResult,
   type ToastRequest,
+  isPromptResult,
+  isStartSessionResult,
 } from './protocol.ts';
 
 export type HostFrame = {
@@ -39,6 +47,7 @@ export type HostClient = {
   onReady: (listener: (context: HostReadyContext) => void) => () => void;
   onDirectory: (listener: (directory: string | null) => void) => () => void;
   onSession: (listener: (session: SessionSnapshot | null) => void) => () => void;
+  onSessionLifecycle: (listener: (event: SessionLifecycleEvent) => void) => () => void;
   onConnection: (listener: (connection: GuestConnection) => void) => () => void;
   onSettings: (listener: (settings: GuestSettings) => void) => () => void;
   toast: (request: ToastRequest) => Promise<void>;
@@ -47,7 +56,9 @@ export type HostClient = {
   writeClipboard: (text: string) => Promise<void>;
   compose: (request: ComposeRequest) => Promise<void>;
   attach: (request: AttachIssueRequest) => Promise<void>;
-  startSession: (request: StartSessionRequest) => Promise<void>;
+  startSession: (request: StartSessionRequest) => Promise<StartSessionResult>;
+  prompt: (request: PromptRequest) => Promise<PromptResult>;
+  sessionLink: (request: AttachIssueRequest) => Promise<void>;
   close: () => Promise<void>;
   oauthStart: () => Promise<void>;
   oauthDisconnect: () => Promise<void>;
@@ -66,7 +77,7 @@ export class HostRequestError extends Error {
 }
 
 type Pending = {
-  resolve: (payload?: GuestRequestResult) => void;
+  resolve: (payload?: HostResultPayload) => void;
   reject: (error: HostRequestError) => void;
   timer: ReturnType<typeof setTimeout>;
 };
@@ -87,11 +98,21 @@ export const connectHost = (options: HostClientOptions = {}): HostClient => {
   const readyListeners = new Set<(context: HostReadyContext) => void>();
   const directoryListeners = new Set<(directory: string | null) => void>();
   const sessionListeners = new Set<(session: SessionSnapshot | null) => void>();
+  const lifecycleListeners = new Set<(event: SessionLifecycleEvent) => void>();
   const connectionListeners = new Set<(connection: GuestConnection) => void>();
   const settingsListeners = new Set<(settings: GuestSettings) => void>();
   const pending = new Map<string, Pending>();
   const ids = { value: 0 };
   let lastReady: HostReadyContext | null = null;
+  let lastLifecycle: SessionLifecycleEvent | null = null;
+
+  const lifecycleFromSession = (session: SessionSnapshot | null): SessionLifecycleEvent | null => {
+    if (!session) return null;
+    return {
+      sessionId: session.id,
+      phase: session.busy ? 'started' : 'completed',
+    };
+  };
 
   const post = (message: GuestMessage): void => {
     target.parent.postMessage(message, '*');
@@ -106,9 +127,13 @@ export const connectHost = (options: HostClientOptions = {}): HostClient => {
 
     if (message.type === 'ready') {
       lastReady = message.payload;
+      lastLifecycle = lifecycleFromSession(message.payload.session);
       for (const listener of readyListeners) listener(message.payload);
       for (const listener of directoryListeners) listener(message.payload.directory);
       for (const listener of sessionListeners) listener(message.payload.session);
+      if (lastLifecycle) {
+        for (const listener of lifecycleListeners) listener(lastLifecycle);
+      }
       for (const listener of connectionListeners) listener(message.payload.connection);
       for (const listener of settingsListeners) listener(message.payload.settings);
       return;
@@ -126,7 +151,18 @@ export const connectHost = (options: HostClientOptions = {}): HostClient => {
       if (lastReady) {
         lastReady = { ...lastReady, session: message.payload.session };
       }
+      if (!message.payload.session) {
+        lastLifecycle = null;
+      } else if (lastLifecycle?.sessionId !== message.payload.session.id) {
+        lastLifecycle = lifecycleFromSession(message.payload.session);
+      }
       for (const listener of sessionListeners) listener(message.payload.session);
+      return;
+    }
+
+    if (message.type === 'session-lifecycle') {
+      lastLifecycle = message.payload;
+      for (const listener of lifecycleListeners) listener(message.payload);
       return;
     }
 
@@ -166,7 +202,7 @@ export const connectHost = (options: HostClientOptions = {}): HostClient => {
 
   const send = (
     message: Exclude<GuestMessage, { type: 'hello' }>,
-  ): Promise<GuestRequestResult | undefined> => {
+  ): Promise<HostResultPayload | undefined> => {
     if (target.parent === target) {
       return Promise.reject(new HostRequestError('HOST_UNAVAILABLE', 'No host frame. This page is not in an iframe.'));
     }
@@ -204,6 +240,13 @@ export const connectHost = (options: HostClientOptions = {}): HostClient => {
       if (lastReady) listener(lastReady.session);
       return () => {
         sessionListeners.delete(listener);
+      };
+    },
+    onSessionLifecycle: (listener) => {
+      lifecycleListeners.add(listener);
+      if (lastLifecycle) listener(lastLifecycle);
+      return () => {
+        lifecycleListeners.delete(listener);
       };
     },
     onConnection: (listener) => {
@@ -262,12 +305,36 @@ export const connectHost = (options: HostClientOptions = {}): HostClient => {
       id: nextId(ids),
       payload: clampAttachRequest(payload),
     }),
-    startSession: (payload) => request({
+    startSession: (payload) => send({
       channel: OPENCHAMBER_SDK_CHANNEL,
       v: OPENCHAMBER_SDK_API_VERSION,
       type: 'start-session',
       id: nextId(ids),
       payload: clampStartSessionRequest(payload),
+    }).then((result) => {
+      if (!isStartSessionResult(result)) {
+        throw new HostRequestError('HOST_REJECTED', 'Host did not return a session.');
+      }
+      return result;
+    }),
+    prompt: (payload) => send({
+      channel: OPENCHAMBER_SDK_CHANNEL,
+      v: OPENCHAMBER_SDK_API_VERSION,
+      type: 'prompt',
+      id: nextId(ids),
+      payload: clampPromptRequest(payload),
+    }).then((result) => {
+      if (!isPromptResult(result)) {
+        throw new HostRequestError('HOST_REJECTED', 'Host did not return a prompt result.');
+      }
+      return result;
+    }),
+    sessionLink: (payload) => request({
+      channel: OPENCHAMBER_SDK_CHANNEL,
+      v: OPENCHAMBER_SDK_API_VERSION,
+      type: 'session-link',
+      id: nextId(ids),
+      payload: clampAttachRequest(payload),
     }),
     close: () => request({
       channel: OPENCHAMBER_SDK_CHANNEL,
@@ -294,7 +361,7 @@ export const connectHost = (options: HostClientOptions = {}): HostClient => {
       id: nextId(ids),
       payload,
     }).then((result) => {
-      if (!result) {
+      if (!result || isStartSessionResult(result) || isPromptResult(result)) {
         throw new HostRequestError('HOST_REJECTED', 'Host request result was empty.');
       }
       return result;
@@ -309,6 +376,7 @@ export const connectHost = (options: HostClientOptions = {}): HostClient => {
       readyListeners.clear();
       directoryListeners.clear();
       sessionListeners.clear();
+      lifecycleListeners.clear();
       connectionListeners.clear();
       settingsListeners.clear();
     },

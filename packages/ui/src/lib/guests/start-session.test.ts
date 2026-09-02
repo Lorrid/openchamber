@@ -3,6 +3,8 @@ import { describe, expect, test } from 'bun:test';
 import {
   guestSessionTitle,
   guestWorktreeBranch,
+  planLinkGuestSession,
+  planPromptGuestSession,
   planStartGuestSession,
   runStartGuestSession,
   type StartGuestSessionDeps,
@@ -118,5 +120,85 @@ describe('runStartGuestSession', () => {
     }));
     expect(result).toEqual({ ok: true, sessionId: 'ses-1', sent: 'sent' });
     expect(sent).toEqual(['MR context']);
+  });
+});
+
+describe('planLinkGuestSession', () => {
+  test('refuses a missing project or session', () => {
+    expect(planLinkGuestSession(request, 'ses-1', null, 1)).toEqual({
+      ok: false,
+      code: 'HOST_REJECTED',
+      message: 'Open a project first.',
+      toastKey: 'contextPanel.plugin.startSession.noProject',
+    });
+    expect(planLinkGuestSession(request, null, '/repo', 1)).toEqual({
+      ok: false,
+      code: 'NO_SESSION',
+      message: 'No open session.',
+      toastKey: 'contextPanel.plugin.sessionLink.noSession',
+    });
+  });
+
+  test('links onto the current session without creating one', () => {
+    const plan = planLinkGuestSession(request, 'ses-9', '/repo', 42);
+    expect(plan.ok).toBe(true);
+    if (!plan.ok) {
+      return;
+    }
+    expect(plan.sessionId).toBe('ses-9');
+    expect(plan.directory).toBe('/repo');
+    expect(plan.linked.identifier).toBe('!12');
+    expect(plan.linked.linkedAt).toBe(42);
+  });
+});
+
+describe('planPromptGuestSession', () => {
+  test('refuses send without a session or while busy', () => {
+    expect(planPromptGuestSession({
+      request: { text: 'Fix the login', send: true },
+      sessionId: null,
+      directory: '/repo',
+      busy: false,
+    })).toEqual({
+      ok: false,
+      code: 'NO_SESSION',
+      message: 'No open session.',
+      toastKey: 'contextPanel.plugin.prompt.noSession',
+    });
+    expect(planPromptGuestSession({
+      request: { text: 'Fix the login', send: true },
+      sessionId: 'ses-1',
+      directory: '/repo',
+      busy: true,
+    })).toEqual({
+      ok: false,
+      code: 'SESSION_BUSY',
+      message: 'Session is busy.',
+      toastKey: 'contextPanel.plugin.prompt.busy',
+    });
+  });
+
+  test('replace-composes when send is omitted', () => {
+    expect(planPromptGuestSession({
+      request: { text: 'Draft this' },
+      sessionId: 'ses-1',
+      directory: '/repo',
+      busy: true,
+    })).toEqual({ ok: true, action: 'compose', text: 'Draft this' });
+  });
+
+  test('sends on the current session', () => {
+    expect(planPromptGuestSession({
+      request: { text: 'Fix the login', send: true },
+      sessionId: 'ses-1',
+      directory: '/repo',
+      busy: false,
+    })).toEqual({
+      ok: true,
+      action: 'send',
+      text: 'Fix the login',
+      sessionId: 'ses-1',
+      directory: '/repo',
+    });
   });
 });

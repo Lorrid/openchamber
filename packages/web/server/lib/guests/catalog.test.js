@@ -2,14 +2,24 @@ import { describe, expect, test } from 'bun:test';
 import fs from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
-import { fileURLToPath } from 'node:url';
-
 import { guestAssetContentType, listInstalledGuests, resolveGuestAssetPath, resolveGuestServedFile, toPublicGuest } from './catalog.js';
 import { writeExtensionPaths } from './persist.js';
 
-const helloPanelRoot = path.resolve(
-  fileURLToPath(new URL('../../../../../examples/hello-panel', import.meta.url)),
-);
+const writeBuiltGuest = async (root) => {
+  await fs.mkdir(path.join(root, 'panel'), { recursive: true });
+  await fs.writeFile(path.join(root, 'panel', 'index.html'), '<script src="./main.js"></script>');
+  await fs.writeFile(path.join(root, 'panel', 'main.js'), 'console.log("hello")');
+  await fs.writeFile(path.join(root, 'package.json'), JSON.stringify({
+    name: '@openchamber/hello',
+    openchamber: {
+      apiVersion: 1,
+      contributes: {
+        panel: { id: 'hello', name: 'Hello', icon: 'window', entry: 'panel/index.html' },
+        attach: 'dialog',
+      },
+    },
+  }));
+};
 
 describe('resolveGuestAssetPath', () => {
   test('stays inside the package and rejects escapes', async () => {
@@ -44,10 +54,12 @@ describe('listInstalledGuests', () => {
     await fs.rm(dir, { recursive: true, force: true });
   });
 
-  test('serves the sample after a path install', async () => {
+  test('serves a path-installed guest', async () => {
     const dir = await fs.mkdtemp(path.join(os.tmpdir(), 'oc-guest-'));
     const persistPath = path.join(dir, 'extensions.json');
-    await writeExtensionPaths([helloPanelRoot], persistPath);
+    const guestRoot = path.join(dir, 'hello');
+    await writeBuiltGuest(guestRoot);
+    await writeExtensionPaths([guestRoot], persistPath);
 
     const guests = await listInstalledGuests({ persistPath });
     const hello = guests.find((guest) => guest.id === 'hello');

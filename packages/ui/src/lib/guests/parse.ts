@@ -21,7 +21,7 @@ const installedGuestSchema = z.object({
   entry: z.string().trim().min(1),
   attach: z.union([z.boolean(), z.enum(['panel', 'dialog'])]).optional(),
   integration: publicIntegrationSchema.optional(),
-  source: z.enum(['bundled', 'path']).optional(),
+  source: z.enum(['bundled', 'path', 'zip', 'git']).optional(),
   path: z.string().nullable().optional(),
 });
 

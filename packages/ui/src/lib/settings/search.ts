@@ -1051,7 +1051,7 @@ const SETTINGS_SEARCH_ITEMS: readonly SettingsSearchItem[] = [
     page: 'extensions',
     titleKey: 'settings.extensions.add.label',
     descriptionKey: 'settings.extensions.add.info',
-    keywords: ['folder', 'path', 'install', 'guest', 'panel'],
+    keywords: ['folder', 'path', 'zip', 'git', 'url', 'install', 'guest', 'panel'],
     isAvailable: (ctx) => !ctx.isVSCode && !ctx.isMobile,
   },
 ] as const;

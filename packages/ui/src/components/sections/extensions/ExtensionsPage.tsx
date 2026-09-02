@@ -10,19 +10,30 @@ import {
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { toast } from '@/components/ui';
-import { installGuestPath, uninstallGuest, type InstallGuestErrorCode } from '@/lib/guests/install';
+import { installGuest, uninstallGuest, type InstallGuestErrorCode } from '@/lib/guests/install';
 import { loadGuestCatalog } from '@/lib/guests/load-catalog';
+import type { GuestSource } from '@/lib/guests/types';
 import { useGuestsStore } from '@/lib/guests/store';
 import { useI18n, type I18nKey } from '@/lib/i18n';
 
 const errorToastKey = (code: InstallGuestErrorCode): I18nKey => {
   if (code === 'invalid-path') return 'settings.extensions.toast.invalidPath';
+  if (code === 'invalid-url') return 'settings.extensions.toast.invalidUrl';
   if (code === 'not-found') return 'settings.extensions.toast.notFound';
   if (code === 'invalid-manifest') return 'settings.extensions.toast.invalidManifest';
   if (code === 'id-taken') return 'settings.extensions.toast.idTaken';
   if (code === 'already-installed') return 'settings.extensions.toast.alreadyInstalled';
   if (code === 'missing-build') return 'settings.extensions.toast.missingBuild';
+  if (code === 'clone-failed') return 'settings.extensions.toast.cloneFailed';
+  if (code === 'extract-failed') return 'settings.extensions.toast.extractFailed';
   return 'settings.extensions.toast.failed';
+};
+
+const sourceKey = (source?: GuestSource): I18nKey => {
+  if (source === 'path') return 'settings.extensions.source.path';
+  if (source === 'zip') return 'settings.extensions.source.zip';
+  if (source === 'git') return 'settings.extensions.source.git';
+  return 'settings.extensions.source.bundled';
 };
 
 export const ExtensionsPage: React.FC = () => {
@@ -30,7 +41,7 @@ export const ExtensionsPage: React.FC = () => {
   const guests = useGuestsStore((state) => state.guests);
   const status = useGuestsStore((state) => state.status);
   const unsupported = status === 'unsupported';
-  const [folderPath, setFolderPath] = React.useState('');
+  const [installValue, setInstallValue] = React.useState('');
   const [busy, setBusy] = React.useState(false);
 
   React.useEffect(() => {
@@ -38,19 +49,19 @@ export const ExtensionsPage: React.FC = () => {
   }, []);
 
   const add = async () => {
-    const trimmed = folderPath.trim();
+    const trimmed = installValue.trim();
     if (!trimmed) {
       toast.error(t('settings.extensions.toast.invalidPath'));
       return;
     }
     setBusy(true);
-    const result = await installGuestPath(trimmed);
+    const result = await installGuest(trimmed);
     setBusy(false);
     if (!result.ok) {
       toast.error(t(errorToastKey(result.code)));
       return;
     }
-    setFolderPath('');
+    setInstallValue('');
     toast.success(t('settings.extensions.toast.added', { name: result.guest.name }));
     await loadGuestCatalog();
   };
@@ -88,13 +99,11 @@ export const ExtensionsPage: React.FC = () => {
               <div className="min-w-0">
                 <div className="typography-ui-label text-foreground">{guest.name}</div>
                 <div className="typography-meta truncate text-muted-foreground">
-                  {guest.source === 'path'
-                    ? t('settings.extensions.source.path')
-                    : t('settings.extensions.source.bundled')}
+                  {t(sourceKey(guest.source))}
                   {guest.path ? ` · ${guest.path}` : ` · ${guest.id}`}
                 </div>
               </div>
-              {guest.source === 'path' ? (
+              {guest.source && guest.source !== 'bundled' ? (
                 <Button
                   type="button"
                   variant="ghost"
@@ -122,8 +131,8 @@ export const ExtensionsPage: React.FC = () => {
             controlClassName="w-full max-w-none"
           >
             <Input
-              value={folderPath}
-              onChange={(event) => setFolderPath(event.target.value)}
+              value={installValue}
+              onChange={(event) => setInstallValue(event.target.value)}
               onKeyDown={(event) => {
                 if (event.key === 'Enter') {
                   event.preventDefault();

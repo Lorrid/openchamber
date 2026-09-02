@@ -24,9 +24,16 @@ export type HostTheme = {
   tokens: HostThemeTokens;
 };
 
+export const START_SESSION_SENT = ['sent', 'no-model', 'skipped', 'failed'] as const;
+
+export type StartSessionSent = (typeof START_SESSION_SENT)[number];
+
 export type SessionSnapshot = {
   id: string;
   title: string;
+  busy: boolean;
+  model?: string;
+  agent?: string;
 };
 
 /** Which host chrome mounted this iframe. Not `openSurface`. */
@@ -52,6 +59,39 @@ export type GuestRequestResult = {
   status: number;
   body: string;
 };
+
+export type StartSessionResult = {
+  sessionId: string;
+  sent: StartSessionSent;
+};
+
+export type PromptRequest = {
+  text: string;
+  send?: boolean;
+};
+
+export type PromptResult = {
+  sent: StartSessionSent;
+};
+
+export const SESSION_LIFECYCLE_PHASES = ['started', 'completed', 'failure'] as const;
+
+export type SessionLifecyclePhase = (typeof SESSION_LIFECYCLE_PHASES)[number];
+
+export type SessionLifecycleEvent = {
+  sessionId: string;
+  phase: SessionLifecyclePhase;
+};
+
+export type HostResultPayload = GuestRequestResult | StartSessionResult | PromptResult;
+
+export const isStartSessionResult = (
+  value: HostResultPayload | undefined,
+): value is StartSessionResult => Boolean(value && 'sessionId' in value);
+
+export const isPromptResult = (
+  value: HostResultPayload | undefined,
+): value is PromptResult => Boolean(value && 'sent' in value && !('sessionId' in value));
 
 export const EMPTY_GUEST_CONNECTION: GuestConnection = {
   connected: false,
@@ -111,6 +151,8 @@ export const GUEST_ATTACH_TEXT_MAX = 16_000;
 export const GUEST_ATTACH_AUTHOR_MAX = 80;
 export const GUEST_ATTACH_BRANCH_MAX = 200;
 export const GUEST_ACCOUNT_MAX = 200;
+export const GUEST_SESSION_MODEL_MAX = 200;
+export const GUEST_SESSION_AGENT_MAX = 80;
 export const GUEST_SETTING_VALUE_MAX = 2_000;
 export const GUEST_REQUEST_PATH_MAX = 2_000;
 export const GUEST_REQUEST_BODY_MAX = 64_000;
@@ -124,6 +166,8 @@ export const HOST_REQUEST_ERROR_CODES = [
   'DISCONNECTED',
   'BAD_PATH',
   'NO_INTEGRATION',
+  'NO_SESSION',
+  'SESSION_BUSY',
 ] as const;
 
 export type HostRequestErrorCode = (typeof HOST_REQUEST_ERROR_CODES)[number];
@@ -183,6 +227,17 @@ export const clampStartSessionRequest = (request: StartSessionRequest): StartSes
   return next;
 };
 
+/** Prompt text uses the compose limit. `send` stays only when the guest asked. */
+export const clampPromptRequest = (request: PromptRequest): PromptRequest => {
+  const next: PromptRequest = {
+    text: request.text.trim().slice(0, GUEST_COMPOSE_TEXT_MAX),
+  };
+  if (request.send) {
+    next.send = true;
+  }
+  return next;
+};
+
 const ATTACH_PROVIDER_ID = /^[a-z][a-z0-9-]*$/;
 const SETTING_KEY = /^[a-z][a-z0-9-]*$/;
 
@@ -220,6 +275,9 @@ const themeTokensSchema = z.object({
 const sessionSnapshotSchema = z.object({
   id: z.string().min(1),
   title: z.string().min(1),
+  busy: z.boolean().optional().default(false),
+  model: z.string().min(1).max(GUEST_SESSION_MODEL_MAX).optional(),
+  agent: z.string().min(1).max(GUEST_SESSION_AGENT_MAX).optional(),
 }).nullable();
 
 const guestConnectionSchema = z.object({
@@ -236,6 +294,21 @@ const requestResultPayloadSchema = z.object({
   status: z.number().int().min(100).max(599),
   body: z.string().max(GUEST_REQUEST_RESPONSE_MAX),
 });
+
+const startSessionResultPayloadSchema = z.object({
+  sessionId: z.string().min(1),
+  sent: z.enum(START_SESSION_SENT),
+});
+
+const promptResultPayloadSchema = z.object({
+  sent: z.enum(START_SESSION_SENT),
+});
+
+const hostResultPayloadSchema = z.union([
+  startSessionResultPayloadSchema,
+  requestResultPayloadSchema,
+  promptResultPayloadSchema,
+]);
 
 const readyPayloadSchema = z.object({
   theme: z.object({
@@ -257,7 +330,7 @@ const hostResultSchema = z.object({
   ok: z.boolean(),
   error: z.string().min(1).optional(),
   code: z.string().min(1).optional(),
-  payload: requestResultPayloadSchema.optional(),
+  payload: hostResultPayloadSchema.optional(),
 }).transform((message, ctx) => {
   if (message.ok) {
     if (message.payload) {
@@ -325,6 +398,14 @@ export const hostMessageSchema = z.union([
     type: z.literal('settings'),
     payload: z.object({
       settings: guestSettingsSchema,
+    }),
+  }),
+  z.object({
+    ...envelope,
+    type: z.literal('session-lifecycle'),
+    payload: z.object({
+      sessionId: z.string().min(1),
+      phase: z.enum(SESSION_LIFECYCLE_PHASES),
     }),
   }),
   hostResultSchema,
@@ -407,6 +488,21 @@ export const guestMessageSchema = z.discriminatedUnion('type', [
   }),
   z.object({
     ...envelope,
+    type: z.literal('prompt'),
+    id: z.string().min(1),
+    payload: z.object({
+      text: z.string().trim().min(1).max(GUEST_COMPOSE_TEXT_MAX),
+      send: z.boolean().optional(),
+    }),
+  }),
+  z.object({
+    ...envelope,
+    type: z.literal('session-link'),
+    id: z.string().min(1),
+    payload: attachPayloadSchema,
+  }),
+  z.object({
+    ...envelope,
     type: z.literal('close'),
     id: z.string().min(1),
   }),
@@ -446,6 +542,8 @@ export type GuestClipboardWriteMessage = Extract<GuestMessage, { type: 'clipboar
 export type GuestComposeMessage = Extract<GuestMessage, { type: 'compose' }>;
 export type GuestAttachMessage = Extract<GuestMessage, { type: 'attach' }>;
 export type GuestStartSessionMessage = Extract<GuestMessage, { type: 'start-session' }>;
+export type GuestPromptMessage = Extract<GuestMessage, { type: 'prompt' }>;
+export type GuestSessionLinkMessage = Extract<GuestMessage, { type: 'session-link' }>;
 export type GuestCloseMessage = Extract<GuestMessage, { type: 'close' }>;
 export type GuestOauthStartMessage = Extract<GuestMessage, { type: 'oauth-start' }>;
 export type GuestOauthDisconnectMessage = Extract<GuestMessage, { type: 'oauth-disconnect' }>;
@@ -453,6 +551,7 @@ export type GuestRequestMessage = Extract<GuestMessage, { type: 'request' }>;
 export type HostReadyMessage = Extract<HostMessage, { type: 'ready' }>;
 export type HostDirectoryMessage = Extract<HostMessage, { type: 'directory' }>;
 export type HostSessionMessage = Extract<HostMessage, { type: 'session' }>;
+export type HostSessionLifecycleMessage = Extract<HostMessage, { type: 'session-lifecycle' }>;
 export type HostConnectionMessage = Extract<HostMessage, { type: 'connection' }>;
 export type HostSettingsMessage = Extract<HostMessage, { type: 'settings' }>;
 export type HostResultMessage = Extract<HostMessage, { type: 'result' }>;

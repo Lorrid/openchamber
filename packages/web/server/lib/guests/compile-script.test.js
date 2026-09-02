@@ -4,13 +4,13 @@ import { fileURLToPath } from 'node:url';
 
 import { compileGuestScript } from './compile-script.js';
 
-const helloMainJs = path.resolve(
-  fileURLToPath(new URL('../../../../../examples/hello-panel/panel/main.js', import.meta.url)),
+const guestEntryJs = path.resolve(
+  fileURLToPath(new URL('./fixtures/guest-entry.js', import.meta.url)),
 );
 
 describe('compileGuestScript', () => {
-  test('bundles the hello panel from connectHost', async () => {
-    const body = await compileGuestScript(helloMainJs);
+  test('bundles a guest entry that calls connectHost', async () => {
+    const body = await compileGuestScript(guestEntryJs);
     expect(body).toBeTruthy();
     const text = body?.toString('utf8') ?? '';
     expect(text).toContain('openchamber.sdk');

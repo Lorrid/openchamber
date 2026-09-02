@@ -32,14 +32,22 @@ export const guestAuthPersistPath = (dataDir) => {
 };
 
 const parseStore = (raw) => {
-  const parsed = storeSchema.safeParse(JSON.parse(raw));
-  return parsed.success ? parsed.data : null;
+  try {
+    const parsed = storeSchema.safeParse(JSON.parse(raw));
+    return parsed.success ? parsed.data : null;
+  } catch {
+    return null;
+  }
 };
 
 export const readGuestAuthStore = async (persistPath) => {
   try {
     const raw = await fs.readFile(persistPath, 'utf8');
-    const parsed = parseStore(raw);
+    const text = raw.replace(/^\uFEFF/, '').trim();
+    if (text === '') {
+      return { guests: {} };
+    }
+    const parsed = parseStore(text);
     if (!parsed) {
       throw new Error('Invalid guest auth store');
     }

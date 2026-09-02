@@ -1,7 +1,3 @@
-import { readFileSync } from 'node:fs';
-import { dirname, join } from 'node:path';
-import { fileURLToPath } from 'node:url';
-
 import { describe, expect, test } from 'bun:test';
 
 import { OPENCHAMBER_SDK_API_VERSION } from './api-version.ts';
@@ -360,9 +356,22 @@ describe('parseManifest', () => {
     });
   });
 
-  test('reads the ClickUp example package', () => {
-    const file = join(dirname(fileURLToPath(import.meta.url)), '../../../examples/clickup/package.json');
-    const result = parseManifestJson(readFileSync(file, 'utf8'));
+  test('reads a token integration', () => {
+    const result = parseManifestJson(JSON.stringify({
+      name: '@openchamber/clickup',
+      openchamber: {
+        apiVersion: OPENCHAMBER_SDK_API_VERSION,
+        contributes: {
+          panel: { id: 'clickup', name: 'ClickUp', icon: 'window', entry: 'panel/index.html' },
+          integration: {
+            name: 'ClickUp',
+            description: 'Tasks from a ClickUp list',
+            token: { apiOrigin: 'https://api.clickup.com' },
+            settings: [{ id: 'list-id', label: 'List ID' }],
+          },
+        },
+      },
+    }));
     expect(result.ok).toBe(true);
     if (result.ok) {
       expect(result.manifest.contributes.panel.id).toBe('clickup');
@@ -374,9 +383,21 @@ describe('parseManifest', () => {
     }
   });
 
-  test('reads the Linear example package', () => {
-    const file = join(dirname(fileURLToPath(import.meta.url)), '../../../examples/linear/package.json');
-    const result = parseManifestJson(readFileSync(file, 'utf8'));
+  test('reads a host Linear integration', () => {
+    const result = parseManifestJson(JSON.stringify({
+      name: '@openchamber/linear',
+      openchamber: {
+        apiVersion: OPENCHAMBER_SDK_API_VERSION,
+        contributes: {
+          panel: { id: 'linear-issues', name: 'Linear', icon: 'window', entry: 'panel/index.html' },
+          integration: {
+            name: 'Linear',
+            description: 'Issues from Linear',
+            host: { provider: 'linear' },
+          },
+        },
+      },
+    }));
     expect(result.ok).toBe(true);
     if (result.ok) {
       expect(result.manifest.contributes.panel.id).toBe('linear-issues');
@@ -386,9 +407,27 @@ describe('parseManifest', () => {
     }
   });
 
-  test('reads the GitLab example package', () => {
-    const file = join(dirname(fileURLToPath(import.meta.url)), '../../../examples/gitlab/package.json');
-    const result = parseManifestJson(readFileSync(file, 'utf8'));
+  test('reads an OAuth integration', () => {
+    const result = parseManifestJson(JSON.stringify({
+      name: '@openchamber/gitlab',
+      openchamber: {
+        apiVersion: OPENCHAMBER_SDK_API_VERSION,
+        contributes: {
+          panel: { id: 'gitlab', name: 'GitLab', icon: 'window', entry: 'panel/index.html' },
+          integration: {
+            name: 'GitLab',
+            description: 'Merge requests from GitLab',
+            oauth: {
+              authorizeUrl: 'https://gitlab.com/oauth/authorize',
+              tokenUrl: 'https://gitlab.com/oauth/token',
+              apiOrigin: 'https://gitlab.com',
+              scopes: ['api'],
+            },
+            settings: [{ id: 'project-path', label: 'Project path' }],
+          },
+        },
+      },
+    }));
     expect(result.ok).toBe(true);
     if (result.ok) {
       expect(result.manifest.contributes.panel.id).toBe('gitlab');

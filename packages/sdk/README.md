@@ -58,7 +58,7 @@ In `package.json`:
 
 `id` is kebab-case. `icon` is a Remixicon name in the same kebab-case the rail uses: `RiWindowLine` → `window`. `icon.svg` and other package files fail parse. `entry` is a path inside the package. `../` and absolute paths fail parse.
 
-`attach: true` or `"panel"` adds a + menu row that opens the rail. `"attach": "dialog"` opens a host window with the same iframe. `ready.surface` is `panel` or `dialog` so the guest can draw a rail form in one and an attach picker in the other. Pets stays off that menu because it does not set attach. VS Code and mobile have no guest rail. That is the 1.0 contract, not a gap in the docs.
+`attach: true` or `"panel"` adds a + menu row that opens the rail. `"attach": "dialog"` opens a host window with the same iframe. `ready.surface` is `panel` or `dialog` so the guest can draw a rail form in one and an attach picker in the other. Omit attach and the panel stays off those menus. VS Code and mobile have no guest rail. That is the 1.0 contract, not a gap in the docs.
 
 `integration` is optional. The host draws the Settings → Integrations card. OAuth guests paste a client id there. Token guests paste an API token. `host: { "provider": "linear" }` reuses the OpenChamber Linear connection and never asks for a client id. The guest never sees the token. `host.request` is a GET or write on that `apiOrigin` only. Host Linear is `https://api.linear.app` only.
 
@@ -125,6 +125,16 @@ await host.startSession({
   worktree: true,
   text: 'Optional diff or notes',
 });
+await host.sessionLink({
+  providerId: 'acme-hello',
+  id: 'TICKET-1',
+  title: 'Login is broken',
+  url: 'https://example.com/TICKET-1',
+});
+await host.prompt({ text: 'Fix the login', send: true });
+host.onSessionLifecycle((event) => {
+  document.body.dataset.phase = event.phase;
+});
 await host.close();
 ```
 
@@ -168,6 +178,12 @@ host.onReady((ctx) => {
 
 `startSession` creates a new session and writes that same snapshot on it. `worktree: true` asks the host to make a worktree first, the way New Worktree does for a GitHub issue. The guest never talks to git. A missing project, a failed worktree, or a failed session create is a host error. VS Code and mobile do not mount guests, so they do not run this.
 
+`sessionLink` writes that snapshot on the current session. It does not create one. No project or no session is a refusal.
+
+`prompt` writes or sends on the current session. Omit `send`, or pass `false`, and it replace-composes. `send: true` sends with the same model path as `startSession`. No session is `NO_SESSION`. A busy session on send is `SESSION_BUSY`. The result is `{ sent }`. The guest does not pick a model or agent.
+
+`onSessionLifecycle` is a host push. Live status `busy` and `retry` are `started`. `idle` is `completed`. An unknown status type is `failure`. That is not abort. A late listener gets the last phase.
+
 The host parses the same block with `parseManifest`. An unknown `apiVersion` is a refusal, not a guess.
 
 ## Slot map
@@ -177,16 +193,14 @@ What exists in code today:
 - `contributes.panel`
 - `contributes.attach` — `true` / `"panel"` opens the rail; `"dialog"` opens a host window around the same iframe
 - `contributes.integration` — host Integrations card, OAuth URLs, optional settings fields
-- `connectHost`: theme, locale, directory, session `{ id, title }`, connection, settings, toast, `openUrl`, `openSurface`, `writeClipboard`, `compose`, `attach` (`kind` issue or pull), `startSession` (same fields plus `worktree`), `close`, `oauthStart`, `oauthDisconnect`, `request`
-- Host hole on web and desktop: `GET /api/guests`, Settings → Extensions (folder path, stored per OpenChamber instance), Settings → Integrations, a rail iframe, the composer + menu, and the attach window (`examples/hello-panel`, `examples/clickup`, `examples/gitlab`). VS Code and mobile mark the catalog unsupported. Ship a classic IIFE with the bundle command above. The packaged app does not compile TypeScript.
-- `HostRequestError.code`: `HOST_UNAVAILABLE`, `HOST_TIMEOUT` (20s), `HOST_REJECTED`, `DISCONNECTED`, `BAD_PATH`, `NO_INTEGRATION`. An unknown wire code becomes `HOST_REJECTED`.
+- `connectHost`: theme, locale, directory, session `{ id, title, busy, model?, agent? }`, connection, settings, toast, `openUrl`, `openSurface`, `writeClipboard`, `compose`, `attach` (`kind` issue or pull), `startSession` (same fields plus `worktree`, returns `{ sessionId, sent }`), `prompt` (current session, returns `{ sent }`), `sessionLink` (current session), `onSessionLifecycle` (`started` / `completed` / `failure`), `close`, `oauthStart`, `oauthDisconnect`, `request`
+- Host hole on web and desktop: `GET /api/guests`, Settings → Extensions (folder, local ZIP, or https git / zip URL, stored per OpenChamber instance), Settings → Integrations, a rail iframe, the composer + menu, and the attach window. VS Code and mobile mark the catalog unsupported. Ship a classic IIFE with the bundle command above. The packaged app does not compile TypeScript.
+- `HostRequestError.code`: `HOST_UNAVAILABLE`, `HOST_TIMEOUT` (20s), `HOST_REJECTED`, `DISCONNECTED`, `BAD_PATH`, `NO_INTEGRATION`, `NO_SESSION`, `SESSION_BUSY`. An unknown wire code becomes `HOST_REJECTED`.
 - `@openchamber/sdk/ui`: `applyHostReady`, `mountIssuePage`, `mountIssueCard`, `mountAttachIssues`, `mountPullRequest`, `mountButton`, `mountTextField`, `mountEmpty`. The guest passes rows. A row may carry `badge` and `subtitle`. The picker can `hasMore`, show one `toggle`, a `session` checkbox, and an `action`. The host does not search.
 
-Frozen on `apiVersion` 1. No new RPC and no second `host.provider` until this set has lived with guests that are not in `examples/`. Named, not typed yet. No slot means no hole in the host. Do not go around it through `RuntimeAPIs`.
+Frozen on `apiVersion` 1. No new RPC and no second `host.provider` until this set has lived with third-party guests. Named, not typed yet. No slot means no hole in the host. Do not go around it through `RuntimeAPIs`.
 
 - `issues` — `search` / `get` still named on the host. The chip is `attach`. The guest draws the list with the UI kit.
-- `sessionLink` on an existing session. `startSession` already writes the snapshot on a new one.
-- `sessionLifecycle` — started / completed / failure
 - A public OAuth broker. Redirect is `{serverOrigin}/api/guests/{id}/oauth/callback`
 - commands, shortcuts
 - Git remote / PR (not the same as `issues`)

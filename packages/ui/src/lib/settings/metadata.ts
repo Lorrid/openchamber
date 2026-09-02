@@ -209,7 +209,7 @@ export const SETTINGS_PAGE_METADATA: readonly SettingsPageMeta[] = [
     title: 'Extensions',
     group: 'general',
     kind: 'single',
-    keywords: ['extension', 'extensions', 'guest', 'panel', 'rail', 'folder'],
+    keywords: ['extension', 'extensions', 'guest', 'panel', 'rail', 'folder', 'zip', 'git', 'url'],
     isAvailable: (ctx) => !ctx.isVSCode && !ctx.isMobile,
   },
 ] as const;

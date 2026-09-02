@@ -18,8 +18,11 @@ import {
   buildConnectionMessage,
   buildDirectoryMessage,
   buildReadyMessage,
+  buildSessionLifecycleMessage,
   buildSessionMessage,
   buildSettingsMessage,
+  guestSessionLifecyclePhase,
+  guestSessionModelId,
   toGuestSessionSnapshot,
 } from '@/lib/guests/host-bridge';
 import { fetchHostLinearIssueGet } from '@/lib/guests/host-linear-request';
@@ -32,7 +35,7 @@ import {
   startGuestOauth,
 } from '@/lib/guests/oauth';
 import { useGuestOauthStore } from '@/lib/guests/oauth-store';
-import { startGuestSession } from '@/lib/guests/start-session';
+import { linkGuestSession, promptGuestSession, startGuestSession } from '@/lib/guests/start-session';
 import { useGuestsStore } from '@/lib/guests/store';
 import { getRuntimeUrlResolver } from '@/lib/runtime-url';
 import { openExternalUrl } from '@/lib/url';
@@ -41,7 +44,7 @@ import { pluginIdFromMode, type PluginContextPanelMode } from '@/lib/surfaces/mo
 import { useUIStore } from '@/stores/useUIStore';
 import { useInputStore } from '@/sync/input-store';
 import { useSessionUIStore } from '@/sync/session-ui-store';
-import { useSession } from '@/sync/sync-context';
+import { useSession, useSessionStatus } from '@/sync/sync-context';
 
 type PluginPaneProps = {
   mode: PluginContextPanelMode;
@@ -76,15 +79,28 @@ export const PluginPane: React.FC<PluginPaneProps> = ({
   const directory = useEffectiveDirectory();
   const currentSessionId = useSessionUIStore((state) => state.currentSessionId);
   const session = useSession(currentSessionId, directory || undefined);
+  const sessionStatus = useSessionStatus(currentSessionId ?? '', directory || undefined);
   const iframeRef = React.useRef<HTMLIFrameElement>(null);
   const guestId = pluginIdFromMode(mode);
   const guest = useGuestsStore((state) => state.guests.find((entry) => entry.id === guestId) ?? null);
   const oauthStatus = useGuestOauthStore((state) => state.byId[guestId]);
   const setOauthStatus = useGuestOauthStore((state) => state.setStatus);
   const refreshOauth = useGuestOauthStore((state) => state.refresh);
+  const sessionBusy = sessionStatus?.type === 'busy' || sessionStatus?.type === 'retry';
+  const lifecyclePhase = guestSessionLifecyclePhase(sessionStatus);
   const sessionSnapshot = React.useMemo(
-    () => toGuestSessionSnapshot(session ?? (currentSessionId ? { id: currentSessionId } : null)),
-    [currentSessionId, session],
+    () => toGuestSessionSnapshot(
+      currentSessionId
+        ? {
+          id: session?.id ?? currentSessionId,
+          title: session?.title,
+          busy: sessionBusy,
+          model: guestSessionModelId(session?.model),
+          agent: session?.agent,
+        }
+        : null,
+    ),
+    [currentSessionId, session, sessionBusy],
   );
 
   const ready = React.useMemo<HostReadyContext>(() => ({
@@ -122,6 +138,10 @@ export const PluginPane: React.FC<PluginPaneProps> = ({
   readyRef.current = ready;
   const directoryRef = React.useRef(directory);
   directoryRef.current = directory;
+  const sessionIdRef = React.useRef(currentSessionId);
+  sessionIdRef.current = currentSessionId;
+  const sessionBusyRef = React.useRef(sessionBusy);
+  sessionBusyRef.current = sessionBusy;
   const guestIdRef = React.useRef(guestId);
   guestIdRef.current = guestId;
   const guestAuthRef = React.useRef(guest?.integration?.auth);
@@ -212,6 +232,22 @@ export const PluginPane: React.FC<PluginPaneProps> = ({
           }
           return started;
         },
+        prompt: (request) => promptGuestSession({
+          request,
+          sessionId: sessionIdRef.current,
+          directory: directoryRef.current || null,
+          busy: sessionBusyRef.current,
+          compose: (text, composeMode) => {
+            useInputStore.getState().setPendingInputText(text, composeMode);
+          },
+          t: translateRef.current,
+        }),
+        sessionLink: (issue) => linkGuestSession({
+          request: issue,
+          sessionId: sessionIdRef.current,
+          directory: directoryRef.current || null,
+          t: translateRef.current,
+        }),
         close: () => {
           onDismiss?.();
         },
@@ -276,6 +312,16 @@ export const PluginPane: React.FC<PluginPaneProps> = ({
   React.useEffect(() => {
     pushHostState();
   }, [pushHostState, ready, directory]);
+
+  React.useEffect(() => {
+    if (!currentSessionId || !lifecyclePhase) {
+      return;
+    }
+    postToGuest(buildSessionLifecycleMessage({
+      sessionId: currentSessionId,
+      phase: lifecyclePhase,
+    }));
+  }, [currentSessionId, lifecyclePhase, postToGuest]);
 
   if (!guest || !src) {
     return (

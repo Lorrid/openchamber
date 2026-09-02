@@ -52,7 +52,7 @@ const ready: HostMessage = {
     },
     locale: 'en',
     directory: '/repo',
-    session: { id: 'ses-1', title: 'Hello' },
+    session: { id: 'ses-1', title: 'Hello', busy: false },
     surface: 'panel',
     connection: { connected: false, account: '' },
     settings: {},
@@ -173,6 +173,31 @@ describe('connectHost', () => {
     });
     expect(directory).toBe('/other');
     expect(title).toBe('Later');
+    host.dispose();
+  });
+
+  test('replays the last session lifecycle to a late listener', () => {
+    const parent = createFrame();
+    const guest = createFrame();
+    guest.parent = parent.parent;
+    const host = connectHost({ target: guest, acceptSource: () => true });
+    guest.dispatch(new MessageEvent('message', { data: ready }));
+
+    const seen: string[] = [];
+    host.onSessionLifecycle((event) => {
+      seen.push(`${event.sessionId}:${event.phase}`);
+    });
+    expect(seen).toEqual(['ses-1:completed']);
+
+    guest.dispatch(new MessageEvent('message', {
+      data: {
+        channel: OPENCHAMBER_SDK_CHANNEL,
+        v: 1,
+        type: 'session-lifecycle',
+        payload: { sessionId: 'ses-1', phase: 'started' },
+      },
+    }));
+    expect(seen).toEqual(['ses-1:completed', 'ses-1:started']);
     host.dispose();
   });
 
@@ -361,9 +386,85 @@ describe('connectHost', () => {
     }
     expect(posted.payload.worktree).toBe(true);
     guest.dispatch(new MessageEvent('message', {
-      data: { channel: OPENCHAMBER_SDK_CHANNEL, v: 1, type: 'result', id: posted.id, ok: true },
+      data: {
+        channel: OPENCHAMBER_SDK_CHANNEL,
+        v: 1,
+        type: 'result',
+        id: posted.id,
+        ok: true,
+        payload: { sessionId: 'ses-9', sent: 'skipped' },
+      },
     }));
-    await start;
+    expect(await start).toEqual({ sessionId: 'ses-9', sent: 'skipped' });
+    host.dispose();
+  });
+
+  test('posts prompt and session-link', async () => {
+    const parent = createFrame();
+    const guest = createFrame();
+    guest.parent = parent.parent;
+    const host = connectHost({ target: guest, acceptSource: () => true });
+    const prompt = host.prompt({ text: 'Fix the login', send: true });
+    const link = host.sessionLink({
+      providerId: 'gitlab',
+      id: '!12',
+      title: 'Fix login',
+      url: 'https://gitlab.com/acme/app/-/merge_requests/12',
+    });
+    const promptRequest = parent.posted[1];
+    const linkRequest = parent.posted[2];
+    if (promptRequest?.type !== 'prompt' || linkRequest?.type !== 'session-link') {
+      throw new Error('expected prompt and session-link');
+    }
+    expect(promptRequest.payload).toEqual({ text: 'Fix the login', send: true });
+    guest.dispatch(new MessageEvent('message', {
+      data: {
+        channel: OPENCHAMBER_SDK_CHANNEL,
+        v: 1,
+        type: 'result',
+        id: promptRequest.id,
+        ok: true,
+        payload: { sent: 'sent' },
+      },
+    }));
+    guest.dispatch(new MessageEvent('message', {
+      data: { channel: OPENCHAMBER_SDK_CHANNEL, v: 1, type: 'result', id: linkRequest.id, ok: true },
+    }));
+    expect(await prompt).toEqual({ sent: 'sent' });
+    await link;
+    host.dispose();
+  });
+
+  test('rejects prompt when the session is busy', async () => {
+    const parent = createFrame();
+    const guest = createFrame();
+    guest.parent = parent.parent;
+    const host = connectHost({ target: guest, acceptSource: () => true });
+    const pending = host.prompt({ text: 'Wait', send: true });
+    const posted = parent.posted[1];
+    if (posted?.type !== 'prompt') {
+      throw new Error('expected prompt');
+    }
+    guest.dispatch(new MessageEvent('message', {
+      data: {
+        channel: OPENCHAMBER_SDK_CHANNEL,
+        v: 1,
+        type: 'result',
+        id: posted.id,
+        ok: false,
+        error: 'Session is busy.',
+        code: 'SESSION_BUSY',
+      },
+    }));
+    try {
+      await pending;
+      throw new Error('should have rejected');
+    } catch (error) {
+      expect(error).toBeInstanceOf(HostRequestError);
+      if (error instanceof HostRequestError) {
+        expect(error.code).toBe('SESSION_BUSY');
+      }
+    }
     host.dispose();
   });
 

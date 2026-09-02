@@ -5,16 +5,16 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const script = fileURLToPath(new URL('./bundle-guest.ts', import.meta.url));
-const helloEntry = path.resolve(
-  fileURLToPath(new URL('../../../examples/hello-panel/panel/main.ts', import.meta.url)),
+const guestEntry = path.resolve(
+  fileURLToPath(new URL('./fixtures/guest-entry.ts', import.meta.url)),
 );
 
 describe('bundle-guest', () => {
-  test('builds the hello panel to a classic IIFE', async () => {
+  test('builds a guest entry to a classic IIFE', async () => {
     const dir = await mkdtemp(path.join(tmpdir(), 'oc-guest-bundle-'));
     const outfile = path.join(dir, 'main.js');
     try {
-      const proc = Bun.spawn(['bun', script, helloEntry, outfile], {
+      const proc = Bun.spawn(['bun', script, guestEntry, outfile], {
         stdout: 'pipe',
         stderr: 'pipe',
       });

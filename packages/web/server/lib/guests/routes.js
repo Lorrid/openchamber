@@ -13,7 +13,7 @@ import {
 } from './catalog.js';
 import { compileGuestScript } from './compile-script.js';
 import { injectGuestAssetTokens, parseGuestUrlToken } from './html-tokens.js';
-import { installGuestFromPath, parseInstallRequest, uninstallGuest } from './install.js';
+import { installGuest, parseInstallRequest, uninstallGuest } from './install.js';
 import { extensionsPersistPath } from './persist.js';
 import { getGuestAuth, guestAuthPersistPath, patchGuestAuth } from './auth-store.js';
 import {
@@ -135,9 +135,10 @@ export const registerGuestRoutes = (app, { openchamberDataDir }) => {
     try {
       const request = parseInstallRequest(req.body);
       if (!request) {
-        return res.status(400).json({ error: 'invalid-path' });
+        const hasUrl = typeof req.body?.url === 'string';
+        return res.status(400).json({ error: hasUrl ? 'invalid-url' : 'invalid-path' });
       }
-      const result = await installGuestFromPath(request.path, persistPath);
+      const result = await installGuest(request, persistPath);
       if (!result.ok) {
         const status = result.code === 'id-taken' || result.code === 'already-installed' ? 409 : 400;
         return res.status(status).json({ error: result.code });

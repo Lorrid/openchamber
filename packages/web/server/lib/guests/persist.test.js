@@ -3,7 +3,15 @@ import fs from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 
-import { extensionsPersistPath, readExtensionPaths, writeExtensionPaths } from './persist.js';
+import {
+  extensionsPersistPath,
+  guestCopiesDir,
+  isCopiedGuestRoot,
+  readExtensionPaths,
+  readExtensionStore,
+  writeExtensionPaths,
+  writeExtensionStore,
+} from './persist.js';
 
 describe('extensionsPersistPath', () => {
   test('joins the instance data dir and refuses a relative path', () => {
@@ -33,6 +41,30 @@ describe('extension persist', () => {
     expect(await readExtensionPaths(a)).toEqual(['/one']);
     expect(await readExtensionPaths(b)).toEqual(['/two']);
     await fs.rm(parent, { recursive: true, force: true });
+  });
+
+  test('reads a path-only store and keeps zip sources', async () => {
+    const dir = await fs.mkdtemp(path.join(os.tmpdir(), 'oc-ext-'));
+    const file = extensionsPersistPath(dir);
+    await fs.writeFile(file, `${JSON.stringify({ paths: ['/one'] })}\n`, 'utf8');
+    expect(await readExtensionStore(file)).toEqual({ paths: ['/one'], sources: {} });
+    await writeExtensionStore(file, {
+      paths: ['/one', '/two'],
+      sources: { '/one': 'path', '/two': 'zip' },
+    });
+    expect(await readExtensionStore(file)).toEqual({
+      paths: ['/one', '/two'],
+      sources: { '/two': 'zip' },
+    });
+    await writeExtensionPaths(['/two'], file);
+    expect(await readExtensionStore(file)).toEqual({
+      paths: ['/two'],
+      sources: { '/two': 'zip' },
+    });
+    expect(guestCopiesDir(file)).toBe(path.join(dir, 'guests'));
+    expect(isCopiedGuestRoot(path.join(dir, 'guests', 'hello'), file)).toBe(true);
+    expect(isCopiedGuestRoot(path.join(dir, 'other', 'hello'), file)).toBe(false);
+    await fs.rm(dir, { recursive: true, force: true });
   });
 
   test('refuses a corrupt store', async () => {

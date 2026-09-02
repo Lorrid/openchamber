@@ -12,6 +12,20 @@ describe('parseGuestCatalogJson', () => {
         entry: 'panel/index.html',
         source: 'path',
         path: '/tmp/hello',
+      }, {
+        id: 'zip-hello',
+        name: 'Zip',
+        icon: 'window',
+        entry: 'panel/index.html',
+        source: 'zip',
+        path: '/data/guests/zip-hello',
+      }, {
+        id: 'git-hello',
+        name: 'Git',
+        icon: 'window',
+        entry: 'panel/index.html',
+        source: 'git',
+        path: '/data/guests/git-hello',
       }],
     }))).toEqual([
       {
@@ -21,6 +35,22 @@ describe('parseGuestCatalogJson', () => {
         entry: 'panel/index.html',
         source: 'path',
         path: '/tmp/hello',
+      },
+      {
+        id: 'zip-hello',
+        name: 'Zip',
+        icon: 'window',
+        entry: 'panel/index.html',
+        source: 'zip',
+        path: '/data/guests/zip-hello',
+      },
+      {
+        id: 'git-hello',
+        name: 'Git',
+        icon: 'window',
+        entry: 'panel/index.html',
+        source: 'git',
+        path: '/data/guests/git-hello',
       },
     ]);
   });
