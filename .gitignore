@@ -69,6 +69,9 @@ workspaces/
 *.pid
 .worktrees/
 
+# Local guest scratch. Not part of the repo.
+examples/
+
 # Marks a disposable clone dedicated to unattended maintenance tasks.
 .maintenance-clone
 test-results/
