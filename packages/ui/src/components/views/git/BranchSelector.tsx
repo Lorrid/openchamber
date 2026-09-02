@@ -34,6 +34,7 @@ interface BranchSelectorProps {
   onCreate: (name: string, remote?: GitRemote) => Promise<void>;
   remotes?: GitRemote[];
   disabled?: boolean;
+  unpushedCommitCount?: number;
   /**
    * Shown above the branch list while the working tree has uncommitted
    * changes: selecting a branch will not switch directly but opens the
@@ -64,6 +65,7 @@ export const BranchSelector: React.FC<BranchSelectorProps> = ({
   onCreate,
   remotes = [],
   disabled = false,
+  unpushedCommitCount = 0,
   switchBlockedNotice = null,
 }) => {
   const { t } = useI18n();
@@ -165,6 +167,8 @@ export const BranchSelector: React.FC<BranchSelectorProps> = ({
     }
   }, [isOpen]);
 
+  const hasUnpushedCommits = unpushedCommitCount > 0;
+
   return (
     <DropdownMenu open={isOpen} onOpenChange={setIsOpen}>
       <Tooltip>
@@ -180,6 +184,17 @@ export const BranchSelector: React.FC<BranchSelectorProps> = ({
               <span className="min-w-0 truncate font-medium text-left">
                 {currentBranch || t('gitView.branch.detachedHead')}
               </span>
+              {hasUnpushedCommits ? (
+                <span
+                  className="inline-flex shrink-0 items-center gap-1 rounded-full border border-border/60 px-1.5 py-0.5 typography-micro text-muted-foreground"
+                  title={unpushedCommitCount === 1
+                    ? t('gitView.branch.unpushedSingle')
+                    : t('gitView.branch.unpushedPlural', { count: unpushedCommitCount })}
+                >
+                  <Icon name="arrow-up" className="size-3" />
+                  <span>{unpushedCommitCount}</span>
+                </span>
+              ) : null}
               <Icon name="arrow-down-s" className="size-4 opacity-60" />
             </Button>
           </DropdownMenuTrigger>
@@ -319,7 +334,20 @@ export const BranchSelector: React.FC<BranchSelectorProps> = ({
                     )}
                   </span>
                   {currentBranch === branch && (
-                    <span className="typography-micro text-primary">{t('gitView.branch.currentBadge')}</span>
+                    <span className="flex items-center gap-2">
+                      {hasUnpushedCommits ? (
+                        <span
+                          className="inline-flex items-center gap-1 rounded-full border border-border/60 px-1.5 py-0.5 typography-micro text-muted-foreground"
+                          title={unpushedCommitCount === 1
+                            ? t('gitView.branch.unpushedSingle')
+                            : t('gitView.branch.unpushedPlural', { count: unpushedCommitCount })}
+                        >
+                          <Icon name="arrow-up" className="size-3" />
+                          <span>{unpushedCommitCount}</span>
+                        </span>
+                      ) : null}
+                      <span className="typography-micro text-primary">{t('gitView.branch.currentBadge')}</span>
+                    </span>
                   )}
                 </CommandItem>
               ))}

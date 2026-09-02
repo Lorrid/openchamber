@@ -2696,9 +2696,14 @@ export const GitView: React.FC<GitViewProps> = ({ isActive }) => {
         onCommitAndSwitch={async (message) => {
           const branch = pendingDirtySwitchBranch;
           if (!branch || !gitDirectory) return;
+          const sourceBranch = status?.current ?? null;
           await git.createGitCommit(gitDirectory, message, { addAll: true });
           bumpIndexRevision(gitDirectory);
-          toast.success(t('gitView.toast.commitCreated'));
+          // The commit lands on the branch being left and is NOT pushed; after
+          // the switch nothing on screen would say so, so the toast must.
+          toast.success(sourceBranch
+            ? t('gitView.dirtySwitch.committedNotPushed', { branch: sourceBranch })
+            : t('gitView.toast.commitCreated'));
           await refreshStatusAndBranches();
           await refreshLog();
           setPendingDirtySwitchBranch(null);

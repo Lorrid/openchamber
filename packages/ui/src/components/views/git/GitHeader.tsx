@@ -436,6 +436,7 @@ export const GitHeader: React.FC<GitHeaderProps> = ({
               localBranches={localBranches}
               remoteBranches={remoteBranches}
               branchInfo={branchInfo}
+              unpushedCommitCount={status.ahead ?? 0}
               onCheckout={onCheckoutBranch}
               onCreate={onCreateBranch}
               remotes={remotes}
