@@ -32,6 +32,7 @@ interface BranchSelectorProps {
   localBranches: string[];
   remoteBranches: string[];
   branchInfo: Record<string, BranchInfo> | undefined;
+  currentBranchAhead?: number;
   onCheckout: (branch: string) => void;
   onCreate: (name: string, remote?: GitRemote) => Promise<void>;
   remotes?: GitRemote[];
@@ -63,6 +64,7 @@ export const BranchSelector: React.FC<BranchSelectorProps> = ({
   localBranches,
   remoteBranches,
   branchInfo,
+  currentBranchAhead = 0,
   onCheckout,
   onCreate,
   remotes = [],
@@ -173,7 +175,10 @@ export const BranchSelector: React.FC<BranchSelectorProps> = ({
   }, [isOpen]);
 
   React.useEffect(() => {
-    if (currentBranch) setRecentBranches(rememberRecentBranch(directory, currentBranch));
+    if (!directory) return;
+    setRecentBranches(currentBranch
+      ? rememberRecentBranch(directory, currentBranch)
+      : getRecentBranches(directory));
   }, [currentBranch, directory]);
 
   React.useEffect(() => {
@@ -330,12 +335,15 @@ export const BranchSelector: React.FC<BranchSelectorProps> = ({
                     <CommandItem key={`recent-${branch}`} onSelect={() => handleCheckout(branch)}>
                       <span className="flex flex-1 items-center gap-2 min-w-0">
                         <span className="typography-ui-label text-foreground truncate">{branch}</span>
-                        {unpushedCounts[branch] ? (
+                        {(() => {
+                          const ahead = unpushedCounts[branch] ?? (branch === currentBranch ? currentBranchAhead : 0);
+                          return ahead > 0 ? (
                           <span className="inline-flex shrink-0 items-center gap-1 rounded-full border border-border/60 px-1.5 py-0.5 typography-micro text-muted-foreground">
                             <Icon name="arrow-up" className="size-3" />
-                            <span>{unpushedCounts[branch]}</span>
+                            <span>{ahead}</span>
                           </span>
-                        ) : null}
+                          ) : null;
+                        })()}
                       </span>
                       {currentBranch === branch ? <span className="typography-micro text-primary">{t('gitView.branch.currentBadge')}</span> : null}
                     </CommandItem>
