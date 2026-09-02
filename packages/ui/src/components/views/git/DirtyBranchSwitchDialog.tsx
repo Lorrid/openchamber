@@ -7,6 +7,7 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
+import { Checkbox } from '@/components/ui/checkbox';
 import { toast } from '@/components/ui';
 import { Icon } from '@/components/icon/Icon';
 import { useI18n } from '@/lib/i18n';
@@ -16,8 +17,11 @@ interface DirtyBranchSwitchDialogProps {
   onOpenChange: (open: boolean) => void;
   targetBranch: string;
   changedFileCount: number;
-  /** Commit every uncommitted change with this message, then perform the checkout. */
-  onCommitAndSwitch: (message: string) => Promise<void>;
+  /**
+   * Commit every uncommitted change with this message — pushing the commit
+   * first when the user opted in — then perform the checkout.
+   */
+  onCommitAndSwitch: (message: string, pushAfter: boolean) => Promise<void>;
   /** Produce an AI commit message for the current changes, same as the commit panel. */
   onGenerateMessage: () => Promise<string>;
   /** Revert every uncommitted change, then perform the checkout. */
@@ -44,10 +48,14 @@ export const DirtyBranchSwitchDialog: React.FC<DirtyBranchSwitchDialogProps> = (
   const { t } = useI18n();
   const [commitMessage, setCommitMessage] = React.useState('');
   const [pendingAction, setPendingAction] = React.useState<'generate' | 'commit' | 'revert' | null>(null);
+  const [pushAfter, setPushAfter] = React.useState(false);
   const isProcessing = pendingAction !== null;
 
   React.useEffect(() => {
-    if (!open) setCommitMessage('');
+    if (!open) {
+      setCommitMessage('');
+      setPushAfter(false);
+    }
   }, [open]);
 
   const handleGenerate = async () => {
@@ -76,7 +84,7 @@ export const DirtyBranchSwitchDialog: React.FC<DirtyBranchSwitchDialogProps> = (
         }
         setCommitMessage(message);
       }
-      await onCommitAndSwitch(message);
+      await onCommitAndSwitch(message, pushAfter);
     } catch (err) {
       toast.error(err instanceof Error ? err.message : t('gitView.dirtySwitch.actionFailed'));
     } finally {
@@ -139,6 +147,21 @@ export const DirtyBranchSwitchDialog: React.FC<DirtyBranchSwitchDialogProps> = (
                 <Icon name="ai-generate-2" className="size-4 text-primary" />
               )}
             </button>
+          </div>
+
+          <div className="flex items-center gap-2">
+            <Checkbox
+              checked={pushAfter}
+              onChange={setPushAfter}
+              disabled={isProcessing}
+              ariaLabel={t('gitView.dirtySwitch.pushAfterCommit')}
+            />
+            <span
+              className="typography-ui-label text-foreground cursor-pointer select-none"
+              onClick={() => !isProcessing && setPushAfter(!pushAfter)}
+            >
+              {t('gitView.dirtySwitch.pushAfterCommit')}
+            </span>
           </div>
 
           <div className="flex items-center justify-between gap-2 pt-1">

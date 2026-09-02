@@ -2694,17 +2694,41 @@ export const GitView: React.FC<GitViewProps> = ({ isActive }) => {
         onOpenChange={(open) => { if (!open) setPendingDirtySwitchBranch(null); }}
         targetBranch={pendingDirtySwitchBranch ?? ''}
         changedFileCount={status?.files?.length ?? 0}
-        onCommitAndSwitch={async (message) => {
+        onCommitAndSwitch={async (message, pushAfter) => {
           const branch = pendingDirtySwitchBranch;
           if (!branch || !gitDirectory) return;
           const sourceBranch = status?.current ?? null;
           await git.createGitCommit(gitDirectory, message, { addAll: true });
           bumpIndexRevision(gitDirectory);
-          // The commit lands on the branch being left and is NOT pushed; after
-          // the switch nothing on screen would say so, so the toast must.
-          toast.success(sourceBranch
-            ? t('gitView.dirtySwitch.committedNotPushed', { branch: sourceBranch })
-            : t('gitView.toast.commitCreated'));
+          let pushedRemoteName: string | null = null;
+          if (pushAfter) {
+            const trackingRemoteName = status?.tracking?.split('/')[0];
+            const remote = effectiveRemotes.find((entry) => entry.name === trackingRemoteName) ?? effectiveRemotes[0];
+            try {
+              if (!remote) throw new Error(t('mobile.changes.noRemote'));
+              await git.gitPush(gitDirectory, status?.tracking
+                ? { remote: remote.name }
+                : { remote: remote.name, branch: sourceBranch ?? undefined, options: ['--set-upstream'] });
+              pushedRemoteName = remote.name;
+            } catch (error) {
+              // The commit stands, so nothing is lost — but the switch is
+              // cancelled: the user must see the failed push on the branch it
+              // belongs to instead of discovering it later from elsewhere.
+              console.error('Push after commit failed:', error);
+              toast.error(t('gitView.dirtySwitch.pushFailed'));
+              await refreshStatusAndBranches();
+              await refreshLog();
+              setPendingDirtySwitchBranch(null);
+              return;
+            }
+          }
+          // Without a push the commit stays local on the branch being left;
+          // after the switch nothing on screen would say so, so the toast must.
+          toast.success(pushedRemoteName
+            ? t('gitView.toast.pushedToUpstream', { name: pushedRemoteName })
+            : sourceBranch
+              ? t('gitView.dirtySwitch.committedNotPushed', { branch: sourceBranch })
+              : t('gitView.toast.commitCreated'));
           await refreshStatusAndBranches();
           await refreshLog();
           setPendingDirtySwitchBranch(null);
