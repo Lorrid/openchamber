@@ -34,6 +34,12 @@ interface BranchSelectorProps {
   onCreate: (name: string, remote?: GitRemote) => Promise<void>;
   remotes?: GitRemote[];
   disabled?: boolean;
+  /**
+   * Shown above the branch list while the working tree has uncommitted
+   * changes: selecting a branch will not switch directly but opens the
+   * commit-or-revert resolution instead.
+   */
+  switchBlockedNotice?: string | null;
 }
 
 const sanitizeBranchNameInput = (value: string): string => {
@@ -58,6 +64,7 @@ export const BranchSelector: React.FC<BranchSelectorProps> = ({
   onCreate,
   remotes = [],
   disabled = false,
+  switchBlockedNotice = null,
 }) => {
   const { t } = useI18n();
   const [isOpen, setIsOpen] = React.useState(false);
@@ -192,6 +199,12 @@ export const BranchSelector: React.FC<BranchSelectorProps> = ({
             onValueChange={setSearch}
             onKeyDown={stopDropdownTypeahead}
           />
+          {switchBlockedNotice ? (
+            <div className="flex items-start gap-2 border-b border-border/60 px-3 py-2">
+              <Icon name="alert" className="mt-0.5 size-3.5 shrink-0 text-[var(--status-warning)]" aria-hidden="true" />
+              <span className="typography-micro text-muted-foreground">{switchBlockedNotice}</span>
+            </div>
+          ) : null}
           <CommandList
             scrollbarClassName="overlay-scrollbar--flush overlay-scrollbar--dense overlay-scrollbar--zero"
             disableHorizontal

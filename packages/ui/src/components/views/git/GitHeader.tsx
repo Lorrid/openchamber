@@ -439,6 +439,7 @@ export const GitHeader: React.FC<GitHeaderProps> = ({
               onCheckout={onCheckoutBranch}
               onCreate={onCreateBranch}
               remotes={remotes}
+              switchBlockedNotice={(status.files?.length ?? 0) > 0 ? t('gitView.branch.switchBlockedNotice') : null}
             />
           )}
           {repositoryOptionsForPicker.length > 0 && onSelectRepository ? (
