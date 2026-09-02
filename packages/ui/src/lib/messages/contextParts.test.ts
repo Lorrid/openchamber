@@ -121,6 +121,32 @@ describe('round-trip through part metadata', () => {
         expect(readContextPart(part)).toEqual(payload);
     });
 
+    test('guest references carry picker-built text and no github number', () => {
+        const payload: ContextPartPayload = {
+            kind: 'guest-issue',
+            providerId: 'hello',
+            id: 'HELLO-1',
+            title: 'Sample ticket',
+            url: 'https://example.com/HELLO-1',
+        };
+        const part = asPart(payload, 'guest body');
+        expect(part.text).toBe('guest body');
+        expect(readContextPart(part)).toEqual(payload);
+    });
+
+    test('guest pull references carry picker-built text and no github number', () => {
+        const payload: ContextPartPayload = {
+            kind: 'guest-pr',
+            providerId: 'gitlab',
+            id: '!12',
+            title: 'Fix login',
+            url: 'https://gitlab.com/acme/app/-/merge_requests/12',
+        };
+        const part = asPart(payload, 'guest pr body');
+        expect(part.text).toBe('guest pr body');
+        expect(readContextPart(part)).toEqual(payload);
+    });
+
     test('non-text parts, missing metadata, and malformed payloads read as null', () => {
         expect(readContextPart({ type: 'file', metadata: {} })).toBeNull();
         expect(readContextPart({ type: 'text' })).toBeNull();

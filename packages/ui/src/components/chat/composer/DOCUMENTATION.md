@@ -26,7 +26,7 @@ existing mobile fixed-position rules unchanged.
 | `state/` | Composer state with a lifecycle: drafts, mobile shell, history, popup placement, draft targeting |
 | `submit/` | Turning what the user has into what gets sent |
 | `attachments/` | Files: paths, drop payloads |
-| `ui/` | Presentation |
+| `ui/` | Presentation. `ComposerAttachmentControls` lists files, GitHub, Linear, then guests with `contributes.attach`. `"panel"` opens the rail. `"dialog"` opens `GuestAttachDialog` with that guest iframe and `ready.surface: "dialog"`. `host.attach` writes the composer chip. VS Code and mobile skip that list. |
 | `text.ts` | How inserted text meets the text already there |
 | `largeTextPaste.ts` | Detect large plain-text pastes and build virtual `.txt` files |
 | `largeTextPasteOffer.ts` | Ask-toast offer id begin/resolve (supersede + double-apply guards) |

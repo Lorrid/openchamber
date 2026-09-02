@@ -1,3 +1,4 @@
+import { useGuestsStore } from '@/lib/guests/store';
 import { opencodeClient } from '@/lib/opencode/client';
 import type { RuntimeEndpointChangedDetail } from '@/lib/runtime-switch';
 import { disposeTerminalInputTransport } from '@/lib/terminalApi';
@@ -68,6 +69,9 @@ export const resetAppForRuntimeEndpointChange = (detail: RuntimeEndpointChangedD
   useGitHubPrStatusStore.getState().resetForRuntimeSwitch();
   useSessionFoldersStore.getState().resetForRuntimeSwitch(detail.runtimeKey);
   useFilesViewTabsStore.getState().resetForRuntimeSwitch(detail.runtimeKey);
+  // Guest rail icons are instance-owned. Keep the previous catalog and the
+  // new instance mints icon URLs that 404: an invisible, still-clickable slot.
+  useGuestsStore.getState().resetForRuntimeSwitch(detail.runtimeKey);
   useSessionUIStore.getState().restoreForRuntimeSwitch(detail.runtimeKey);
   resetStreamingState();
   queueMicrotask(() => void syncDesktopSettings());

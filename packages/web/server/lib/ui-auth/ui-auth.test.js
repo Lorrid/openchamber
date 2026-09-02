@@ -213,6 +213,14 @@ describe('ui auth client credential seam', () => {
     });
     expect(mountedServeCalled).toBe(true);
 
+    const guestReq = { method: 'GET', path: '/api/guests/hello/panel/index.html', url: `/api/guests/hello/panel/index.html?oc_url_token=${encodeURIComponent(urlToken)}`, headers: {} };
+    const guestRes = createResponse();
+    let guestCalled = false;
+    await auth.requireAuth(guestReq, guestRes, () => {
+      guestCalled = true;
+    });
+    expect(guestCalled).toBe(true);
+
     const dictationWsReq = {
       method: 'GET',
       path: '/api/dictation/ws',

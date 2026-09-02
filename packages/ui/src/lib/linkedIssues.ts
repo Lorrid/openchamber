@@ -36,7 +36,27 @@ export type LinkedLinearIssue = {
   linkedAt: number;
 };
 
-export type LinkedIssue = LinkedGitHubIssue | LinkedLinearIssue;
+export type LinkedGuestIssue = {
+  /** `guest:{providerId}:{identifier}`, unique per session. */
+  id: string;
+  providerId: string;
+  identifier: string;
+  title: string;
+  url: string;
+  kind: 'guest';
+  /** Missing on older snapshots; those are issues. */
+  thread?: 'issue' | 'pull';
+  author?: string;
+  head?: string;
+  base?: string;
+  linkedAt: number;
+};
+
+export const isGuestPull = (entry: { thread?: 'issue' | 'pull' }): boolean => (
+  entry.thread === 'pull'
+);
+
+export type LinkedIssue = LinkedGitHubIssue | LinkedLinearIssue | LinkedGuestIssue;
 
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   Boolean(value && typeof value === 'object' && !Array.isArray(value));
@@ -67,8 +87,27 @@ const isLinkedLinearIssue = (value: unknown): value is LinkedLinearIssue => (
   && Number.isFinite(value.linkedAt)
 );
 
+const isLinkedGuestIssue = (value: unknown): value is LinkedGuestIssue => (
+  isRecord(value)
+  && typeof value.id === 'string'
+  && value.id.length > 0
+  && typeof value.providerId === 'string'
+  && value.providerId.length > 0
+  && typeof value.identifier === 'string'
+  && value.identifier.length > 0
+  && typeof value.title === 'string'
+  && typeof value.url === 'string'
+  && value.kind === 'guest'
+  && (value.thread === undefined || value.thread === 'issue' || value.thread === 'pull')
+  && (value.author === undefined || typeof value.author === 'string')
+  && (value.head === undefined || typeof value.head === 'string')
+  && (value.base === undefined || typeof value.base === 'string')
+  && typeof value.linkedAt === 'number'
+  && Number.isFinite(value.linkedAt)
+);
+
 const isLinkedIssue = (value: unknown): value is LinkedIssue => (
-  isLinkedGitHubIssue(value) || isLinkedLinearIssue(value)
+  isLinkedGitHubIssue(value) || isLinkedLinearIssue(value) || isLinkedGuestIssue(value)
 );
 
 export const buildLinkedIssueId = (owner: string, repo: string, number: number): string =>
@@ -108,6 +147,41 @@ export const buildLinkedIssue = (input: {
     authorAvatarUrl: input.author?.avatarUrl ?? undefined,
     linkedAt: input.linkedAt,
   };
+};
+
+export const buildLinkedGuestIssue = (input: {
+  providerId: string;
+  identifier: string;
+  title: string;
+  url: string;
+  thread?: 'issue' | 'pull';
+  author?: string;
+  head?: string;
+  base?: string;
+  linkedAt: number;
+}): LinkedGuestIssue => {
+  const next: LinkedGuestIssue = {
+    id: `guest:${input.providerId}:${input.identifier}`,
+    providerId: input.providerId,
+    identifier: input.identifier,
+    title: input.title,
+    url: input.url,
+    kind: 'guest',
+    thread: input.thread === 'pull' ? 'pull' : 'issue',
+    linkedAt: input.linkedAt,
+  };
+  if (input.author?.trim()) {
+    next.author = input.author.trim();
+  }
+  if (next.thread === 'pull') {
+    if (input.head?.trim()) {
+      next.head = input.head.trim();
+    }
+    if (input.base?.trim()) {
+      next.base = input.base.trim();
+    }
+  }
+  return next;
 };
 
 export const buildLinkedLinearIssue = (input: {

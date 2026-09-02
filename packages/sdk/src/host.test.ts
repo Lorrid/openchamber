@@ -1,0 +1,480 @@
+import { describe, expect, test } from 'bun:test';
+
+import { OPENCHAMBER_SDK_API_VERSION, OPENCHAMBER_SDK_CHANNEL } from './api-version.ts';
+import { connectHost, HostRequestError, type HostFrame } from './host.ts';
+import { GUEST_ATTACH_TITLE_MAX, type GuestMessage, type HostMessage } from './protocol.ts';
+
+type Listener = (event: Event) => void;
+
+const createFrame = (): HostFrame & { dispatch: (event: Event) => void; posted: GuestMessage[] } => {
+  const listeners = new Set<Listener>();
+  const posted: GuestMessage[] = [];
+  const postMessage = (message: GuestMessage) => {
+    posted.push(message);
+  };
+  return {
+    parent: { postMessage },
+    postMessage,
+    addEventListener: (type: string, listener: Listener) => {
+      if (type === 'message') listeners.add(listener);
+    },
+    removeEventListener: (type: string, listener: Listener) => {
+      listeners.delete(listener);
+    },
+    dispatch: (event: Event) => {
+      for (const listener of listeners) listener(event);
+    },
+    posted,
+  };
+};
+
+const ready: HostMessage = {
+  channel: OPENCHAMBER_SDK_CHANNEL,
+  v: OPENCHAMBER_SDK_API_VERSION,
+  type: 'ready',
+  payload: {
+    theme: {
+      mode: 'dark',
+      tokens: {
+        background: '#111',
+        elevated: '#1a1a1a',
+        foreground: '#eee',
+        muted: '#666',
+        subtle: '#222',
+        border: '#333',
+        hover: '#2a2a2a',
+        selection: '#334',
+        focus: '#4af',
+        primary: '#4af',
+        font: 'SF Pro Text, sans-serif',
+        radius: '0.5625rem',
+      },
+    },
+    locale: 'en',
+    directory: '/repo',
+    session: { id: 'ses-1', title: 'Hello' },
+    surface: 'panel',
+    connection: { connected: false, account: '' },
+    settings: {},
+  },
+};
+
+describe('connectHost', () => {
+  test('sends hello and delivers ready from the parent frame only', () => {
+    const parent = createFrame();
+    const guest = createFrame();
+    guest.parent = parent.parent;
+
+    const host = connectHost({ target: guest, acceptSource: () => true });
+    expect(parent.posted[0]).toEqual({
+      channel: OPENCHAMBER_SDK_CHANNEL,
+      v: 1,
+      type: 'hello',
+    });
+
+    const seen: string[] = [];
+    host.onReady((context) => {
+      seen.push(context.directory ?? '');
+    });
+
+    guest.dispatch(new MessageEvent('message', { data: ready }));
+    expect(seen).toEqual(['/repo']);
+
+    guest.dispatch(new Event('click'));
+    expect(seen).toEqual(['/repo']);
+
+    host.dispose();
+  });
+
+  test('replays the last ready to a late listener', () => {
+    const parent = createFrame();
+    const guest = createFrame();
+    guest.parent = parent.parent;
+
+    const host = connectHost({ target: guest, acceptSource: () => true });
+    guest.dispatch(new MessageEvent('message', { data: ready }));
+
+    let locale = '';
+    host.onReady((context) => {
+      locale = context.locale;
+    });
+    expect(locale).toBe('en');
+    host.dispose();
+  });
+
+  test('delivers a session push', () => {
+    const parent = createFrame();
+    const guest = createFrame();
+    guest.parent = parent.parent;
+
+    const host = connectHost({ target: guest, acceptSource: () => true });
+    const seen: Array<string | null> = [];
+    host.onSession((session) => {
+      seen.push(session?.title ?? null);
+    });
+    guest.dispatch(new MessageEvent('message', {
+      data: {
+        channel: OPENCHAMBER_SDK_CHANNEL,
+        v: 1,
+        type: 'session',
+        payload: { session: { id: 'ses-2', title: 'Later' } },
+      },
+    }));
+    expect(seen).toEqual(['Later']);
+    host.dispose();
+  });
+
+  test('replays the last directory to a late listener', () => {
+    const parent = createFrame();
+    const guest = createFrame();
+    guest.parent = parent.parent;
+
+    const host = connectHost({ target: guest, acceptSource: () => true });
+    guest.dispatch(new MessageEvent('message', { data: ready }));
+
+    let directory = '';
+    host.onDirectory((next) => {
+      directory = next ?? '';
+    });
+    expect(directory).toBe('/repo');
+    host.dispose();
+  });
+
+  test('keeps lastReady current after a directory and session push', () => {
+    const parent = createFrame();
+    const guest = createFrame();
+    guest.parent = parent.parent;
+    const host = connectHost({ target: guest, acceptSource: () => true });
+    guest.dispatch(new MessageEvent('message', { data: ready }));
+    guest.dispatch(new MessageEvent('message', {
+      data: {
+        channel: OPENCHAMBER_SDK_CHANNEL,
+        v: 1,
+        type: 'directory',
+        payload: { directory: '/other' },
+      },
+    }));
+    guest.dispatch(new MessageEvent('message', {
+      data: {
+        channel: OPENCHAMBER_SDK_CHANNEL,
+        v: 1,
+        type: 'session',
+        payload: { session: { id: 'ses-9', title: 'Later' } },
+      },
+    }));
+
+    let directory = '';
+    let title = '';
+    host.onDirectory((next) => {
+      directory = next ?? '';
+    });
+    host.onSession((session) => {
+      title = session?.title ?? '';
+    });
+    expect(directory).toBe('/other');
+    expect(title).toBe('Later');
+    host.dispose();
+  });
+
+  test('replays the last session to a late listener', () => {
+    const parent = createFrame();
+    const guest = createFrame();
+    guest.parent = parent.parent;
+
+    const host = connectHost({ target: guest, acceptSource: () => true });
+    guest.dispatch(new MessageEvent('message', { data: ready }));
+
+    let title = '';
+    host.onSession((session) => {
+      title = session?.title ?? '';
+    });
+    expect(title).toBe('Hello');
+    host.dispose();
+  });
+
+  test('resolves toast when the host answers ok', async () => {
+    const parent = createFrame();
+    const guest = createFrame();
+    guest.parent = parent.parent;
+
+    const host = connectHost({ target: guest, acceptSource: () => true });
+    const toast = host.toast({ kind: 'info', message: 'Hello' });
+    const request = parent.posted[1];
+    expect(request?.type).toBe('toast');
+    if (request?.type !== 'toast') {
+      throw new Error('expected toast');
+    }
+
+    guest.dispatch(new MessageEvent('message', {
+      data: {
+        channel: OPENCHAMBER_SDK_CHANNEL,
+        v: 1,
+        type: 'result',
+        id: request.id,
+        ok: true,
+      },
+    }));
+
+    await toast;
+    host.dispose();
+  });
+
+  test('rejects when the page is not framed', async () => {
+    const top = createFrame();
+    top.parent = top;
+    const host = connectHost({ target: top });
+    try {
+      await host.toast({ kind: 'info', message: 'Hello' });
+      throw new Error('should have rejected');
+    } catch (error) {
+      expect(error).toBeInstanceOf(HostRequestError);
+      if (error instanceof HostRequestError) {
+        expect(error.code).toBe('HOST_UNAVAILABLE');
+      }
+    }
+    host.dispose();
+  });
+
+  test('posts clipboard-write and compose', async () => {
+    const parent = createFrame();
+    const guest = createFrame();
+    guest.parent = parent.parent;
+
+    const host = connectHost({ target: guest, acceptSource: () => true });
+    const write = host.writeClipboard('/repo');
+    const compose = host.compose({ text: 'Hello from the guest' });
+    const writeRequest = parent.posted[1];
+    const composeRequest = parent.posted[2];
+    if (writeRequest?.type !== 'clipboard-write' || composeRequest?.type !== 'compose') {
+      throw new Error('expected clipboard-write and compose');
+    }
+
+    guest.dispatch(new MessageEvent('message', {
+      data: { channel: OPENCHAMBER_SDK_CHANNEL, v: 1, type: 'result', id: writeRequest.id, ok: true },
+    }));
+    guest.dispatch(new MessageEvent('message', {
+      data: { channel: OPENCHAMBER_SDK_CHANNEL, v: 1, type: 'result', id: composeRequest.id, ok: true },
+    }));
+    await Promise.all([write, compose]);
+    host.dispose();
+  });
+
+  test('posts attach and close', async () => {
+    const parent = createFrame();
+    const guest = createFrame();
+    guest.parent = parent.parent;
+
+    const host = connectHost({ target: guest, acceptSource: () => true });
+    const attach = host.attach({
+      providerId: 'hello',
+      id: 'HELLO-1',
+      title: 'Sample ticket',
+      url: 'https://example.com/HELLO-1',
+    });
+    const close = host.close();
+    const attachRequest = parent.posted[1];
+    const closeRequest = parent.posted[2];
+    if (attachRequest?.type !== 'attach' || closeRequest?.type !== 'close') {
+      throw new Error('expected attach and close');
+    }
+
+    guest.dispatch(new MessageEvent('message', {
+      data: { channel: OPENCHAMBER_SDK_CHANNEL, v: 1, type: 'result', id: attachRequest.id, ok: true },
+    }));
+    guest.dispatch(new MessageEvent('message', {
+      data: { channel: OPENCHAMBER_SDK_CHANNEL, v: 1, type: 'result', id: closeRequest.id, ok: true },
+    }));
+    await Promise.all([attach, close]);
+    host.dispose();
+  });
+
+  test('clamps attach title before post', async () => {
+    const parent = createFrame();
+    const guest = createFrame();
+    guest.parent = parent.parent;
+    const host = connectHost({ target: guest, acceptSource: () => true });
+    const title = 'x'.repeat(240);
+    const attach = host.attach({
+      providerId: 'clickup',
+      id: 'abc',
+      title,
+      url: 'https://app.clickup.com/t/abc',
+    });
+    const attachRequest = parent.posted[1];
+    if (attachRequest?.type !== 'attach') {
+      throw new Error('expected attach');
+    }
+    expect(attachRequest.payload.title).toHaveLength(GUEST_ATTACH_TITLE_MAX);
+    guest.dispatch(new MessageEvent('message', {
+      data: { channel: OPENCHAMBER_SDK_CHANNEL, v: 1, type: 'result', id: attachRequest.id, ok: true },
+    }));
+    await attach;
+    host.dispose();
+  });
+
+  test('posts a pull attach with author and branches', async () => {
+    const parent = createFrame();
+    const guest = createFrame();
+    guest.parent = parent.parent;
+    const host = connectHost({ target: guest, acceptSource: () => true });
+    const attach = host.attach({
+      providerId: 'gitlab',
+      id: '!12',
+      title: 'Fix login',
+      url: 'https://gitlab.com/acme/app/-/merge_requests/12',
+      kind: 'pull',
+      author: 'ada',
+      branches: { head: 'feature', base: 'main' },
+    });
+    const attachRequest = parent.posted[1];
+    if (attachRequest?.type !== 'attach') {
+      throw new Error('expected attach');
+    }
+    expect(attachRequest.payload).toMatchObject({
+      kind: 'pull',
+      author: 'ada',
+      branches: { head: 'feature', base: 'main' },
+    });
+    guest.dispatch(new MessageEvent('message', {
+      data: { channel: OPENCHAMBER_SDK_CHANNEL, v: 1, type: 'result', id: attachRequest.id, ok: true },
+    }));
+    await attach;
+    host.dispose();
+  });
+
+  test('posts start-session with a worktree flag', async () => {
+    const parent = createFrame();
+    const guest = createFrame();
+    guest.parent = parent.parent;
+    const host = connectHost({ target: guest, acceptSource: () => true });
+    const start = host.startSession({
+      providerId: 'gitlab',
+      id: '!12',
+      title: 'Fix login',
+      url: 'https://gitlab.com/acme/app/-/merge_requests/12',
+      kind: 'pull',
+      worktree: true,
+    });
+    const posted = parent.posted[1];
+    if (posted?.type !== 'start-session') {
+      throw new Error('expected start-session');
+    }
+    expect(posted.payload.worktree).toBe(true);
+    guest.dispatch(new MessageEvent('message', {
+      data: { channel: OPENCHAMBER_SDK_CHANNEL, v: 1, type: 'result', id: posted.id, ok: true },
+    }));
+    await start;
+    host.dispose();
+  });
+
+  test('replays connection and settings from ready', () => {
+    const parent = createFrame();
+    const guest = createFrame();
+    guest.parent = parent.parent;
+    const host = connectHost({ target: guest, acceptSource: () => true });
+    guest.dispatch(new MessageEvent('message', {
+      data: {
+        ...ready,
+        payload: {
+          ...ready.payload,
+          connection: { connected: true, account: 'ada' },
+          settings: { 'list-id': '123' },
+        },
+      },
+    }));
+
+    let account = '';
+    let listId = '';
+    host.onConnection((connection) => {
+      account = connection.account;
+    });
+    host.onSettings((settings) => {
+      listId = settings['list-id'] ?? '';
+    });
+    expect(account).toBe('ada');
+    expect(listId).toBe('123');
+    host.dispose();
+  });
+
+  test('resolves request with the host payload', async () => {
+    const parent = createFrame();
+    const guest = createFrame();
+    guest.parent = parent.parent;
+    const host = connectHost({ target: guest, acceptSource: () => true });
+    const pending = host.request({ method: 'GET', path: '/api/v2/user' });
+    const posted = parent.posted[1];
+    if (posted?.type !== 'request') {
+      throw new Error('expected request');
+    }
+    guest.dispatch(new MessageEvent('message', {
+      data: {
+        channel: OPENCHAMBER_SDK_CHANNEL,
+        v: 1,
+        type: 'result',
+        id: posted.id,
+        ok: true,
+        payload: { status: 200, body: '{"user":{"username":"ada"}}' },
+      },
+    }));
+    await expect(pending).resolves.toEqual({
+      status: 200,
+      body: '{"user":{"username":"ada"}}',
+    });
+    host.dispose();
+  });
+
+  test('rejects a request with the host error code', async () => {
+    const parent = createFrame();
+    const guest = createFrame();
+    guest.parent = parent.parent;
+    const host = connectHost({ target: guest, acceptSource: () => true });
+    const pending = host.request({ method: 'GET', path: '/api/v2/user' });
+    const posted = parent.posted[1];
+    if (posted?.type !== 'request') {
+      throw new Error('expected request');
+    }
+    guest.dispatch(new MessageEvent('message', {
+      data: {
+        channel: OPENCHAMBER_SDK_CHANNEL,
+        v: 1,
+        type: 'result',
+        id: posted.id,
+        ok: false,
+        error: 'Not connected.',
+        code: 'DISCONNECTED',
+      },
+    }));
+    try {
+      await pending;
+      throw new Error('should have rejected');
+    } catch (error) {
+      expect(error).toBeInstanceOf(HostRequestError);
+      if (error instanceof HostRequestError) {
+        expect(error.code).toBe('DISCONNECTED');
+        expect(error.message).toBe('Not connected.');
+      }
+    }
+    host.dispose();
+  });
+
+  test('rejects when the host stays silent past the timeout', async () => {
+    const parent = createFrame();
+    const guest = createFrame();
+    guest.parent = parent.parent;
+    const host = connectHost({
+      target: guest,
+      acceptSource: () => true,
+      requestTimeoutMs: 5,
+    });
+    try {
+      await host.request({ method: 'GET', path: '/api/v2/user' });
+      throw new Error('should have rejected');
+    } catch (error) {
+      expect(error).toBeInstanceOf(HostRequestError);
+      if (error instanceof HostRequestError) {
+        expect(error.code).toBe('HOST_TIMEOUT');
+      }
+    }
+    host.dispose();
+  });
+});

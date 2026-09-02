@@ -1,3 +1,5 @@
+import { extensionsSettingsI18n } from './extensions.settings.i18n';
+import { guestIntegrationsI18n } from './guest-integrations.i18n';
 import { linearIntegrationI18n } from './linear-integration.i18n';
 import { thirdPartyIntegrationI18n } from './third-party-integrations.i18n';
 export const settingsDict = {
@@ -2224,4 +2226,6 @@ export const settingsDict = {
   'chat.message.userText.collapseAria': 'Benutzernachricht einklappen',
   ...linearIntegrationI18n.de,
   ...thirdPartyIntegrationI18n.de,
+  ...guestIntegrationsI18n.de,
+  ...extensionsSettingsI18n.de,
 };

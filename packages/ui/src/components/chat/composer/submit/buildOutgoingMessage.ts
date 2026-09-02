@@ -54,6 +54,14 @@ export interface OutgoingMessageInput {
     linkedIssue: { number: number; title: string; url: string; contextText: string } | null;
     linkedPr: { number: number; title: string; url: string; instructions: string; context: string } | null;
     linkedLinearIssue: { identifier: string; title: string; url: string; contextText: string } | null;
+    linkedGuestIssue: {
+        providerId: string;
+        id: string;
+        title: string;
+        url: string;
+        contextText: string;
+        thread?: 'issue' | 'pull';
+    } | null;
 }
 
 /**
@@ -165,6 +173,17 @@ export function buildOutgoingMessage(
     if (input.linkedLinearIssue) {
         const { identifier, title, url, contextText } = input.linkedLinearIssue;
         additionalParts.push(createContextPart({ kind: 'linear-issue', identifier, title, url }, contextText));
+    }
+
+    if (input.linkedGuestIssue) {
+        const { providerId, id, title, url, contextText, thread } = input.linkedGuestIssue;
+        additionalParts.push(createContextPart({
+            kind: thread === 'pull' ? 'guest-pr' : 'guest-issue',
+            providerId,
+            id,
+            title,
+            url,
+        }, contextText));
     }
 
     const skillInstruction = deps.buildSkillInstruction(skillNames);

@@ -38,6 +38,7 @@ import { useGitStatus } from '@/stores/useGitStore';
 import { useGitHubAuthStore } from '@/stores/useGitHubAuthStore';
 import { useLinearAuthStore } from '@/stores/useLinearAuthStore';
 import { normalizeContextPanelDirectoryKey, useUIStore } from '@/stores/useUIStore';
+import { useGuestSurfaces } from '@/hooks/useGuestSurfaces';
 import { ContextRailSurfacesDialog } from './ContextRailSurfacesDialog';
 
 const RAIL_TOOLTIP_DELAY_MS = 150;
@@ -257,6 +258,7 @@ export const ContextPanelRail: React.FC = () => {
     useSensor(TouchSensor, { activationConstraint: { delay: 200, tolerance: 6 } }),
   );
 
+  const guestSurfaces = useGuestSurfaces();
   const tabs = panelState?.tabs ?? EMPTY_TABS;
   const activeTab = tabs.find((tab) => tab.id === panelState?.activeTabId) ?? null;
   const activeMode = panelState?.isOpen ? activeTab?.mode ?? null : null;
@@ -272,8 +274,9 @@ export const ContextPanelRail: React.FC = () => {
       tabs,
       linearConnected,
       githubConnected,
+      extras: guestSurfaces,
     });
-  }, [contextRailHiddenSurfaces, contextRailOrder, githubConnected, linearConnected, planModeEnabled, screenWidth, tabs]);
+  }, [contextRailHiddenSurfaces, contextRailOrder, githubConnected, guestSurfaces, linearConnected, planModeEnabled, screenWidth, tabs]);
 
   // A surface whose integration disconnected closes rather than lingering as
   // an active panel with no rail icon.
@@ -299,7 +302,7 @@ export const ContextPanelRail: React.FC = () => {
       return;
     }
 
-    const orderedIds = sortContextSurfaces(useUIStore.getState().contextRailOrder).map((surface) => surface.id);
+    const orderedIds = sortContextSurfaces(useUIStore.getState().contextRailOrder, guestSurfaces).map((surface) => surface.id);
     const fromIndex = orderedIds.indexOf(active.id as (typeof orderedIds)[number]);
     const toIndex = orderedIds.indexOf(over.id as (typeof orderedIds)[number]);
     if (fromIndex === -1 || toIndex === -1) {
@@ -307,7 +310,7 @@ export const ContextPanelRail: React.FC = () => {
     }
 
     setContextRailOrder(arrayMove(orderedIds, fromIndex, toIndex));
-  }, [setContextRailOrder]);
+  }, [guestSurfaces, setContextRailOrder]);
 
   if (!directoryKey) {
     return null;
@@ -321,7 +324,7 @@ export const ContextPanelRail: React.FC = () => {
       <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
         <SortableContext items={surfaces.map((surface) => surface.id)} strategy={verticalListSortingStrategy}>
           {surfaces.map((surface, index) => {
-            const label = t(surface.labelKey);
+            const label = surface.label ?? t(surface.labelKey);
             // Git shows a numeric badge instead of the old activity dot.
             // Other surfaces never inherit git's changed-files signal.
             // The work-status panel reports the same count in words a few

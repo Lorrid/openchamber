@@ -12,9 +12,10 @@ import type { ProjectRef } from '@/lib/projectContextApi';
 import { useFilesViewTabsStore } from './useFilesViewTabsStore';
 import { isWindowsArm64 } from '@/lib/platform';
 import { isVSCodeRuntime } from '@/lib/desktop';
+import { isContextPanelMode, type ContextPanelMode } from '@/lib/surfaces/modes';
 
 export type PendingDiffScope = 'working' | 'staged' | 'turn' | 'branch';
-export type ContextPanelMode = 'diff' | 'walkthrough' | 'file' | 'context' | 'plan' | 'chat' | 'browser' | 'git' | 'pr' | 'linear' | 'notes' | 'terminal';
+export type { ContextPanelMode };
 export type MermaidRenderingMode = 'svg' | 'ascii';
 export type UserMessageRenderingMode = 'markdown' | 'plain';
 export type ChatRenderMode = 'sorted' | 'live';
@@ -373,7 +374,7 @@ const sanitizeContextPanelTabs = (tabs: unknown): ContextPanelTab[] => {
     // Legacy 'preview' tabs are converted to 'browser' by the v14 migration;
     // anything still carrying an unknown mode here is discarded rather than
     // resurrected into a tab the panel cannot render.
-    if (candidate.mode !== 'diff' && candidate.mode !== 'walkthrough' && candidate.mode !== 'file' && candidate.mode !== 'context' && candidate.mode !== 'plan' && candidate.mode !== 'chat' && candidate.mode !== 'browser' && candidate.mode !== 'git' && candidate.mode !== 'pr' && candidate.mode !== 'linear' && candidate.mode !== 'notes' && candidate.mode !== 'terminal') {
+    if (typeof candidate.mode !== 'string' || !isContextPanelMode(candidate.mode)) {
       continue;
     }
 
@@ -649,7 +650,7 @@ const sanitizeContextPanelByDirectory = (
     if (candidate.widthByMode && typeof candidate.widthByMode === 'object') {
       for (const [mode, value] of Object.entries(candidate.widthByMode as Record<string, unknown>)) {
         if (
-          (mode === 'diff' || mode === 'file' || mode === 'context' || mode === 'plan' || mode === 'chat' || mode === 'browser' || mode === 'git' || mode === 'pr' || mode === 'linear' || mode === 'notes' || mode === 'terminal')
+          isContextPanelMode(mode)
           && typeof value === 'number'
           && Number.isFinite(value)
         ) {

@@ -1,0 +1,31 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>ClickUp</title>
+  <style>
+    html, body {
+      margin: 0;
+      height: 100%;
+      overflow: hidden;
+      background: transparent;
+      color: var(--surface-foreground, inherit);
+      font-family: var(--font-sans, inherit);
+    }
+    html[data-oc-surface="panel"],
+    html[data-oc-surface="panel"] body {
+      background: var(--surface-background, transparent);
+    }
+    #root {
+      box-sizing: border-box;
+      height: 100%;
+      min-height: 0;
+    }
+  </style>
+</head>
+<body>
+  <div id="root"></div>
+  <script src="./main.js"></script>
+</body>
+</html>

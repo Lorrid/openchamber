@@ -95,6 +95,39 @@
         "vite": "^7.1.2",
       },
     },
+    "examples/clickup": {
+      "name": "@openchamber/clickup",
+      "dependencies": {
+        "@openchamber/sdk": "workspace:*",
+        "zod": "^4.3.6",
+      },
+    },
+    "examples/gitlab": {
+      "name": "@openchamber/gitlab",
+      "dependencies": {
+        "@openchamber/sdk": "workspace:*",
+        "zod": "^4.3.6",
+      },
+    },
+    "examples/hello-panel": {
+      "name": "@openchamber/hello-panel",
+      "dependencies": {
+        "@openchamber/sdk": "workspace:*",
+      },
+    },
+    "examples/linear": {
+      "name": "@openchamber/linear",
+      "dependencies": {
+        "@openchamber/sdk": "workspace:*",
+        "zod": "^4.3.6",
+      },
+    },
+    "examples/pets": {
+      "name": "@openchamber/pets",
+      "dependencies": {
+        "@openchamber/sdk": "workspace:*",
+      },
+    },
     "packages/electron": {
       "name": "@openchamber/electron",
       "version": "1.22.0",
@@ -130,6 +163,13 @@
         "@types/node": "^24.3.1",
         "serve-sim": "^0.1.45",
         "typescript": "~5.9.0",
+      },
+    },
+    "packages/sdk": {
+      "name": "@openchamber/sdk",
+      "version": "1.0.0",
+      "dependencies": {
+        "zod": "^4.3.6",
       },
     },
     "packages/ui": {
@@ -169,6 +209,7 @@
         "@dnd-kit/utilities": "^3.2.2",
         "@legendapp/list": "3.3.8",
         "@lezer/highlight": "^1.2.3",
+        "@openchamber/sdk": "workspace:*",
         "@opencode-ai/sdk": "1.18.25",
         "@pierre/diffs": "1.3.0-beta.6",
         "@replit/codemirror-vim": "^6.4.0",
@@ -271,6 +312,7 @@
       "dependencies": {
         "@clack/prompts": "^1.1.0",
         "@octokit/rest": "^22.0.1",
+        "@openchamber/sdk": "workspace:*",
         "@opencode-ai/sdk": "1.18.25",
         "@simplewebauthn/server": "13.3.1",
         "bun-pty": "^0.4.5",
@@ -1000,9 +1042,21 @@
 
     "@octokit/types": ["@octokit/types@16.0.0", "", { "dependencies": { "@octokit/openapi-types": "^27.0.0" } }, "sha512-sKq+9r1Mm4efXW1FCk7hFSeJo4QKreL/tTbR0rz/qx/r1Oa2VV83LTA/H/MuCOX7uCIJmQVRKBcbmWoySjAnSg=="],
 
+    "@openchamber/clickup": ["@openchamber/clickup@workspace:examples/clickup"],
+
     "@openchamber/electron": ["@openchamber/electron@workspace:packages/electron"],
 
+    "@openchamber/gitlab": ["@openchamber/gitlab@workspace:examples/gitlab"],
+
+    "@openchamber/hello-panel": ["@openchamber/hello-panel@workspace:examples/hello-panel"],
+
+    "@openchamber/linear": ["@openchamber/linear@workspace:examples/linear"],
+
     "@openchamber/mobile": ["@openchamber/mobile@workspace:packages/mobile"],
+
+    "@openchamber/pets": ["@openchamber/pets@workspace:examples/pets"],
+
+    "@openchamber/sdk": ["@openchamber/sdk@workspace:packages/sdk"],
 
     "@openchamber/ui": ["@openchamber/ui@workspace:packages/ui"],
 

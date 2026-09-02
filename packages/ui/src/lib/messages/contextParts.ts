@@ -103,6 +103,22 @@ type LinearIssueContext = {
     url: string;
 };
 
+type GuestIssueContext = {
+    kind: 'guest-issue';
+    providerId: string;
+    id: string;
+    title: string;
+    url: string;
+};
+
+type GuestPrContext = {
+    kind: 'guest-pr';
+    providerId: string;
+    id: string;
+    title: string;
+    url: string;
+};
+
 export type ContextPartPayload =
     | CodeCommentContext
     | TerminalContextPayload
@@ -113,7 +129,9 @@ export type ContextPartPayload =
     | ChatQuoteContext
     | GitHubIssueContext
     | GitHubPrContext
-    | LinearIssueContext;
+    | LinearIssueContext
+    | GuestIssueContext
+    | GuestPrContext;
 
 export type ContextPartMetadata = { [K in typeof CONTEXT_METADATA_KEY]: ContextPartPayload };
 
@@ -163,8 +181,10 @@ export function formatContextText(payload: ContextPartPayload): string {
         case 'github-issue':
         case 'github-pr':
         case 'linear-issue':
-            // Linked issues/PRs carry server-fetched context text built by
-            // their pickers; there is no default text to derive here.
+        case 'guest-issue':
+        case 'guest-pr':
+            // Linked issues/PRs carry picker-built context text;
+            // there is no default text to derive here.
             return '';
     }
 }
@@ -313,6 +333,20 @@ const contextPayloadSchema = z.discriminatedUnion('kind', [
         title: z.string(),
         url: z.string(),
     }),
+    z.object({
+        kind: z.literal('guest-issue'),
+        providerId: z.string().min(1),
+        id: z.string().min(1),
+        title: z.string(),
+        url: z.string(),
+    }),
+    z.object({
+        kind: z.literal('guest-pr'),
+        providerId: z.string().min(1),
+        id: z.string().min(1),
+        title: z.string(),
+        url: z.string(),
+    }),
 ]);
 
 /** The subset of a message part that context read-back inspects. */
@@ -405,6 +439,8 @@ export function draftFromContextPayload(
         case 'github-issue':
         case 'github-pr':
         case 'linear-issue':
+        case 'guest-issue':
+        case 'guest-pr':
             return null;
     }
 }

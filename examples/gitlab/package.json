@@ -1,0 +1,33 @@
+{
+  "name": "@openchamber/gitlab",
+  "private": true,
+  "type": "module",
+  "dependencies": {
+    "@openchamber/sdk": "workspace:*",
+    "zod": "^4.3.6"
+  },
+  "openchamber": {
+    "apiVersion": 1,
+    "contributes": {
+      "panel": {
+        "id": "gitlab",
+        "name": "GitLab",
+        "icon": "gitlab",
+        "entry": "panel/index.html"
+      },
+      "attach": "dialog",
+      "integration": {
+        "name": "GitLab",
+        "description": "Issues and merge requests from a gitlab.com project",
+        "oauth": {
+          "authorizeUrl": "https://gitlab.com/oauth/authorize",
+          "tokenUrl": "https://gitlab.com/oauth/token",
+          "apiOrigin": "https://gitlab.com",
+          "scopes": ["api"],
+          "account": { "path": "/api/v4/user", "name": "username" }
+        },
+        "settings": [{ "id": "project-path", "label": "Project path" }]
+      }
+    }
+  }
+}

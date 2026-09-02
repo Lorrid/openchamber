@@ -1,0 +1,20 @@
+{
+  "name": "@openchamber/hello-panel",
+  "private": true,
+  "type": "module",
+  "dependencies": {
+    "@openchamber/sdk": "workspace:*"
+  },
+  "openchamber": {
+    "apiVersion": 1,
+    "contributes": {
+      "panel": {
+        "id": "hello",
+        "name": "Hello",
+        "icon": "window",
+        "entry": "panel/index.html"
+      },
+      "attach": "dialog"
+    }
+  }
+}

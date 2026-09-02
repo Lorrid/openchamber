@@ -1,0 +1,153 @@
+import React from 'react';
+
+import { Icon } from '@/components/icon/Icon';
+import { SettingsPageLayout } from '@/components/sections/shared/SettingsPageLayout';
+import {
+  SETTINGS_FIELDS_STACK_CLASS,
+  SettingsSection,
+  SettingsStackedField,
+} from '@/components/sections/shared/SettingsSection';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { toast } from '@/components/ui';
+import { installGuestPath, uninstallGuest, type InstallGuestErrorCode } from '@/lib/guests/install';
+import { loadGuestCatalog } from '@/lib/guests/load-catalog';
+import { useGuestsStore } from '@/lib/guests/store';
+import { useI18n, type I18nKey } from '@/lib/i18n';
+
+const errorToastKey = (code: InstallGuestErrorCode): I18nKey => {
+  if (code === 'invalid-path') return 'settings.extensions.toast.invalidPath';
+  if (code === 'not-found') return 'settings.extensions.toast.notFound';
+  if (code === 'invalid-manifest') return 'settings.extensions.toast.invalidManifest';
+  if (code === 'id-taken') return 'settings.extensions.toast.idTaken';
+  if (code === 'already-installed') return 'settings.extensions.toast.alreadyInstalled';
+  if (code === 'missing-build') return 'settings.extensions.toast.missingBuild';
+  return 'settings.extensions.toast.failed';
+};
+
+export const ExtensionsPage: React.FC = () => {
+  const { t } = useI18n();
+  const guests = useGuestsStore((state) => state.guests);
+  const status = useGuestsStore((state) => state.status);
+  const unsupported = status === 'unsupported';
+  const [folderPath, setFolderPath] = React.useState('');
+  const [busy, setBusy] = React.useState(false);
+
+  React.useEffect(() => {
+    void loadGuestCatalog();
+  }, []);
+
+  const add = async () => {
+    const trimmed = folderPath.trim();
+    if (!trimmed) {
+      toast.error(t('settings.extensions.toast.invalidPath'));
+      return;
+    }
+    setBusy(true);
+    const result = await installGuestPath(trimmed);
+    setBusy(false);
+    if (!result.ok) {
+      toast.error(t(errorToastKey(result.code)));
+      return;
+    }
+    setFolderPath('');
+    toast.success(t('settings.extensions.toast.added', { name: result.guest.name }));
+    await loadGuestCatalog();
+  };
+
+  const remove = async (id: string, name: string) => {
+    setBusy(true);
+    const result = await uninstallGuest(id);
+    setBusy(false);
+    if (!result.ok) {
+      toast.error(t('settings.extensions.toast.removeFailed'));
+      return;
+    }
+    toast.success(t('settings.extensions.toast.removed', { name }));
+    await loadGuestCatalog();
+  };
+
+  return (
+    <SettingsPageLayout
+      title={t('settings.page.extensions.title')}
+      description={t('settings.page.extensions.description')}
+    >
+      <SettingsSection title={t('settings.extensions.section.installed')} divider={false}>
+        {status === 'error' ? (
+          <p className="typography-meta text-destructive">{t('settings.extensions.toast.loadFailed')}</p>
+        ) : null}
+        {unsupported ? (
+          <p className="typography-meta text-muted-foreground">{t('settings.extensions.unsupported')}</p>
+        ) : null}
+        {status === 'ready' && guests.length === 0 ? (
+          <p className="typography-meta text-muted-foreground">{t('settings.extensions.empty')}</p>
+        ) : null}
+        <div className={SETTINGS_FIELDS_STACK_CLASS}>
+          {guests.map((guest) => (
+            <div key={guest.id} className="flex items-center justify-between gap-3">
+              <div className="min-w-0">
+                <div className="typography-ui-label text-foreground">{guest.name}</div>
+                <div className="typography-meta truncate text-muted-foreground">
+                  {guest.source === 'path'
+                    ? t('settings.extensions.source.path')
+                    : t('settings.extensions.source.bundled')}
+                  {guest.path ? ` · ${guest.path}` : ` · ${guest.id}`}
+                </div>
+              </div>
+              {guest.source === 'path' ? (
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="xs"
+                  disabled={busy}
+                  aria-label={t('settings.extensions.remove.aria', { name: guest.name })}
+                  onClick={() => void remove(guest.id, guest.name)}
+                >
+                  {t('settings.extensions.remove')}
+                </Button>
+              ) : null}
+            </div>
+          ))}
+        </div>
+      </SettingsSection>
+
+      {unsupported ? null : (
+        <SettingsSection
+          title={t('settings.extensions.add.action')}
+          info={t('settings.extensions.add.info')}
+        >
+          <SettingsStackedField
+            label={t('settings.extensions.add.label')}
+            settingsItem="extensions.add"
+            controlClassName="w-full max-w-none"
+          >
+            <Input
+              value={folderPath}
+              onChange={(event) => setFolderPath(event.target.value)}
+              onKeyDown={(event) => {
+                if (event.key === 'Enter') {
+                  event.preventDefault();
+                  void add();
+                }
+              }}
+              placeholder={t('settings.extensions.add.placeholder')}
+              aria-label={t('settings.extensions.add.label')}
+              className="h-8 min-w-0 flex-1 rounded-md px-3"
+              disabled={busy}
+            />
+            <Button
+              type="button"
+              size="sm"
+              disabled={busy}
+              aria-label={t('settings.extensions.add.aria')}
+              onClick={() => void add()}
+            >
+              <Icon name="add" className="h-4 w-4" />
+              {t('settings.extensions.add.action')}
+            </Button>
+          </SettingsStackedField>
+        </SettingsSection>
+      )}
+    </SettingsPageLayout>
+  );
+};

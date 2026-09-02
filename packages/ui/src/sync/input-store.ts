@@ -4,6 +4,7 @@
  */
 
 import { create } from "zustand"
+import type { AttachIssueRequest } from '@openchamber/sdk'
 import type { ContextPartMetadata } from '@/lib/messages/contextParts'
 import type { AttachedFile } from "@/stores/types/sessionTypes"
 import { prepareAttachmentFiles } from "./attachment-files"
@@ -137,6 +138,8 @@ export type InputState = {
    * narrow layouts); consumed by ChatInput, which owns the command-aware submit.
    */
   pendingPresetSubmit: { text: string; type: "command" | "skill" } | null
+  /** Guest rail/dialog attach. ChatInput consumes this into the composer chip. */
+  pendingGuestIssue: AttachIssueRequest | null
   attachedFiles: AttachedFile[]
   activeEditorFile: VSCodeActiveEditorFile | null
 
@@ -144,6 +147,8 @@ export type InputState = {
   consumePendingInputText: () => { text: string; mode: "replace" | "append" | "append-inline" } | null
   requestPresetSubmit: (text: string, type: "command" | "skill") => void
   consumePendingPresetSubmit: () => { text: string; type: "command" | "skill" } | null
+  setPendingGuestIssue: (issue: AttachIssueRequest | null) => void
+  consumePendingGuestIssue: () => AttachIssueRequest | null
   setPendingSyntheticParts: (parts: SyntheticContextPart[] | null) => void
   consumePendingSyntheticParts: () => SyntheticContextPart[] | null
   addAttachedFile: (file: File) => Promise<boolean>
@@ -162,6 +167,7 @@ export const useInputStore = create<InputState>()((set, get) => ({
   pendingInputMode: "replace",
   pendingSyntheticParts: null,
   pendingPresetSubmit: null,
+  pendingGuestIssue: null,
   attachedFiles: [],
   activeEditorFile: null,
 
@@ -182,6 +188,15 @@ export const useInputStore = create<InputState>()((set, get) => ({
     if (pendingPresetSubmit === null) return null
     set({ pendingPresetSubmit: null })
     return pendingPresetSubmit
+  },
+
+  setPendingGuestIssue: (issue) => set({ pendingGuestIssue: issue }),
+
+  consumePendingGuestIssue: () => {
+    const { pendingGuestIssue } = get()
+    if (pendingGuestIssue === null) return null
+    set({ pendingGuestIssue: null })
+    return pendingGuestIssue
   },
 
   setPendingSyntheticParts: (parts) => set({ pendingSyntheticParts: parts }),

@@ -17,7 +17,9 @@ import {
 } from '@/sync/attachment-files';
 import type { AttachedFile } from '@/stores/types/sessionTypes';
 import * as sessionActions from '@/sync/session-actions';
-import { buildLinkedIssue, buildLinkedLinearIssue } from '@/lib/linkedIssues';
+import { GuestAttachDialog } from '@/components/layout/GuestAttachDialog';
+import { buildLinkedGuestIssue, buildLinkedIssue, buildLinkedLinearIssue } from '@/lib/linkedIssues';
+import type { AttachIssueRequest } from '@openchamber/sdk';
 import { useUserMessageHistory } from "@/sync/sync-context";
 import { getInlineCommentDraftKey, useInlineCommentDraftStore, type InlineCommentDraft, type InlineCommentDraftTarget } from '@/stores/useInlineCommentDraftStore';
 import { useSnippetsStore } from '@/stores/useSnippetsStore';
@@ -71,6 +73,8 @@ import { LinearIssuePickerDialog } from '@/components/session/LinearIssuePickerD
 import { Icon } from "@/components/icon/Icon";
 import { DraftPresetChips } from './DraftPresetChips';
 import { useChatSearchDirectory } from '@/hooks/useChatSearchDirectory';
+import { useGuestAttachItems } from '@/hooks/useGuestSurfaces';
+import { pluginModeFromId } from '@/lib/surfaces/modes';
 import { opencodeClient } from '@/lib/opencode/client';
 import { useGitStore, useIsGitRepo } from '@/stores/useGitStore';
 import { useDirectoryStore } from '@/stores/useDirectoryStore';
@@ -395,6 +399,8 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({
     const pendingPresetSubmit = useInputStore((s) => s.pendingPresetSubmit);
     const setPendingInputText = useInputStore((s) => s.setPendingInputText);
     const pendingInputText = useInputStore((s) => s.pendingInputText);
+    const pendingGuestIssue = useInputStore((s) => s.pendingGuestIssue);
+    const consumePendingGuestIssue = useInputStore((s) => s.consumePendingGuestIssue);
 
     React.useEffect(() => {
         if (!newSessionDraftOpen || newSessionDraft.target !== 'chat' || message.trim().length === 0) return;
@@ -756,6 +762,18 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({
         url: string;
         contextText: string;
         author?: { login: string; avatarUrl?: string };
+    } | null>(null);
+    const [attachDialogGuestId, setAttachDialogGuestId] = React.useState<string | null>(null);
+    const [linkedGuestIssue, setLinkedGuestIssue] = React.useState<{
+        providerId: string;
+        id: string;
+        title: string;
+        url: string;
+        contextText: string;
+        thread?: 'issue' | 'pull';
+        author?: string;
+        head?: string;
+        base?: string;
     } | null>(null);
 
     // Message queue
@@ -1182,6 +1200,16 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({
             linkedLinearIssue: linkedLinearIssue
                 ? { identifier: linkedLinearIssue.identifier, title: linkedLinearIssue.title, url: linkedLinearIssue.url, contextText: linkedLinearIssue.contextText }
                 : null,
+            linkedGuestIssue: linkedGuestIssue
+                ? {
+                    providerId: linkedGuestIssue.providerId,
+                    id: linkedGuestIssue.id,
+                    title: linkedGuestIssue.title,
+                    url: linkedGuestIssue.url,
+                    contextText: linkedGuestIssue.contextText,
+                    thread: linkedGuestIssue.thread,
+                }
+                : null,
         }, {
             parseAgentMention: (text) => {
                 const { sanitizedText, mention } = parseAgentMentions(text, agents);
@@ -1433,6 +1461,24 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({
                     true,
                 ).catch(() => undefined);
             }
+            if (linkedGuestIssue && linkTargetSessionId) {
+                void sessionActions.setLinkedIssue(
+                    linkTargetSessionId,
+                    linkTargetDirectory,
+                    buildLinkedGuestIssue({
+                        providerId: linkedGuestIssue.providerId,
+                        identifier: linkedGuestIssue.id,
+                        title: linkedGuestIssue.title,
+                        url: linkedGuestIssue.url,
+                        thread: linkedGuestIssue.thread,
+                        author: linkedGuestIssue.author,
+                        head: linkedGuestIssue.head,
+                        base: linkedGuestIssue.base,
+                        linkedAt: Date.now(),
+                    }),
+                    true,
+                ).catch(() => undefined);
+            }
 
             // Clear linked issue after successful message send
             if (linkedIssue) {
@@ -1443,6 +1489,9 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({
             }
             if (linkedLinearIssue) {
                 setLinkedLinearIssue(null);
+            }
+            if (linkedGuestIssue) {
+                setLinkedGuestIssue(null);
             }
         }).catch((error: unknown) => {
             const rawMessage =
@@ -2569,6 +2618,43 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({
 
     const footerGapClass = 'gap-x-1.5 gap-y-0';
     const isVSCode = isVSCodeRuntime();
+    const guestAttachItems = useGuestAttachItems();
+    const openGuestAttach = React.useCallback((guestId: string) => {
+        const item = guestAttachItems.find((guest) => guest.id === guestId);
+        if (item?.mode === 'dialog') {
+            setAttachDialogGuestId(guestId);
+            return;
+        }
+        useUIStore.getState().openContextSurface(currentDirectory || '', pluginModeFromId(guestId));
+    }, [currentDirectory, guestAttachItems]);
+    const handleGuestAttach = React.useCallback((issue: AttachIssueRequest) => {
+        const contextText = issue.text
+            ?? `Attached ${issue.providerId} ${issue.id}: ${issue.title}\n${issue.url}`;
+        setLinkedGuestIssue({
+            providerId: issue.providerId,
+            id: issue.id,
+            title: issue.title,
+            url: issue.url,
+            contextText,
+            thread: issue.kind === 'pull' ? 'pull' : 'issue',
+            author: issue.author,
+            head: issue.branches?.head,
+            base: issue.branches?.base,
+        });
+        setLinkedIssue(null);
+        setLinkedPr(null);
+        setLinkedLinearIssue(null);
+        setAttachDialogGuestId(null);
+    }, []);
+    React.useEffect(() => {
+        if (!pendingGuestIssue) {
+            return;
+        }
+        const issue = consumePendingGuestIssue();
+        if (issue) {
+            handleGuestAttach(issue);
+        }
+    }, [consumePendingGuestIssue, handleGuestAttach, pendingGuestIssue]);
     const showLinearPicker = Boolean(runtimeLinear) && !isVSCode;
     // The work-status panel carries the agent's todos and the changed-file
     // count, but only on the desktop/web layout — VS Code and mobile have no
@@ -2833,6 +2919,23 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({
                         onRemove={() => setLinkedLinearIssue(null)}
                     />
                 ) : null}
+                {linkedGuestIssue && !isVSCode ? (
+                    <LinkedReferenceRow
+                        numberLabel={linkedGuestIssue.thread === 'pull'
+                            ? t('chat.chatInput.linked.guest.pr.number', { id: linkedGuestIssue.id })
+                            : linkedGuestIssue.id}
+                        title={linkedGuestIssue.title}
+                        url={linkedGuestIssue.url}
+                        author={linkedGuestIssue.author ? { login: linkedGuestIssue.author } : undefined}
+                        branches={linkedGuestIssue.thread === 'pull' && linkedGuestIssue.head && linkedGuestIssue.base
+                            ? { head: linkedGuestIssue.head, base: linkedGuestIssue.base }
+                            : undefined}
+                        openInBrowserLabel={t('chat.chatInput.linked.guest.openInBrowserAria', { id: linkedGuestIssue.id })}
+                        removeLabel={t('chat.chatInput.linked.guest.removeAria', { id: linkedGuestIssue.id })}
+                        onReopenPicker={() => setAttachDialogGuestId(linkedGuestIssue.providerId)}
+                        onRemove={() => setLinkedGuestIssue(null)}
+                    />
+                ) : null}
                 <RevertedMessageDock
                     sessionId={currentSessionId}
                     directory={currentSessionDirectoryForSync ?? currentDirectory}
@@ -3082,6 +3185,8 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({
                         onOpenPrPicker={openPrPicker}
                         showLinearPicker={showLinearPicker}
                         onOpenLinearPicker={openLinearPicker}
+                        attachGuests={isMobile ? [] : guestAttachItems}
+                        onOpenGuestAttach={openGuestAttach}
                         onOpenAttachSheet={openMobileAttachSheet}
                         onToggleExpandedInput={handleToggleExpandedInput}
                         onTogglePermissionAutoAccept={handlePermissionAutoAcceptToggle}
@@ -3147,6 +3252,7 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({
                 setLinkedIssue(issue);
                 setLinkedPr(null);
                 setLinkedLinearIssue(null);
+                setLinkedGuestIssue(null);
             }}
         />
         <GitHubPrPickerDialog
@@ -3156,6 +3262,13 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({
                 setLinkedPr(pr);
                 setLinkedIssue(null);
                 setLinkedLinearIssue(null);
+                setLinkedGuestIssue(null);
+            }}
+        />
+        <GuestAttachDialog
+            guestId={isMobile ? null : attachDialogGuestId}
+            onOpenChange={(open) => {
+                if (!open) setAttachDialogGuestId(null);
             }}
         />
         <LinearIssuePickerDialog
@@ -3166,6 +3279,7 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({
                 setLinkedLinearIssue(issue);
                 setLinkedIssue(null);
                 setLinkedPr(null);
+                setLinkedGuestIssue(null);
             }}
         />
         <ReviewFlowDialog

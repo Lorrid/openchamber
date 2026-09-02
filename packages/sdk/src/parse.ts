@@ -1,0 +1,369 @@
+import { z } from 'zod';
+
+import { OPENCHAMBER_SDK_API_VERSION } from './api-version.ts';
+
+const PANEL_ID = /^[a-z][a-z0-9-]*$/;
+
+export type PanelContribution = {
+  id: string;
+  name: string;
+  icon: string;
+  entry: string;
+};
+
+export type AttachMode = 'panel' | 'dialog';
+
+export type AttachContribution = boolean | AttachMode;
+
+export type IntegrationSettingField = {
+  id: string;
+  label: string;
+};
+
+export type IntegrationOAuthAccount = {
+  path: string;
+  name: string;
+};
+
+export type IntegrationOAuth = {
+  authorizeUrl: string;
+  tokenUrl: string;
+  apiOrigin: string;
+  scopes?: string[];
+  account?: IntegrationOAuthAccount;
+};
+
+export type IntegrationToken = {
+  apiOrigin: string;
+  account?: IntegrationOAuthAccount;
+};
+
+export type IntegrationHostProvider = 'linear';
+
+export type IntegrationHost = {
+  provider: IntegrationHostProvider;
+};
+
+export type IntegrationAuth = 'oauth' | 'token' | 'host';
+
+export type GuestAuthorization = 'bearer' | 'header';
+
+export type ResolvedGuestApi = {
+  apiOrigin: string;
+  account?: IntegrationOAuthAccount;
+  authorization: GuestAuthorization;
+};
+
+export const HOST_LINEAR_API_ORIGIN = 'https://api.linear.app';
+
+export type IntegrationContribution = {
+  name: string;
+  description: string;
+  oauth?: IntegrationOAuth;
+  token?: IntegrationToken;
+  host?: IntegrationHost;
+  settings?: IntegrationSettingField[];
+};
+
+/** Catalog card. Drops oauth URLs and token apiOrigin. */
+export type PublicIntegration = {
+  name: string;
+  description: string;
+  auth: IntegrationAuth;
+  settings?: IntegrationSettingField[];
+};
+
+export const resolveIntegrationAuth = (
+  integration: Pick<IntegrationContribution, 'oauth' | 'token' | 'host'>,
+): IntegrationAuth | null => {
+  const kinds = [Boolean(integration.oauth), Boolean(integration.token), Boolean(integration.host)]
+    .filter(Boolean).length;
+  if (kinds !== 1) {
+    return null;
+  }
+  if (integration.host) return 'host';
+  return integration.oauth ? 'oauth' : 'token';
+};
+
+export const resolveIntegrationApi = (
+  integration: IntegrationContribution,
+): ResolvedGuestApi | null => {
+  if (integration.oauth) {
+    return {
+      apiOrigin: integration.oauth.apiOrigin,
+      account: integration.oauth.account,
+      authorization: 'bearer',
+    };
+  }
+  if (integration.token) {
+    return {
+      apiOrigin: integration.token.apiOrigin,
+      account: integration.token.account,
+      authorization: 'header',
+    };
+  }
+  if (integration.host?.provider === 'linear') {
+    return {
+      apiOrigin: HOST_LINEAR_API_ORIGIN,
+      authorization: 'bearer',
+    };
+  }
+  return null;
+};
+
+export type OpenChamberContributes = {
+  panel: PanelContribution;
+  attach?: AttachContribution;
+  integration?: IntegrationContribution;
+};
+
+export const resolveAttachMode = (attach: AttachContribution | undefined): AttachMode | null => {
+  if (attach === true || attach === 'panel') return 'panel';
+  if (attach === 'dialog') return 'dialog';
+  return null;
+};
+
+export type OpenChamberManifest = {
+  apiVersion: typeof OPENCHAMBER_SDK_API_VERSION;
+  contributes: OpenChamberContributes;
+};
+
+export type ParseManifestErrorCode =
+  | 'not-object'
+  | 'missing-openchamber'
+  | 'unsupported-api-version'
+  | 'missing-panel'
+  | 'invalid-panel-id'
+  | 'invalid-panel-name'
+  | 'invalid-panel-icon'
+  | 'invalid-panel-entry'
+  | 'invalid-attach'
+  | 'invalid-integration';
+
+export type ParseManifestFailure = {
+  ok: false;
+  code: ParseManifestErrorCode;
+  message: string;
+};
+
+export type ParseManifestSuccess = {
+  ok: true;
+  manifest: OpenChamberManifest;
+};
+
+export type ParseManifestResult = ParseManifestSuccess | ParseManifestFailure;
+
+const isSafeAssetPath = (value: string): boolean => {
+  if (value.includes('\0') || value.includes('\\') || value.startsWith('/') || value.includes('://')) {
+    return false;
+  }
+  const segments = value.split('/');
+  if (segments.some((segment) => segment === '' || segment === '.' || segment === '..')) {
+    return false;
+  }
+  return /^[a-zA-Z0-9][a-zA-Z0-9._/-]*$/.test(value);
+};
+
+const isHttpsUrl = (value: string): boolean => {
+  try {
+    const parsed = new URL(value);
+    return parsed.protocol === 'https:' && parsed.username === '' && parsed.password === '';
+  } catch {
+    return false;
+  }
+};
+
+const isHttpsOrigin = (value: string): boolean => {
+  try {
+    const parsed = new URL(value);
+    return parsed.protocol === 'https:'
+      && parsed.username === ''
+      && parsed.password === ''
+      && parsed.pathname === '/'
+      && parsed.search === ''
+      && parsed.hash === ''
+      && value === parsed.origin;
+  } catch {
+    return false;
+  }
+};
+
+const isSafeApiPath = (value: string): boolean => {
+  if (!value.startsWith('/') || value.includes('\0') || value.includes('\\') || value.includes('://')) {
+    return false;
+  }
+  const segments = value.split('/');
+  return !segments.some((segment) => segment === '.' || segment === '..');
+};
+
+const ACCOUNT_NAME = /^[A-Za-z][A-Za-z0-9_]*(\.[A-Za-z][A-Za-z0-9_]*)*$/;
+
+const panelSchema = z.object({
+  id: z.string().trim().regex(PANEL_ID),
+  name: z.string().trim().min(1),
+  icon: z.string().trim().regex(PANEL_ID),
+  entry: z.string().trim().refine(isSafeAssetPath),
+});
+
+const integrationSettingSchema = z.object({
+  id: z.string().trim().regex(PANEL_ID),
+  label: z.string().trim().min(1),
+});
+
+const integrationOauthSchema = z.object({
+  authorizeUrl: z.string().trim().refine(isHttpsUrl),
+  tokenUrl: z.string().trim().refine(isHttpsUrl),
+  apiOrigin: z.string().trim().refine(isHttpsOrigin),
+  scopes: z.array(z.string().trim().min(1)).optional(),
+  account: z.object({
+    path: z.string().trim().refine(isSafeApiPath),
+    name: z.string().trim().regex(ACCOUNT_NAME),
+  }).optional(),
+});
+
+const integrationTokenSchema = z.object({
+  apiOrigin: z.string().trim().refine(isHttpsOrigin),
+  account: z.object({
+    path: z.string().trim().refine(isSafeApiPath),
+    name: z.string().trim().regex(ACCOUNT_NAME),
+  }).optional(),
+});
+
+const integrationHostSchema = z.object({
+  provider: z.enum(['linear']),
+});
+
+const integrationSchema = z.object({
+  name: z.string().trim().min(1),
+  description: z.string().trim().min(1),
+  oauth: integrationOauthSchema.optional(),
+  token: integrationTokenSchema.optional(),
+  host: integrationHostSchema.optional(),
+  settings: z.array(integrationSettingSchema).optional(),
+}).refine((value) => resolveIntegrationAuth(value) !== null, { path: ['oauth'] });
+
+export const toPublicIntegration = (integration: IntegrationContribution): PublicIntegration => {
+  const auth = resolveIntegrationAuth(integration) ?? 'oauth';
+  const next: PublicIntegration = {
+    name: integration.name,
+    description: integration.description,
+    auth,
+  };
+  if (integration.settings && integration.settings.length > 0) {
+    next.settings = integration.settings.map((field) => ({
+      id: field.id,
+      label: field.label,
+    }));
+  }
+  return next;
+};
+
+export const openChamberManifestSchema = z.object({
+  apiVersion: z.literal(OPENCHAMBER_SDK_API_VERSION),
+  contributes: z.object({
+    panel: panelSchema,
+    attach: z.union([z.boolean(), z.enum(['panel', 'dialog'])]).optional(),
+    integration: integrationSchema.optional(),
+  }),
+});
+
+export const packageManifestSchema = z.object({
+  openchamber: openChamberManifestSchema,
+});
+
+const packageEnvelopeSchema = z.union([
+  z.object({ openchamber: z.null() }),
+  z.object({ openchamber: z.object({}).passthrough() }),
+]);
+
+export type ManifestDocument = z.input<typeof openChamberManifestSchema> | z.input<typeof packageManifestSchema>;
+
+const fail = (code: ParseManifestErrorCode, message: string): ParseManifestFailure => ({
+  ok: false,
+  code,
+  message,
+});
+
+const failureFromIssue = (issue: { path: ReadonlyArray<PropertyKey>; code: string }): ParseManifestFailure => {
+  const path = issue.path.join('.');
+  if (!path && issue.code === 'invalid_type') {
+    return fail('not-object', 'Manifest must be a plain object.');
+  }
+  if (path.includes('apiVersion') || issue.code === 'invalid_value') {
+    return fail(
+      'unsupported-api-version',
+      `Unsupported apiVersion. This host speaks ${OPENCHAMBER_SDK_API_VERSION}.`,
+    );
+  }
+  if (path.endsWith('id')) {
+    return fail('invalid-panel-id', 'panel.id must be kebab-case starting with a letter.');
+  }
+  if (path.endsWith('name')) {
+    return fail('invalid-panel-name', 'panel.name must be a non-empty string.');
+  }
+  if (path.endsWith('icon')) {
+    return fail('invalid-panel-icon', 'panel.icon must be a Remixicon name.');
+  }
+  if (path.endsWith('entry')) {
+    return fail('invalid-panel-entry', 'panel.entry must be a relative path inside the package.');
+  }
+  if (path.endsWith('attach')) {
+    return fail('invalid-attach', 'contributes.attach must be true, false, "panel", or "dialog".');
+  }
+  if (path.includes('integration')) {
+    return fail(
+      'invalid-integration',
+      'contributes.integration needs a name, description, and oauth, token, or host.',
+    );
+  }
+  if (path.includes('openchamber') && issue.code === 'invalid_type') {
+    return fail('missing-openchamber', 'package.json openchamber must be a plain object.');
+  }
+  return fail('missing-panel', 'contributes.panel is required.');
+};
+
+const decodeManifest = (parsed: ReturnType<typeof openChamberManifestSchema.safeParse>): ParseManifestResult => {
+  if (parsed.success) {
+    return { ok: true, manifest: parsed.data };
+  }
+  const issue = parsed.error.issues[0];
+  if (!issue) {
+    return fail('not-object', 'Manifest must be a plain object.');
+  }
+  return failureFromIssue(issue);
+};
+
+export const parseManifest = (document: ManifestDocument): ParseManifestResult => {
+  if ('openchamber' in document) {
+    const parsed = packageManifestSchema.safeParse(document);
+    if (parsed.success) {
+      return { ok: true, manifest: parsed.data.openchamber };
+    }
+    const issue = parsed.error.issues[0];
+    if (!issue) {
+      return fail('not-object', 'Manifest must be a plain object.');
+    }
+    return failureFromIssue(issue);
+  }
+  return decodeManifest(openChamberManifestSchema.safeParse(document));
+};
+
+export const parseManifestJson = (json: string): ParseManifestResult => {
+  try {
+    const raw = JSON.parse(json);
+    if (packageEnvelopeSchema.safeParse(raw).success) {
+      const parsed = packageManifestSchema.safeParse(raw);
+      if (parsed.success) {
+        return { ok: true, manifest: parsed.data.openchamber };
+      }
+      const issue = parsed.error.issues[0];
+      if (!issue) {
+        return fail('not-object', 'Manifest must be a plain object.');
+      }
+      return failureFromIssue(issue);
+    }
+    return decodeManifest(openChamberManifestSchema.safeParse(raw));
+  } catch {
+    return fail('not-object', 'Manifest must be a plain object.');
+  }
+};

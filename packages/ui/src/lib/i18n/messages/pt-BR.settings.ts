@@ -1,3 +1,5 @@
+import { extensionsSettingsI18n } from './extensions.settings.i18n';
+import { guestIntegrationsI18n } from './guest-integrations.i18n';
 import { linearIntegrationI18n } from './linear-integration.i18n';
 import { thirdPartyIntegrationI18n } from './third-party-integrations.i18n';
 export const settingsDict = {
@@ -2233,4 +2235,6 @@ export const settingsDict = {
   "settings.openchamber.visual.option.followUpBehavior.queue.label": "Queue",
   ...linearIntegrationI18n['pt-BR'],
   ...thirdPartyIntegrationI18n['pt-BR'],
+  ...guestIntegrationsI18n['pt-BR'],
+  ...extensionsSettingsI18n['pt-BR'],
 } as const;

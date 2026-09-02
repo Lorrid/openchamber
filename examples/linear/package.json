@@ -1,0 +1,26 @@
+{
+  "name": "@openchamber/linear",
+  "private": true,
+  "type": "module",
+  "dependencies": {
+    "@openchamber/sdk": "workspace:*",
+    "zod": "^4.3.6"
+  },
+  "openchamber": {
+    "apiVersion": 1,
+    "contributes": {
+      "panel": {
+        "id": "linear-issues",
+        "name": "Linear",
+        "icon": "checkbox-circle",
+        "entry": "panel/index.html"
+      },
+      "attach": "dialog",
+      "integration": {
+        "name": "Linear",
+        "description": "Issues from the OpenChamber Linear connection",
+        "host": { "provider": "linear" }
+      }
+    }
+  }
+}

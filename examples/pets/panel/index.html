@@ -1,0 +1,76 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Pets</title>
+  <style>
+    :root {
+      color-scheme: dark;
+      --oc-bg: #111;
+      --oc-fg: #eee;
+      --oc-muted: #888;
+      --oc-border: #333;
+      --oc-primary: #4af;
+    }
+    html, body {
+      margin: 0;
+      height: 100%;
+      background: var(--oc-bg);
+      color: var(--oc-fg);
+      font: 13px/1.4 ui-sans-serif, system-ui, sans-serif;
+    }
+    .shell {
+      display: flex;
+      flex-direction: column;
+      height: 100%;
+    }
+    header {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 8px 10px;
+      border-bottom: 1px solid var(--oc-border);
+    }
+    h1 {
+      margin: 0;
+      flex: 1;
+      font-size: 0.95rem;
+      font-weight: 600;
+    }
+    button {
+      appearance: none;
+      border: 1px solid var(--oc-border);
+      background: transparent;
+      color: var(--oc-fg);
+      border-radius: 6px;
+      padding: 4px 8px;
+      font: inherit;
+    }
+    button.primary {
+      background: var(--oc-primary);
+      color: var(--oc-bg);
+      border-color: transparent;
+    }
+    canvas {
+      display: block;
+      width: 100%;
+      flex: 1;
+      min-height: 0;
+      cursor: crosshair;
+    }
+  </style>
+</head>
+<body>
+  <div class="shell">
+    <header>
+      <h1>Pets</h1>
+      <button type="button" id="add">Add</button>
+      <button type="button" id="ball" class="primary">Ball</button>
+      <button type="button" id="clear">Clear</button>
+    </header>
+    <canvas id="room"></canvas>
+  </div>
+  <script src="./main.js"></script>
+</body>
+</html>

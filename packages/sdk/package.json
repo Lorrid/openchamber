@@ -1,0 +1,32 @@
+{
+  "name": "@openchamber/sdk",
+  "version": "1.0.0",
+  "description": "Contract for OpenChamber guests: manifest parse and iframe host bridge.",
+  "private": false,
+  "type": "module",
+  "main": "src/index.ts",
+  "types": "src/index.ts",
+  "exports": {
+    ".": "./src/index.ts",
+    "./ui": "./src/ui/index.ts"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "scripts": {
+    "type-check": "tsc --noEmit",
+    "lint": "eslint \"./src/**/*.ts\" --config ../../eslint.config.js",
+    "bundle": "bun scripts/bundle-guest.ts",
+    "test": "node ../../scripts/run-isolated-tests.mjs src scripts",
+    "clean": "node -e \"process.exit(0)\""
+  },
+  "files": [
+    "src",
+    "scripts/bundle-guest.ts",
+    "README.md",
+    "DOCUMENTATION.md"
+  ],
+  "dependencies": {
+    "zod": "^4.3.6"
+  }
+}

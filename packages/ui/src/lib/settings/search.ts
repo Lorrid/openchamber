@@ -1019,6 +1019,14 @@ const SETTINGS_SEARCH_ITEMS: readonly SettingsSearchItem[] = [
     isAvailable: (ctx) => !ctx.isVSCode,
   },
   {
+    id: 'integrations.guests',
+    page: 'integrations',
+    titleKey: 'settings.integrations.guests.title',
+    descriptionKey: 'settings.integrations.guests.info',
+    keywords: ['guest', 'extension', 'oauth', 'clickup', 'gitlab', 'panel', 'connect'],
+    isAvailable: (ctx) => !ctx.isVSCode,
+  },
+  {
     id: 'integrations.third-party',
     page: 'integrations',
     titleKey: 'settings.integrations.thirdParty.title',
@@ -1037,6 +1045,14 @@ const SETTINGS_SEARCH_ITEMS: readonly SettingsSearchItem[] = [
     titleKey: 'settings.integrations.thirdParty.opencodeCursorOauth.name',
     descriptionKey: 'settings.integrations.thirdParty.opencodeCursorOauth.description',
     keywords: ['cursor', 'oauth', 'subscription', 'openai compatible', '@openchamber/opencode-cursor'],
+  },
+  {
+    id: 'extensions.add',
+    page: 'extensions',
+    titleKey: 'settings.extensions.add.label',
+    descriptionKey: 'settings.extensions.add.info',
+    keywords: ['folder', 'path', 'install', 'guest', 'panel'],
+    isAvailable: (ctx) => !ctx.isVSCode && !ctx.isMobile,
   },
 ] as const;
 

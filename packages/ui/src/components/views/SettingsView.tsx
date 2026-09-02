@@ -40,6 +40,7 @@ import { SnippetsSidebar } from '@/components/sections/snippets/SnippetsSidebar'
 import { SnippetsPage } from '@/components/sections/snippets/SnippetsPage';
 import { GitPage } from '@/components/sections/git-identities/GitPage';
 import { IntegrationsPage } from '@/components/sections/integrations/IntegrationsPage';
+import { ExtensionsPage } from '@/components/sections/extensions/ExtensionsPage';
 import type { OpenChamberSection } from '@/components/sections/openchamber/types';
 import { OpenChamberPage } from '@/components/sections/openchamber/OpenChamberPage';
 import { AboutSettings } from '@/components/sections/openchamber/AboutSettings';
@@ -101,6 +102,7 @@ const pageOrder: SettingsPageSlug[] = [
   'shortcuts',
   'voice',
   'integrations',
+  'extensions',
   'usage',
   'about',
   // 'projects' group — Workspace
@@ -375,6 +377,8 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ onClose, forceMobile
         return t('settings.page.git.title');
       case 'integrations':
         return t('settings.page.integrations.title');
+      case 'extensions':
+        return t('settings.page.extensions.title');
       case 'appearance':
         return t('settings.page.appearance.title');
       case 'chat':
@@ -685,6 +689,8 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ onClose, forceMobile
             onOpenPluginManager={() => openPage('plugins')}
           />
         );
+      case 'extensions':
+        return <ExtensionsPage />;
       case 'general':
       case 'appearance':
       case 'chat':

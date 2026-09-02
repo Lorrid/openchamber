@@ -301,7 +301,9 @@ const isUrlAuthReadableHttpPath = (pathname) => {
     || pathname === '/api/fs/serve'
     || pathname.startsWith('/api/fs/serve/')
     || pathname.startsWith('/api/preview/proxy/')
-    || /^\/api\/projects\/[^/]+\/icon$/.test(pathname);
+    || /^\/api\/projects\/[^/]+\/icon$/.test(pathname)
+    || pathname === '/api/guests'
+    || /^\/api\/guests\/[a-z][a-z0-9-]*\//.test(pathname);
 };
 
 const isUrlAuthWebSocketPath = (pathname) => {

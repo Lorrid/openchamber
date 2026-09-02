@@ -1,8 +1,8 @@
 import { describe, expect, test } from 'bun:test';
 import type { Session } from '@opencode-ai/sdk/v2';
-import { buildLinkedIssue, buildLinkedIssueId, buildLinkedLinearIssue, canOpenLinearIssueInContextPanel, getLinkedIssues, withLinkedIssue, type LinkedIssue } from './linkedIssues';
+import { buildLinkedGuestIssue, buildLinkedIssue, buildLinkedIssueId, buildLinkedLinearIssue, canOpenLinearIssueInContextPanel, getLinkedIssues, withLinkedIssue, type LinkedIssue } from './linkedIssues';
 
-type LinkedGitHubIssue = Exclude<LinkedIssue, { kind: 'linear' }>;
+type LinkedGitHubIssue = Extract<LinkedIssue, { kind: 'issue' | 'pull' }>;
 
 const issue = (overrides: Partial<LinkedGitHubIssue> = {}): LinkedGitHubIssue => ({
   id: 'owner/repo#12',
@@ -117,6 +117,52 @@ describe('getLinkedIssues', () => {
       'string',
     ]);
     expect(getLinkedIssues(session)).toEqual([good]);
+  });
+
+  test('keeps a guest entry without inventing a number', () => {
+    const guest = buildLinkedGuestIssue({
+      providerId: 'hello',
+      identifier: 'HELLO-1',
+      title: 'Sample ticket',
+      url: 'https://example.com/HELLO-1',
+      linkedAt: 3,
+    });
+    expect(guest.kind).toBe('guest');
+    expect(guest.thread).toBe('issue');
+    expect(guest.id).toBe('guest:hello:HELLO-1');
+    expect(getLinkedIssues(sessionWith([guest]))).toEqual([guest]);
+  });
+
+  test('keeps a guest pull with author and branches', () => {
+    const guest = buildLinkedGuestIssue({
+      providerId: 'gitlab',
+      identifier: '!12',
+      title: 'Fix login',
+      url: 'https://gitlab.com/acme/app/-/merge_requests/12',
+      thread: 'pull',
+      author: 'ada',
+      head: 'feature',
+      base: 'main',
+      linkedAt: 4,
+    });
+    expect(guest.thread).toBe('pull');
+    expect(guest.author).toBe('ada');
+    expect(guest.head).toBe('feature');
+    expect(guest.base).toBe('main');
+    expect(getLinkedIssues(sessionWith([guest]))).toEqual([guest]);
+  });
+
+  test('treats a stored guest row without thread as an issue', () => {
+    const stored = {
+      id: 'guest:hello:HELLO-1',
+      providerId: 'hello',
+      identifier: 'HELLO-1',
+      title: 'Sample ticket',
+      url: 'https://example.com/HELLO-1',
+      kind: 'guest',
+      linkedAt: 3,
+    };
+    expect(getLinkedIssues(sessionWith([stored]))).toEqual([stored]);
   });
 
   test('keeps Linear entries next to GitHub ones', () => {

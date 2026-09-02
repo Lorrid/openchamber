@@ -7,6 +7,17 @@ beforeEach(() => {
 });
 
 describe('useUIStore context panel tabs', () => {
+  test('opens a plugin surface tab', () => {
+    useUIStore.getState().openContextPanelTab('/repo', {
+      mode: 'plugin:hello',
+      label: 'Hello',
+    });
+    const tabs = useUIStore.getState().contextPanelByDirectory['/repo']?.tabs ?? [];
+    expect(tabs).toHaveLength(1);
+    expect(tabs[0]?.mode).toBe('plugin:hello');
+    expect(tabs[0]?.label).toBe('Hello');
+  });
+
   test('updates readOnly when an existing chat tab is reopened', () => {
     const directory = '/repo';
 

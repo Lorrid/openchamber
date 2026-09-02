@@ -25,6 +25,8 @@ import {
   type ShortcutActionId,
 } from '@/lib/shortcuts';
 import { ShortcutRegistry } from '@/lib/shortcuts/registry';
+import { guestSurfaceFromInstalled } from '@/lib/guests/surfaces';
+import { useGuestsStore } from '@/lib/guests/store';
 import { getVisibleContextRailSurfaces } from '@/lib/surfaces/registry';
 import { readEmbeddedThemeSearchParams } from '@/contexts/theme-embedded-bootstrap';
 import { useDirectoryStore } from '@/stores/useDirectoryStore';
@@ -509,6 +511,7 @@ export const useKeyboardShortcuts = () => {
             tabs: panel?.tabs ?? [],
             linearConnected: useLinearAuthStore.getState().status?.connected === true,
             githubConnected: useGitHubAuthStore.getState().status?.connected === true,
+            extras: useGuestsStore.getState().guests.map((guest) => guestSurfaceFromInstalled(guest)),
           });
           const target = visibleSurfaces[switchSurfaceDigit - 1];
           if (target) {

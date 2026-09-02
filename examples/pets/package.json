@@ -1,0 +1,19 @@
+{
+  "name": "@openchamber/pets",
+  "private": true,
+  "type": "module",
+  "dependencies": {
+    "@openchamber/sdk": "workspace:*"
+  },
+  "openchamber": {
+    "apiVersion": 1,
+    "contributes": {
+      "panel": {
+        "id": "pets",
+        "name": "Pets",
+        "icon": "heart",
+        "entry": "panel/index.html"
+      }
+    }
+  }
+}

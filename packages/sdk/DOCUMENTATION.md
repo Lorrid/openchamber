@@ -1,0 +1,47 @@
+# OpenChamber SDK
+
+Public author pages live in `packages/docs/content/docs/sdk.mdx`, `sdk/host.mdx`, and `sdk/ui.mdx`. Read them in a browser from `packages/sdk/docs/index.html` until the website syncs.
+
+## Purpose
+
+`packages/sdk` owns the guest contract: `parseManifest`, the iframe message envelope, and `connectHost`. Guest-only drawing lives under `@openchamber/sdk/ui`. Host and guest import from here. Do not copy these types into `packages/ui`.
+
+## Entrypoints
+
+- `src/index.ts`: public exports. Host and guest protocol.
+- `src/parse.ts`: `package.json` / bare-block parse. Fails closed.
+- `src/protocol.ts`: envelope parse for host and guest messages.
+- `src/host.ts`: iframe client. Posts to `parent`. Ignores messages whose `source` is not `parent`. In-flight RPCs time out at `GUEST_REQUEST_TIMEOUT_MS` (20s) as `HOST_TIMEOUT`. `onDirectory` / `onSession` replay and stay current after later pushes, same as connection and settings.
+- `scripts/bundle-guest.ts`: official IIFE build. `bun run --filter @openchamber/sdk bundle -- panel/main.ts panel/main.js`.
+- `src/ui/`: guest drawing kit. `mountIssuePage`, `mountIssueCard`, `mountAttachIssues`, `mountPullRequest`, `mountButton`, `mountTextField`, and `mountEmpty`. Import `@openchamber/sdk/ui`. Do not import this from `packages/ui`. Kit changes follow package semver, not `apiVersion`.
+
+## Invariants
+
+- `apiVersion` is `1`. Any other value is `unsupported-api-version`.
+- Panel `id` is kebab-case. `icon` is a Remixicon kebab-case name (`RiWindowLine` → `window`, `RiGitMergeLine` → `git-merge`). Paths, URLs, and package SVGs fail parse. `entry` stays inside the package (no `..`, no absolute, no URL). The rail paints that Remixicon glyph from the host sprite. A name the sprite does not carry falls back to `window`.
+- Extra manifest keys are dropped, not forwarded.
+- `connectHost` rejects when `parent === self`. A silent host rejects in-flight RPCs as `HOST_TIMEOUT` after 20s. Dispose rejects the rest as `HOST_UNAVAILABLE`.
+- Failed `result` may carry `code`. Known guest codes are `HOST_UNAVAILABLE`, `HOST_TIMEOUT`, `HOST_REJECTED`, `DISCONNECTED`, `BAD_PATH`, `NO_INTEGRATION`. Anything else becomes `HOST_REJECTED`. The `error` string stays.
+- `parseManifest` takes a typed document. File or network bytes go through `parseManifestJson`. Both return a result and do not throw on junk.
+- Iframe `event.data` is parsed with `hostMessageSchema` / `guestMessageSchema`. Typed builders use `parseHostMessage` / `parseGuestMessage`.
+- `ready` always carries `session` (`{ id, title }` or `null`), `surface` (`panel` on the rail, `dialog` in the attach window), `connection` (`{ connected, account }`), and `settings` (declared keys only). Title falls back to `id` when the host record has no title. `surface` is which host chrome mounted the iframe. It is not `openSurface`. `ready.theme.tokens` is the host surface, interactive, font, and radius bag. `applyHostReady` writes it onto the iframe. The host also pushes `connection` and `settings` the same way as `session`. Access tokens never appear in `ready` or a result.
+- `writeClipboard` text is 1–32000 characters. `compose` text is 1–16000 after trim. Compose default mode is `append`. Compose writes the chat composer. It does not send.
+- `contributes.attach` is `true`, `false`, `"panel"`, or `"dialog"`. `true` and `"panel"` add a + menu row that opens the rail. `"dialog"` opens a host window that mounts the same iframe. New Worktree shows the same dialog-mode guests next to GitHub and Linear. Omitted or `false` stays off those menus. Public 1.0 is web and desktop. VS Code and mobile mark the guest catalog `unsupported`. They do not show the row.
+- `contributes.integration` is optional. Panel stays required. Exactly one of `oauth`, `token`, or `host` is required. The public catalog slice is name, description, `auth`, and setting field defs. OAuth URLs and token origins stay on the server. Client id, secret, and pasted tokens are not in the package. `host.provider: "linear"` binds the first-party Linear connection. `apiOrigin` is `https://api.linear.app` only.
+- `attach` puts `{ providerId, id, title, url }` on the composer as a chip, exclusive with GitHub and Linear. `kind` is `issue` or `pull` and defaults to `issue`. `author` is a login. `branches` is `{ head, base }` on a pull. Avatar URLs stay off this payload. It does not invent a GitHub `number`. `text` is optional model context, 1–16000 after trim. `connectHost.attach` clamps id/title/url/text/author/branches to the protocol max so the host schema does not drop the message. The rail and the attach window both write `pendingGuestIssue` on the composer store. Send writes `guest-issue` or `guest-pr` and a session snapshot. `close` dismisses the attach window and is a no-op on the rail.
+- `startSession` is the same attach fields plus optional `worktree`. The host creates a session in the current project, or a worktree then a session. It writes the guest snapshot on that session. `text` becomes the first message when a model is selected. A failed worktree create leaves no session. No project directory is a refusal, not an empty success. VS Code and mobile have no guest iframe, so they never see this hole. Git stays on the host. The guest does not get a git API.
+- `oauthStart` opens the provider authorize URL, or the first-party Linear authorize URL for a host Linear guest. `oauthDisconnect` drops that guest's tokens, or the Linear connection for a host Linear guest. Token guests have no authorize URL. `request` is `{ method, path, query?, body? }`. `path` must start with `/`, stay on the declared `apiOrigin`, and never include a scheme. The host attaches `Authorization`. Token guests send the raw token. OAuth and host Linear send Bearer. The result is `{ status, body }`. A 409 `DISCONNECTED` or 400 `BAD_PATH` / `NO_INTEGRATION` lands on the guest as `HostRequestError.code`. Silence for 20s is `HOST_TIMEOUT`. The guest parses JSON. A host Linear guest may also `GET /api/linear/issues/get` through that same `request` call. The host answers from the first-party Linear route, which already asks Linear for public file URLs. Guest request itself does not know Linear.
+
+## Host hole
+
+`GET /api/guests` plus `PluginPane` on the desktop/web rail. Settings → Extensions installs a folder path into that OpenChamber instance's data dir (`extensions.json`). Settings → Integrations shows a host card for each installed guest that declared `integration`. OAuth and pasted tokens live in `guest-auth.json`. Host Linear uses `linear-auth.json`. VS Code and mobile set the catalog to `unsupported`. That is not an empty success. `examples/hello-panel` mounts `mountIssuePage` on the rail and `mountAttachIssues` in the + window. `examples/clickup` pastes a ClickUp API token. `examples/gitlab` pastes a GitLab OAuth client. `examples/linear` reuses the first-party Linear connection. GitLab paints `mountPullRequest` for a merge request and can call `startSession`. Add the folder yourself. Examples import `@openchamber/sdk` and `@openchamber/sdk/ui`. A guest must ship a classic IIFE (`panel/main.js`) from the SDK bundle command. The packaged app and `openchamber serve` run on Node and will not compile TypeScript. `oc-dev` on Bun still compiles `panel/main.ts` when it serves `panel/main.js`. The iframe cannot load ESM.
+
+The iframe is `sandbox="allow-scripts"` with no `allow-same-origin`, so its origin is opaque. Host posts to that frame's `contentWindow` with target `*`. The string `null` is not a legal `postMessage` targetOrigin. Receive still accepts only `event.source === contentWindow`. Guest `connectHost` posts `hello` to `parent` with `*`. The host answers `hello` and also pushes `ready` on iframe `load`, because a cached panel can fire `hello` while React is swapping the listener.
+
+Clipboard writes run in the host (`copyTextToClipboard`). Compose uses `useInputStore.setPendingInputText`. Attach writes the composer chip. The iframe has no clipboard, no composer, and no chip. The + menu and the attach window chrome are host. Guest JS is not in that React tree.
+
+Add a type when the host grows that hole, not before. Any new `connectHost` method ships with a `PluginPane` / `answerGuestMessage` branch in the same change.
+
+## Not here yet
+
+`issues.search` / `issues.get` on the host, a write of `sessionLink` onto an existing session, `sessionLifecycle`, a public OAuth broker, a second `host.provider`. Frozen on `apiVersion` 1. Named in the README slot map. `attach` is the chip. `startSession` creates a session and writes that snapshot. Search and the task list live in the guest. `@openchamber/sdk/ui` is the drawing kit. `mountIssuePage` is the tracker list with filters. Kit keeps the live filter choice across `update()`. Guest remounts pass `value` again. The host does not persist guest filters. `mountIssueCard` is the issue after a row click. Description and comments lift `![alt](https://…)` and `[label](https://…)`. `mountAttachIssues` is the GitHub / Linear attach picker. `mountPullRequest` is the host PR window. Create form or existing pull, tabs Overview / Checks / Comments, guest callbacks for attach, start session, ready, merge. `mountButton`, `mountTextField`, and `mountEmpty` are the shared connect chrome. Pass rows. `ready.theme.tokens` carries the host surface and interactive colors. Call `applyHostReady` before mount.
