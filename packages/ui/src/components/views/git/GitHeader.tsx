@@ -22,6 +22,7 @@ import type {
   GitHubChecksSummary,
 } from '@/lib/api/types';
 import { useI18n } from '@/lib/i18n';
+import { useDeviceInfo } from '@/lib/device';
 
 type SyncAction = 'fetch' | 'pull' | 'push' | 'sync' | null;
 
@@ -274,6 +275,7 @@ export const GitHeader: React.FC<GitHeaderProps> = ({
   repositoryRoot,
 }) => {
   const { t } = useI18n();
+  const { isMobile } = useDeviceInfo();
   if (!status) {
     return null;
   }
@@ -427,7 +429,7 @@ export const GitHeader: React.FC<GitHeaderProps> = ({
     <header className="@container/git-header px-3 py-2 bg-transparent">
       <div className="flex items-center justify-between gap-2 min-w-0">
         <div className="flex min-w-0 flex-1 items-center gap-1">
-          {isWorktreeMode ? (
+          {isWorktreeMode && !isMobile ? (
             <WorktreeBranchDisplay
               currentBranch={status.current}
               onRename={onRenameBranch}

@@ -136,46 +136,36 @@ export const DirtyBranchSwitchDialog: React.FC<DirtyBranchSwitchDialogProps> = (
               {pendingAction === 'generate' ? (
                 <Icon name="loader-4" className="size-4 animate-spin" />
               ) : (
-                <Icon name="sparkling" className="size-4" />
+                <Icon name="ai-generate-2" className="size-4 text-primary" />
               )}
             </button>
           </div>
 
-          <div className="flex flex-col gap-2">
+          <div className="flex items-center justify-between gap-2 pt-1">
+            <Button
+              variant="destructive"
+              size="sm"
+              onClick={() => { void handleRevertAndSwitch(); }}
+              disabled={isProcessing}
+              className="gap-2"
+            >
+              {pendingAction === 'revert' ? (
+                <Icon name="loader-4" className="size-4 animate-spin" />
+              ) : null}
+              {t('gitView.dirtySwitch.revertAndSwitch')}
+            </Button>
             <Button
               variant="default"
+              size="sm"
               onClick={() => { void handleCommitAndSwitch(); }}
               disabled={isProcessing}
-              className="w-full gap-2"
+              className="gap-2"
             >
               {pendingAction === 'commit' ? (
                 <Icon name="loader-4" className="size-4 animate-spin" />
               ) : null}
               {t('gitView.dirtySwitch.commitAndSwitch')}
             </Button>
-            <div className="flex gap-2 pt-1">
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={() => onOpenChange(false)}
-                disabled={isProcessing}
-                className="flex-1"
-              >
-                {t('gitView.common.cancel')}
-              </Button>
-              <Button
-                variant="destructive"
-                size="sm"
-                onClick={() => { void handleRevertAndSwitch(); }}
-                disabled={isProcessing}
-                className="flex-1 gap-2"
-              >
-                {pendingAction === 'revert' ? (
-                  <Icon name="loader-4" className="size-4 animate-spin" />
-                ) : null}
-                {t('gitView.dirtySwitch.revertAndSwitch')}
-              </Button>
-            </div>
           </div>
         </div>
       </DialogContent>
