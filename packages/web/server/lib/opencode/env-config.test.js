@@ -95,3 +95,29 @@ describe('resolveOpenCodeEnvConfig hostname', () => {
     expect(result.effectivePort).toBe(4096);
   });
 });
+
+describe('resolveOpenCodeEnvConfig path mapping', () => {
+  it('returns zero rules when OPENCODE_PATH_MAP is absent', () => {
+    const result = resolveOpenCodeEnvConfig({ env: {} });
+    expect(result.pathMappingRules).toEqual([]);
+  });
+
+  it('parses valid OPENCODE_PATH_MAP pairs', () => {
+    const result = resolveOpenCodeEnvConfig({
+      env: { OPENCODE_PATH_MAP: '/home/me/projem=/workspace' },
+    });
+    expect(result.pathMappingRules).toEqual([
+      { hostPrefix: '/home/me/projem', remotePrefix: '/workspace', compareKey: '/home/me/projem' },
+    ]);
+  });
+
+  it('warns about invalid pairs without dropping valid ones', () => {
+    const logger = { warn: vi.fn(), error: vi.fn() };
+    const result = resolveOpenCodeEnvConfig({
+      env: { OPENCODE_PATH_MAP: '/home/me/valid=/workspace;relative=/workspace' },
+      logger,
+    });
+    expect(result.pathMappingRules).toHaveLength(1);
+    expect(logger.warn).toHaveBeenCalledWith(expect.stringContaining('OPENCODE_PATH_MAP'));
+  });
+});
