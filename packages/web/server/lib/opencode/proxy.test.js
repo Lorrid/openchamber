@@ -84,13 +84,13 @@ describe('createDirectoryQueryCanonicalizer', () => {
       realpath: async (value) => value,
       pathMapping: createPathMapping({
         platform: 'win32',
-        rules: [{ hostPrefix: 'C:\\Users\\me\\projem', remotePrefix: '/workspace', compareKey: 'c:\\users\\me\\projem' }],
+        rules: [{ hostPrefix: 'C:\\Users\\me\\my-project', remotePrefix: '/workspace', compareKey: 'c:\\users\\me\\my-project' }],
       }),
     });
 
-    await expect(canonicalize('/session?directory=C:\\Users\\me\\projem'))
+    await expect(canonicalize('/session?directory=C:\\Users\\me\\my-project'))
       .resolves.toBe('/session?directory=%2Fworkspace');
-    await expect(canonicalize('/session?directory=C:\\Users\\me\\projem\\src'))
+    await expect(canonicalize('/session?directory=C:\\Users\\me\\my-project\\src'))
       .resolves.toBe('/session?directory=%2Fworkspace%2Fsrc');
   });
 
@@ -99,7 +99,7 @@ describe('createDirectoryQueryCanonicalizer', () => {
       realpath: async (value) => value,
       pathMapping: createPathMapping({
         platform: 'win32',
-        rules: [{ hostPrefix: 'C:\\Users\\me\\projem', remotePrefix: '/workspace', compareKey: 'c:\\users\\me\\projem' }],
+        rules: [{ hostPrefix: 'C:\\Users\\me\\my-project', remotePrefix: '/workspace', compareKey: 'c:\\users\\me\\my-project' }],
       }),
     });
 
@@ -139,11 +139,11 @@ describe('normalizeForwardedDirectoryHeaders with a path mapping', () => {
   it('translates decoded host directories to the remote spelling', () => {
     setActivePathMapping(createPathMapping({
       platform: 'win32',
-      rules: [{ hostPrefix: 'C:\\Users\\me\\projem', remotePrefix: '/workspace', compareKey: 'c:\\users\\me\\projem' }],
+      rules: [{ hostPrefix: 'C:\\Users\\me\\my-project', remotePrefix: '/workspace', compareKey: 'c:\\users\\me\\my-project' }],
     }));
 
     const headers = normalizeForwardedDirectoryHeaders({
-      'x-opencode-directory': encodeURIComponent('C:\\Users\\me\\projem\\src'),
+      'x-opencode-directory': encodeURIComponent('C:\\Users\\me\\my-project\\src'),
       'x-opencode-directory-encoding': 'uri',
     });
 
@@ -155,7 +155,7 @@ describe('normalizeForwardedDirectoryHeaders with a path mapping', () => {
   it('leaves values outside every mapping rule untouched', () => {
     setActivePathMapping(createPathMapping({
       platform: 'win32',
-      rules: [{ hostPrefix: 'C:\\Users\\me\\projem', remotePrefix: '/workspace', compareKey: 'c:\\users\\me\\projem' }],
+      rules: [{ hostPrefix: 'C:\\Users\\me\\my-project', remotePrefix: '/workspace', compareKey: 'c:\\users\\me\\my-project' }],
     }));
 
     const headers = normalizeForwardedDirectoryHeaders({

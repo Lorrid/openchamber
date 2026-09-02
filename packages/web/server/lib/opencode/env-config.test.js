@@ -104,21 +104,21 @@ describe('resolveOpenCodeEnvConfig path mapping', () => {
 
   it('parses valid OPENCODE_PATH_MAP pairs', () => {
     const result = resolveOpenCodeEnvConfig({
-      env: { OPENCODE_PATH_MAP: 'C:\\Users\\me\\projem=/workspace' },
+      env: { OPENCODE_PATH_MAP: 'C:\\Users\\me\\my-project=/workspace' },
       platform: 'win32',
     });
     expect(result.pathMappingRules).toEqual([
-      { hostPrefix: 'C:\\Users\\me\\projem', remotePrefix: '/workspace', compareKey: 'c:\\users\\me\\projem' },
+      { hostPrefix: 'C:\\Users\\me\\my-project', remotePrefix: '/workspace', compareKey: 'c:\\users\\me\\my-project' },
     ]);
   });
 
   it('parses POSIX host pairs on POSIX platforms', () => {
     const result = resolveOpenCodeEnvConfig({
-      env: { OPENCODE_PATH_MAP: '/home/me/projem=/workspace' },
+      env: { OPENCODE_PATH_MAP: '/home/me/my-project=/workspace' },
       platform: 'linux',
     });
     expect(result.pathMappingRules).toEqual([
-      { hostPrefix: '/home/me/projem', remotePrefix: '/workspace', compareKey: '/home/me/projem' },
+      { hostPrefix: '/home/me/my-project', remotePrefix: '/workspace', compareKey: '/home/me/my-project' },
     ]);
   });
 

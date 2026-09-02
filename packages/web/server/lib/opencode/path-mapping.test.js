@@ -17,13 +17,13 @@ describe('parsePathMappingRules', () => {
   });
 
   it('parses a single host=remote pair on Windows hosts', () => {
-    const { rules } = parsePathMappingRules('C:\\Users\\me\\projem=/workspace', {
+    const { rules } = parsePathMappingRules('C:\\Users\\me\\my-project=/workspace', {
       platform: 'win32',
       logger: silentLogger,
     });
 
     expect(rules).toEqual([
-      { hostPrefix: 'C:\\Users\\me\\projem', remotePrefix: '/workspace', compareKey: 'c:\\users\\me\\projem' },
+      { hostPrefix: 'C:\\Users\\me\\my-project', remotePrefix: '/workspace', compareKey: 'c:\\users\\me\\my-project' },
     ]);
   });
 
@@ -37,12 +37,12 @@ describe('parsePathMappingRules', () => {
   });
 
   it('accepts POSIX host paths on POSIX platforms', () => {
-    const { rules } = parsePathMappingRules('/home/me/projem=/workspace', {
+    const { rules } = parsePathMappingRules('/home/me/my-project=/workspace', {
       platform: 'linux',
       logger: silentLogger,
     });
 
-    expect(rules).toEqual([{ hostPrefix: '/home/me/projem', remotePrefix: '/workspace', compareKey: '/home/me/projem' }]);
+    expect(rules).toEqual([{ hostPrefix: '/home/me/my-project', remotePrefix: '/workspace', compareKey: '/home/me/my-project' }]);
   });
 
   it('keeps valid pairs and warns about invalid ones', () => {
@@ -67,7 +67,7 @@ describe('parsePathMappingRules', () => {
   });
 
   it('rejects a host path that is absolute only on the other platform', () => {
-    const { rules } = parsePathMappingRules('/home/me/projem=/workspace', {
+    const { rules } = parsePathMappingRules('/home/me/my-project=/workspace', {
       platform: 'win32',
       logger: silentLogger,
     });
@@ -76,12 +76,12 @@ describe('parsePathMappingRules', () => {
   });
 
   it('strips trailing separators so prefix matching stays consistent', () => {
-    const { rules } = parsePathMappingRules('C:\\Users\\me\\projem\\=/workspace/', {
+    const { rules } = parsePathMappingRules('C:\\Users\\me\\my-project\\=/workspace/', {
       platform: 'win32',
       logger: silentLogger,
     });
 
-    expect(rules[0]).toMatchObject({ hostPrefix: 'C:\\Users\\me\\projem', remotePrefix: '/workspace' });
+    expect(rules[0]).toMatchObject({ hostPrefix: 'C:\\Users\\me\\my-project', remotePrefix: '/workspace' });
   });
 
   it('overrides duplicate host prefixes with a warning', () => {
@@ -100,7 +100,7 @@ describe('parsePathMappingRules', () => {
 describe('createPathMapping.toRemote', () => {
   const windowsMapping = createPathMapping({
     platform: 'win32',
-    rules: [{ hostPrefix: 'C:\\Users\\me\\projem', remotePrefix: '/workspace', compareKey: 'c:\\users\\me\\projem' }],
+    rules: [{ hostPrefix: 'C:\\Users\\me\\my-project', remotePrefix: '/workspace', compareKey: 'c:\\users\\me\\my-project' }],
   });
 
   it('is identity when no rules exist', () => {
@@ -112,20 +112,20 @@ describe('createPathMapping.toRemote', () => {
   });
 
   it('maps the exact prefix', () => {
-    expect(windowsMapping.toRemote('C:\\Users\\me\\projem')).toBe('/workspace');
+    expect(windowsMapping.toRemote('C:\\Users\\me\\my-project')).toBe('/workspace');
   });
 
   it('maps nested paths and normalizes separators', () => {
-    expect(windowsMapping.toRemote('C:\\Users\\me\\projem\\src\\app.ts')).toBe('/workspace/src/app.ts');
-    expect(windowsMapping.toRemote('C:/Users/me/projem/src/app.ts')).toBe('/workspace/src/app.ts');
+    expect(windowsMapping.toRemote('C:\\Users\\me\\my-project\\src\\app.ts')).toBe('/workspace/src/app.ts');
+    expect(windowsMapping.toRemote('C:/Users/me/my-project/src/app.ts')).toBe('/workspace/src/app.ts');
   });
 
   it('matches prefixes case-insensitively on Windows hosts', () => {
-    expect(windowsMapping.toRemote('c:\\users\\me\\PROJEM\\src')).toBe('/workspace/src');
+    expect(windowsMapping.toRemote('c:\\users\\me\\MY-PROJECT\\src')).toBe('/workspace/src');
   });
 
   it('does not claim paths that merely share a prefix string', () => {
-    expect(windowsMapping.toRemote('C:\\Users\\me\\projemExtra\\file.ts')).toBe('C:\\Users\\me\\projemExtra\\file.ts');
+    expect(windowsMapping.toRemote('C:\\Users\\me\\my-projectExtra\\file.ts')).toBe('C:\\Users\\me\\my-projectExtra\\file.ts');
   });
 
   it('passes through unmapped host paths untouched', () => {
@@ -133,33 +133,33 @@ describe('createPathMapping.toRemote', () => {
   });
 
   it('fails closed on parent-directory segments inside the mapped suffix', () => {
-    expect(windowsMapping.toRemote('C:\\Users\\me\\projem\\..\\secret')).toBe('C:\\Users\\me\\projem\\..\\secret');
-    expect(windowsMapping.toRemote('C:\\Users\\me\\projem\\src\\..\\app.ts')).toBe('C:\\Users\\me\\projem\\src\\..\\app.ts');
+    expect(windowsMapping.toRemote('C:\\Users\\me\\my-project\\..\\secret')).toBe('C:\\Users\\me\\my-project\\..\\secret');
+    expect(windowsMapping.toRemote('C:\\Users\\me\\my-project\\src\\..\\app.ts')).toBe('C:\\Users\\me\\my-project\\src\\..\\app.ts');
   });
 
   it('is case-sensitive on POSIX hosts', () => {
     const mapping = createPathMapping({
       platform: 'linux',
-      rules: [{ hostPrefix: '/home/me/projem', remotePrefix: '/workspace', compareKey: '/home/me/projem' }],
+      rules: [{ hostPrefix: '/home/me/my-project', remotePrefix: '/workspace', compareKey: '/home/me/my-project' }],
     });
 
     expect(mapping.toRemote('/home/me/Projem/src')).toBe('/home/me/Projem/src');
-    expect(mapping.toRemote('/home/me/projem/src')).toBe('/workspace/src');
+    expect(mapping.toRemote('/home/me/my-project/src')).toBe('/workspace/src');
   });
 });
 
 describe('createPathMapping.toHost', () => {
   const windowsMapping = createPathMapping({
     platform: 'win32',
-    rules: [{ hostPrefix: 'C:\\Users\\me\\projem', remotePrefix: '/workspace', compareKey: 'c:\\users\\me\\projem' }],
+    rules: [{ hostPrefix: 'C:\\Users\\me\\my-project', remotePrefix: '/workspace', compareKey: 'c:\\users\\me\\my-project' }],
   });
 
   it('maps the exact remote prefix back to the host path', () => {
-    expect(windowsMapping.toHost('/workspace')).toBe('C:\\Users\\me\\projem');
+    expect(windowsMapping.toHost('/workspace')).toBe('C:\\Users\\me\\my-project');
   });
 
   it('maps nested remote paths back with host separators', () => {
-    expect(windowsMapping.toHost('/workspace/src/app.ts')).toBe('C:\\Users\\me\\projem\\src\\app.ts');
+    expect(windowsMapping.toHost('/workspace/src/app.ts')).toBe('C:\\Users\\me\\my-project\\src\\app.ts');
   });
 
   it('does not claim remote paths that merely share a prefix string', () => {
@@ -180,27 +180,27 @@ describe('createPathMapping round trips', () => {
     const mapping = createPathMapping({
       platform: 'win32',
       rules: [
-        { hostPrefix: 'C:\\projem', remotePrefix: '/workspace', compareKey: 'c:\\projem' },
-        { hostPrefix: 'C:\\projem\\deep', remotePrefix: '/deep', compareKey: 'c:\\projem\\deep' },
+        { hostPrefix: 'C:\\my-project', remotePrefix: '/workspace', compareKey: 'c:\\my-project' },
+        { hostPrefix: 'C:\\my-project\\deep', remotePrefix: '/deep', compareKey: 'c:\\my-project\\deep' },
       ],
     });
 
-    expect(mapping.toHost(mapping.toRemote('C:\\projem\\deep\\src\\a.ts'))).toBe('C:\\projem\\deep\\src\\a.ts');
+    expect(mapping.toHost(mapping.toRemote('C:\\my-project\\deep\\src\\a.ts'))).toBe('C:\\my-project\\deep\\src\\a.ts');
     expect(mapping.toRemote(mapping.toHost('/deep/src/a.ts'))).toBe('/deep/src/a.ts');
-    expect(mapping.toHost(mapping.toRemote('C:\\projem\\src\\a.ts'))).toBe('C:\\projem\\src\\a.ts');
+    expect(mapping.toHost(mapping.toRemote('C:\\my-project\\src\\a.ts'))).toBe('C:\\my-project\\src\\a.ts');
   });
 
   it('prefers the longest matching prefix', () => {
     const mapping = createPathMapping({
       platform: 'win32',
       rules: [
-        { hostPrefix: 'C:\\projem', remotePrefix: '/workspace', compareKey: 'c:\\projem' },
-        { hostPrefix: 'C:\\projem\\deep', remotePrefix: '/deep', compareKey: 'c:\\projem\\deep' },
+        { hostPrefix: 'C:\\my-project', remotePrefix: '/workspace', compareKey: 'c:\\my-project' },
+        { hostPrefix: 'C:\\my-project\\deep', remotePrefix: '/deep', compareKey: 'c:\\my-project\\deep' },
       ],
     });
 
-    expect(mapping.toRemote('C:\\projem\\deep\\a.ts')).toBe('/deep/a.ts');
-    expect(mapping.toRemote('C:\\projem\\a.ts')).toBe('/workspace/a.ts');
+    expect(mapping.toRemote('C:\\my-project\\deep\\a.ts')).toBe('/deep/a.ts');
+    expect(mapping.toRemote('C:\\my-project\\a.ts')).toBe('/workspace/a.ts');
   });
 });
 
@@ -219,10 +219,10 @@ describe('process-wide mapping', () => {
   it('caches the mapping for a stable environment value', () => {
     setActivePathMapping(createPathMapping({
       platform: 'linux',
-      rules: [{ hostPrefix: '/home/me/projem', remotePrefix: '/workspace', compareKey: '/home/me/projem' }],
+      rules: [{ hostPrefix: '/home/me/my-project', remotePrefix: '/workspace', compareKey: '/home/me/my-project' }],
     }));
 
     expect(getPathMapping().enabled).toBe(true);
-    expect(getPathMapping().toRemote('/home/me/projem/src')).toBe('/workspace/src');
+    expect(getPathMapping().toRemote('/home/me/my-project/src')).toBe('/workspace/src');
   });
 });

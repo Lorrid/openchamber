@@ -3,13 +3,13 @@
  *
  * When OpenChamber talks to an OpenCode server running in another filesystem
  * namespace (for example a Docker container), a project directory exists under
- * a different absolute path on each side: `C:\Users\me\projem` on the Windows
+ * a different absolute path on each side: `C:\Users\me\my-project` on the Windows
  * host is mounted as `/workspace` inside the container. `OPENCODE_PATH_MAP`
  * declares that correspondence so requests sent to OpenCode carry remote
  * paths while values shown to the user keep host paths.
  *
  * Format: semicolon-separated `HOST=REMOTE` pairs.
- *   OPENCODE_PATH_MAP="C:\Users\me\projem=/workspace;D:\code=/srv/code"
+ *   OPENCODE_PATH_MAP="C:\Users\me\my-project=/workspace;D:\code=/srv/code"
  *
  * `;` separates pairs because Windows host paths contain `:`; `=` pairs the
  * sides because Windows paths never contain `=`. Host prefixes must be
