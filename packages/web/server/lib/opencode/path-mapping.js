@@ -101,6 +101,14 @@ export const parsePathMappingRules = (raw, options = {}) => {
 };
 
 /**
+ * True when `suffix` carries a parent-directory segment. Mapped suffixes are
+ * mechanical prefix rewrites; a `..` inside one would let a hint escape the
+ * intended remote/host root after translation, so those values fail closed
+ * (returned untranslated) instead of being rewritten.
+ */
+const hasParentSegment = (suffix) => suffix.split(/[\\/]/).includes('..');
+
+/**
  * Creates the bidirectional translator used across the OpenCode integration.
  * `toRemote` maps a host path to its remote counterpart; `toHost` maps a
  * remote path back. Values outside every declared prefix pass through
@@ -149,6 +157,7 @@ export const createPathMapping = ({ rules, platform = process.platform } = {}) =
       if (!rule) return value;
       const normalized = String(value).replaceAll('\\', '/');
       const suffix = normalized.slice(normalizeHostPath(rule.hostPrefix).length);
+      if (hasParentSegment(suffix)) return value;
       return `${rule.remotePrefix}${suffix}`;
     },
 
@@ -157,6 +166,7 @@ export const createPathMapping = ({ rules, platform = process.platform } = {}) =
       if (!rule) return value;
       const text = String(value);
       const suffix = text.slice(rule.remotePrefix.length);
+      if (hasParentSegment(suffix)) return value;
       const restored = platform === WINDOWS
         ? suffix.replaceAll('/', '\\')
         : suffix;

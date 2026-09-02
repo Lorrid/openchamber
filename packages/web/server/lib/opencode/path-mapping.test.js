@@ -132,6 +132,11 @@ describe('createPathMapping.toRemote', () => {
     expect(windowsMapping.toRemote('C:\\other\\project')).toBe('C:\\other\\project');
   });
 
+  it('fails closed on parent-directory segments inside the mapped suffix', () => {
+    expect(windowsMapping.toRemote('C:\\Users\\me\\projem\\..\\secret')).toBe('C:\\Users\\me\\projem\\..\\secret');
+    expect(windowsMapping.toRemote('C:\\Users\\me\\projem\\src\\..\\app.ts')).toBe('C:\\Users\\me\\projem\\src\\..\\app.ts');
+  });
+
   it('is case-sensitive on POSIX hosts', () => {
     const mapping = createPathMapping({
       platform: 'linux',
@@ -163,6 +168,10 @@ describe('createPathMapping.toHost', () => {
 
   it('passes through unmapped remote paths untouched', () => {
     expect(windowsMapping.toHost('/srv/other/file.ts')).toBe('/srv/other/file.ts');
+  });
+
+  it('fails closed on parent-directory segments inside the mapped remote suffix', () => {
+    expect(windowsMapping.toHost('/workspace/../secret')).toBe('/workspace/../secret');
   });
 });
 
