@@ -42,7 +42,6 @@ import { lazyWithChunkRecovery } from '@/lib/chunkLoadRecovery';
 import type { ToolPopupContent } from './message/types';
 import { QueuedMessageChips } from './QueuedMessageChips';
 import { AutoReviewBanner } from './AutoReviewBanner';
-import { NewSessionDirtyDirectoryNotice } from './NewSessionDirtyDirectoryNotice';
 import type { FileMentionHandle } from './FileMentionAutocomplete';
 import type { CommandAutocompleteHandle, CommandInfo } from './CommandAutocomplete';
 import type { SkillAutocompleteHandle } from './SkillAutocomplete';
@@ -2585,6 +2584,7 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({
         selectedDraftDirectory,
         selectedDraftBranchLabel,
         selectedDraftBranchIsKnown,
+        selectedDraftDirectoryHasUncommittedChanges,
         projectRootBranchOption,
         worktreeBranchOptions,
         draftBranchItems,
@@ -2790,7 +2790,6 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({
                     onSendMessage={handleQueuedMessageSend}
                 />
                 <AutoReviewBanner />
-                <NewSessionDirtyDirectoryNotice />
                 {hasDrafts ? (
                     <ComposerContextChips
                         draftTarget={inlineDraftTarget}
@@ -2853,6 +2852,7 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({
                             selectedDirectory={selectedDraftDirectory}
                             selectedBranchLabel={selectedDraftBranchLabel}
                             selectedBranchIsKnown={selectedDraftBranchIsKnown}
+                            hasUncommittedChanges={selectedDraftDirectoryHasUncommittedChanges}
                             projectRootBranchOption={projectRootBranchOption}
                             worktreeBranchOptions={worktreeBranchOptions}
                             branchItems={draftBranchItems}
@@ -2867,6 +2867,7 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({
                     <MobileDraftTargetTriggers
                         selectedProject={selectedDraftProject}
                         selectedBranchLabel={selectedDraftBranchLabel}
+                        hasUncommittedChanges={selectedDraftDirectoryHasUncommittedChanges}
                         showBranchSelector={shouldShowDraftBranchSelector}
                         theme={currentTheme}
                         onOpenPicker={setMobileDraftPicker}
@@ -3278,6 +3279,7 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({
                 selectedDirectory={selectedDraftDirectory}
                 selectedBranchLabel={selectedDraftBranchLabel}
                 selectedBranchIsKnown={selectedDraftBranchIsKnown}
+                hasUncommittedChanges={selectedDraftDirectoryHasUncommittedChanges}
                 projectRootBranchOption={projectRootBranchOption}
                 worktreeBranchOptions={worktreeBranchOptions}
                 branchItems={draftBranchItems}
