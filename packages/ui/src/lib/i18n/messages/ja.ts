@@ -794,6 +794,8 @@ export const dict: Record<I18nKey, string> = {
   'gitView.commit.title': 'コミット',
   'gitView.common.cancel': 'キャンセル',
   'gitView.branch.switchBlockedNotice': '未コミットの変更があります — 切り替え前にコミットまたは破棄の手順が入ります。',
+  'gitView.branch.unpushedSingle': '未プッシュのコミットが1件',
+  'gitView.branch.unpushedPlural': '未プッシュのコミットが{count}件',
   'gitView.branch.recentBranches': '最近のブランチ',
   'gitView.dirtySwitch.title': '未コミットの変更',
   'gitView.dirtySwitch.descriptionSingle': '変更したファイルを失わないよう、{branch}への切り替えを一時停止しました。先にコミットするか破棄してください。',

@@ -796,6 +796,8 @@ export const dict = {
   'gitView.commit.title': 'Commit',
   'gitView.common.cancel': 'Cancel',
   'gitView.branch.switchBlockedNotice': 'Uncommitted changes — switching opens a commit-or-revert step first.',
+  'gitView.branch.unpushedSingle': '1 commit not pushed',
+  'gitView.branch.unpushedPlural': '{count} commits not pushed',
   'gitView.branch.recentBranches': 'Recent branches',
   'gitView.dirtySwitch.title': 'Uncommitted changes',
   'gitView.dirtySwitch.descriptionSingle': 'Switching to {branch} is paused so your changed file is not lost. Commit it, or revert it first.',

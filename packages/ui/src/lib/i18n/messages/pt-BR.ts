@@ -797,6 +797,8 @@ export const dict: Record<I18nKey, string> = {
   "gitView.commit.title": "Commit",
   "gitView.common.cancel": "Cancelar",
   'gitView.branch.switchBlockedNotice': 'Alterações sem commit — antes de trocar, será oferecido commit ou reversão.',
+  'gitView.branch.unpushedSingle': '1 commit sem push',
+  'gitView.branch.unpushedPlural': '{count} commits sem push',
   'gitView.branch.recentBranches': 'Branches recentes',
   'gitView.dirtySwitch.title': 'Alterações sem commit',
   'gitView.dirtySwitch.descriptionSingle': 'A troca para {branch} foi pausada para não perder seu arquivo alterado. Faça commit ou reverta primeiro.',

@@ -700,6 +700,8 @@ export const dict = {
   'gitView.commit.title': 'Commit',
   'gitView.common.cancel': 'Abbrechen',
   'gitView.branch.switchBlockedNotice': 'Nicht committete Änderungen — vor dem Wechsel folgt ein Commit-oder-Verwerfen-Schritt.',
+  'gitView.branch.unpushedSingle': '1 Commit nicht gepusht',
+  'gitView.branch.unpushedPlural': '{count} Commits nicht gepusht',
   'gitView.branch.recentBranches': 'Kürzliche Branches',
   'gitView.dirtySwitch.title': 'Nicht committete Änderungen',
   'gitView.dirtySwitch.descriptionSingle': 'Der Wechsel zu {branch} ist angehalten, damit die geänderte Datei nicht verloren geht. Zuerst committen oder verwerfen.',

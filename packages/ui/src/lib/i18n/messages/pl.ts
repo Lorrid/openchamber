@@ -2109,6 +2109,8 @@ export const dict: Record<I18nKey, string> = {
   'gitView.commit.title': 'Commit',
   'gitView.common.cancel': 'Anuluj',
   'gitView.branch.switchBlockedNotice': 'Niezacommitowane zmiany — przed przełączeniem pojawi się krok commit lub cofnięcie.',
+  'gitView.branch.unpushedSingle': '1 niewypchnięty commit',
+  'gitView.branch.unpushedPlural': 'Niewypchnięte commity: {count}',
   'gitView.branch.recentBranches': 'Ostatnie gałęzie',
   'gitView.dirtySwitch.title': 'Niezacommitowane zmiany',
   'gitView.dirtySwitch.descriptionSingle': 'Przełączenie na {branch} wstrzymano, aby nie stracić zmienionego pliku. Najpierw go zacommituj lub cofnij.',

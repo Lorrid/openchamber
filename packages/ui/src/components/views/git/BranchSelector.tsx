@@ -199,6 +199,9 @@ export const BranchSelector: React.FC<BranchSelectorProps> = ({
     const recentLocalBranches = recentBranches.filter((branch) => localBranches.includes(branch));
     const renderBranch = (branch: string, remote = false) => {
       const ahead = unpushedCounts[branch] ?? (branch === currentBranch ? currentBranchAhead : 0);
+      const aheadLabel = ahead === 1
+        ? t('gitView.branch.unpushedSingle')
+        : t('gitView.branch.unpushedPlural', { count: ahead });
       return (
         <button
           key={`${remote ? 'remote' : 'local'}-${branch}`}
@@ -208,9 +211,13 @@ export const BranchSelector: React.FC<BranchSelectorProps> = ({
         >
           <span className="min-w-0 flex-1 truncate">{branch}</span>
           {ahead > 0 ? (
-            <span className="inline-flex shrink-0 items-center gap-1 typography-micro text-muted-foreground">
-              <Icon name="arrow-up" className="size-3" />
-              <span>{ahead}</span>
+            <span
+              className="inline-flex shrink-0 items-center gap-1 typography-micro text-muted-foreground"
+              title={aheadLabel}
+              aria-label={aheadLabel}
+            >
+              <Icon name="arrow-up" className="size-3" aria-hidden="true" />
+              <span aria-hidden="true">{ahead}</span>
             </span>
           ) : null}
           {currentBranch === branch ? <Icon name="check" className="size-4 shrink-0 text-primary" /> : null}
@@ -418,10 +425,17 @@ export const BranchSelector: React.FC<BranchSelectorProps> = ({
                         <span className="typography-ui-label text-foreground truncate">{branch}</span>
                         {(() => {
                           const ahead = unpushedCounts[branch] ?? (branch === currentBranch ? currentBranchAhead : 0);
+                          const aheadLabel = ahead === 1
+                            ? t('gitView.branch.unpushedSingle')
+                            : t('gitView.branch.unpushedPlural', { count: ahead });
                           return ahead > 0 ? (
-                          <span className="inline-flex shrink-0 items-center gap-1 rounded-full px-1.5 py-0.5 typography-micro text-muted-foreground">
-                            <Icon name="arrow-up" className="size-3" />
-                            <span>{ahead}</span>
+                          <span
+                            className="inline-flex shrink-0 items-center gap-1 rounded-full px-1.5 py-0.5 typography-micro text-muted-foreground"
+                            title={aheadLabel}
+                            aria-label={aheadLabel}
+                          >
+                            <Icon name="arrow-up" className="size-3" aria-hidden="true" />
+                            <span aria-hidden="true">{ahead}</span>
                           </span>
                           ) : null;
                         })()}

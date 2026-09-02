@@ -778,6 +778,8 @@ export const dict = {
   'gitView.commit.title': 'Commit',
   'gitView.common.cancel': 'İptal',
   'gitView.branch.switchBlockedNotice': 'Commit edilmemiş değişiklikler var — geçişten önce commit veya geri alma adımı açılır.',
+  'gitView.branch.unpushedSingle': '1 commit push edilmedi',
+  'gitView.branch.unpushedPlural': '{count} commit push edilmedi',
   'gitView.branch.recentBranches': 'Son kullanılan dallar',
   'gitView.dirtySwitch.title': 'Commit edilmemiş değişiklikler',
   'gitView.dirtySwitch.descriptionSingle': 'Değiştirilen dosyanız kaybolmasın diye {branch} dalına geçiş duraklatıldı. Önce commit edin veya geri alın.',

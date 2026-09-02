@@ -797,6 +797,8 @@ export const dict: Record<I18nKey, string> = {
   "gitView.commit.title": "Коміт",
   "gitView.common.cancel": "Скасувати",
   'gitView.branch.switchBlockedNotice': 'Є незакомічені зміни — перед перемиканням спершу буде крок «закомітити або скасувати».',
+  'gitView.branch.unpushedSingle': '1 незапушений коміт',
+  'gitView.branch.unpushedPlural': 'Незапушені коміти: {count}',
   'gitView.branch.recentBranches': 'Нещодавні гілки',
   'gitView.dirtySwitch.title': 'Незакомічені зміни',
   'gitView.dirtySwitch.descriptionSingle': 'Перемикання на {branch} призупинено, щоб не втратити змінений файл. Спершу закоміть його або скасуй зміни.',
