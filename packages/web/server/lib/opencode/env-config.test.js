@@ -104,7 +104,18 @@ describe('resolveOpenCodeEnvConfig path mapping', () => {
 
   it('parses valid OPENCODE_PATH_MAP pairs', () => {
     const result = resolveOpenCodeEnvConfig({
+      env: { OPENCODE_PATH_MAP: 'C:\\Users\\me\\projem=/workspace' },
+      platform: 'win32',
+    });
+    expect(result.pathMappingRules).toEqual([
+      { hostPrefix: 'C:\\Users\\me\\projem', remotePrefix: '/workspace', compareKey: 'c:\\users\\me\\projem' },
+    ]);
+  });
+
+  it('parses POSIX host pairs on POSIX platforms', () => {
+    const result = resolveOpenCodeEnvConfig({
       env: { OPENCODE_PATH_MAP: '/home/me/projem=/workspace' },
+      platform: 'linux',
     });
     expect(result.pathMappingRules).toEqual([
       { hostPrefix: '/home/me/projem', remotePrefix: '/workspace', compareKey: '/home/me/projem' },
@@ -114,7 +125,8 @@ describe('resolveOpenCodeEnvConfig path mapping', () => {
   it('warns about invalid pairs without dropping valid ones', () => {
     const logger = { warn: vi.fn(), error: vi.fn() };
     const result = resolveOpenCodeEnvConfig({
-      env: { OPENCODE_PATH_MAP: '/home/me/valid=/workspace;relative=/workspace' },
+      env: { OPENCODE_PATH_MAP: 'C:\\valid=/workspace;relative=/workspace' },
+      platform: 'win32',
       logger,
     });
     expect(result.pathMappingRules).toHaveLength(1);

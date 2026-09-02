@@ -26,6 +26,7 @@ export const isValidOpenCodeHostname = (value) => {
 export const resolveOpenCodeEnvConfig = (options = {}) => {
   const env = options.env && typeof options.env === 'object' ? options.env : {};
   const logger = options.logger ?? console;
+  const platform = options.platform ?? process.platform;
 
   const configuredOpenCodePort = (() => {
     const raw =
@@ -101,7 +102,7 @@ export const resolveOpenCodeEnvConfig = (options = {}) => {
   // the runtime translator in path-mapping.js reads the same variable lazily.
   const pathMappingRules = parsePathMappingRules(
     typeof env.OPENCODE_PATH_MAP === 'string' ? env.OPENCODE_PATH_MAP : '',
-    { logger },
+    { logger, platform },
   ).rules;
 
   return {
