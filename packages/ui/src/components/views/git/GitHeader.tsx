@@ -26,6 +26,7 @@ import { useI18n } from '@/lib/i18n';
 type SyncAction = 'fetch' | 'pull' | 'push' | 'sync' | null;
 
 interface GitHeaderProps {
+  directory: string;
   status: GitStatus | null;
   localBranches: string[];
   remoteBranches: string[];
@@ -240,6 +241,7 @@ const UpstreamStatusPill: React.FC<UpstreamStatusPillProps> = ({
 };
 
 export const GitHeader: React.FC<GitHeaderProps> = ({
+  directory,
   status,
   localBranches,
   remoteBranches,
@@ -432,11 +434,11 @@ export const GitHeader: React.FC<GitHeaderProps> = ({
             />
           ) : (
             <BranchSelector
+              directory={directory}
               currentBranch={status.current}
               localBranches={localBranches}
               remoteBranches={remoteBranches}
               branchInfo={branchInfo}
-              unpushedCommitCount={status.ahead ?? 0}
               onCheckout={onCheckoutBranch}
               onCreate={onCreateBranch}
               remotes={remotes}
