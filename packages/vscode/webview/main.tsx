@@ -384,6 +384,14 @@ const handleLocalApiRequest = async (input: RequestInfo | URL, url: URL, init: R
     return unsupportedWebRouteResponse('Remote tunnel settings');
   }
 
+  // Archiving a batch of sessions server-side needs an OpenChamber server
+  // process; the extension host has none. Answering explicitly keeps the
+  // shared UI on its per-session archive path instead of leaving the request
+  // to the generic proxy.
+  if (normalizedPathname === '/api/openchamber/sessions/archive') {
+    return unsupportedWebRouteResponse('Server-side session archiving');
+  }
+
   if (/^\/api\/projects\/[^/]+\/scheduled-tasks(?:\/[^/]+)?$/.test(normalizedPathname)) {
     return unsupportedWebRouteResponse('Scheduled tasks');
   }
@@ -1859,7 +1867,7 @@ window.addEventListener('openchamber:vscode-notification-event', (event) => {
 // Listen for settings sync command from extension (broadcast to all VS Code webviews)
 onCommand('settingsSynced', () => {
   import('@openchamber/ui/lib/persistence').then(({ syncDesktopSettings }) => {
-    void syncDesktopSettings();
+    void syncDesktopSettings({ adoptTheme: false });
   });
 });
 
