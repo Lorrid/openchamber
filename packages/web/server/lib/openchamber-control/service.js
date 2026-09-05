@@ -530,6 +530,14 @@ export const createOpenChamberControlService = (dependencies) => {
           let sessions = Array.isArray(response?.data) ? response.data : [];
           if (input.all !== true) sessions = sessions.filter((session) => !session?.time?.archived);
           sessions = sessions.slice(0, limit);
+          // OpenCode reports remote-side directories; restore the host view so
+          // control clients see the same paths as the session-list proxy.
+          sessions = sessions.map((session) => {
+            const sessionDirectory = asNonEmptyString(session?.directory);
+            return sessionDirectory
+              ? { ...session, directory: getPathMapping().toHost(sessionDirectory) }
+              : session;
+          });
           if (input.withStatus === true) {
             const cache = new Map();
             sessions = await Promise.all(sessions.map(async (session) => {

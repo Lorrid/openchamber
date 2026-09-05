@@ -40,9 +40,9 @@ export const createContextObligatoryRuntime = ({
   const inflight = new Set();
   let stopped = false;
 
-const openCodeFetch = async (fetchPath, { directory, method = 'GET', body, query } = {}) => {
-  const params = new URLSearchParams(query || {});
-  if (directory) params.set('directory', getPathMapping().toRemote(directory));
+  const openCodeFetch = async (fetchPath, { directory, method = 'GET', body, query } = {}) => {
+    const params = new URLSearchParams(query || {});
+    if (directory) params.set('directory', getPathMapping().toRemote(directory));
     const search = params.toString();
     const response = await fetch(`${buildOpenCodeUrl(fetchPath, '')}${search ? `?${search}` : ''}`, {
       method,

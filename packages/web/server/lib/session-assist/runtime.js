@@ -165,9 +165,9 @@ export const createSessionAssistRuntime = ({
     }
   };
 
-const openCodeFetch = async (path, { directory, method = 'GET', body } = {}) => {
-  const base = buildOpenCodeUrl(path, '');
-  const url = directory ? `${base}?directory=${encodeURIComponent(getPathMapping().toRemote(directory))}` : base;
+  const openCodeFetch = async (path, { directory, method = 'GET', body } = {}) => {
+    const base = buildOpenCodeUrl(path, '');
+    const url = directory ? `${base}?directory=${encodeURIComponent(getPathMapping().toRemote(directory))}` : base;
     const response = await fetch(url, {
       method,
       headers: {
