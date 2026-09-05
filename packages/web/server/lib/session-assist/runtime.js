@@ -10,6 +10,8 @@
 
 import fs from 'fs';
 import os from 'os';
+
+import { getPathMapping } from '../opencode/path-mapping.js';
 import path from 'path';
 
 const OPENCHAMBER_SETTINGS_FILE = path.join(
@@ -163,9 +165,9 @@ export const createSessionAssistRuntime = ({
     }
   };
 
-  const openCodeFetch = async (path, { directory, method = 'GET', body } = {}) => {
-    const base = buildOpenCodeUrl(path, '');
-    const url = directory ? `${base}?directory=${encodeURIComponent(directory)}` : base;
+const openCodeFetch = async (path, { directory, method = 'GET', body } = {}) => {
+  const base = buildOpenCodeUrl(path, '');
+  const url = directory ? `${base}?directory=${encodeURIComponent(getPathMapping().toRemote(directory))}` : base;
     const response = await fetch(url, {
       method,
       headers: {

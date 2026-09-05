@@ -1,3 +1,5 @@
+import { getPathMapping } from '../opencode/path-mapping.js';
+
 const FETCH_TIMEOUT_MS = 15_000;
 const MESSAGE_FETCH_LIMIT = 20;
 
@@ -38,9 +40,9 @@ export const createContextObligatoryRuntime = ({
   const inflight = new Set();
   let stopped = false;
 
-  const openCodeFetch = async (fetchPath, { directory, method = 'GET', body, query } = {}) => {
-    const params = new URLSearchParams(query || {});
-    if (directory) params.set('directory', directory);
+const openCodeFetch = async (fetchPath, { directory, method = 'GET', body, query } = {}) => {
+  const params = new URLSearchParams(query || {});
+  if (directory) params.set('directory', getPathMapping().toRemote(directory));
     const search = params.toString();
     const response = await fetch(`${buildOpenCodeUrl(fetchPath, '')}${search ? `?${search}` : ''}`, {
       method,

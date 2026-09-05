@@ -185,7 +185,7 @@ Managed health failures are classified as `timeout`, `connection_refused`, `conn
 - `createPathMapping({ rules, platform? })`: bidirectional translator. `toRemote(hostPath)` maps host paths to the remote spelling; `toHost(remotePath)` restores the host view. Values outside every prefix pass through untouched, so callers never branch on `enabled`.
 - `getPathMapping()`: process-wide translator, built lazily from `OPENCODE_PATH_MAP`. Disabled (identity) when the variable is unset.
 - `setActivePathMapping(mapping)`: test/composition injection that overrides the process-wide mapping.
-- Contract: with a mapping configured, every directory hint sent to OpenCode (proxy headers, `directory` query params, SDK `directory` options, session-create bodies) carries the remote spelling, while session-list responses and everything user-facing keep host paths. OpenCode-origin paths that fall outside every rule pass through unchanged.
+- Contract: with a mapping configured, every OpenCode-bound directory hint carries the remote spelling — proxy headers and `directory` query params, the openchamber-sessions dispatch, scheduled-task runs, session goals (create + runtime loop), the message-queue flush, session-assist, context-obligatory, agent-memory, permission auto-accept, markdown image grants, the directory event WS bridge, MCP OAuth callbacks, post-readiness directory warmup, and openchamber-control SDK calls — while session-list responses and everything user-facing keep host paths. OpenCode-origin paths that fall outside every rule pass through unchanged.
 
 ## Public exports (hmr-state-runtime.js)
 - `createHmrStateRuntime(dependencies)`: creates runtime for HMR state container initialization and runtime<->HMR state synchronization.
