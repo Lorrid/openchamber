@@ -3352,4 +3352,5 @@ export const dict = {
   'dockerInstances.create.field.workspaceRequired': 'Bağlanacak klasörün mutlak yolunu yazın.',
   'dockerInstances.create.field.workspaceInvalid': 'Yol mutlak olmalı (örneğin C:\projects\demo veya /srv/demo).',
 
-  'dockerInstances.create.actions.pull': '{image} indir',};
+  'dockerInstances.create.actions.pull': '{image} indir',
+  'dockerInstances.header.activeLabel': 'Docker: {name}',};

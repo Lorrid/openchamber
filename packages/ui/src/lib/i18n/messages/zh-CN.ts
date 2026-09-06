@@ -3355,4 +3355,5 @@ export const dict: Record<I18nKey, string> = {
   'dockerInstances.create.field.workspaceRequired': '请输入要挂载文件夹的绝对路径。',
   'dockerInstances.create.field.workspaceInvalid': '路径必须是绝对路径（例如 C:\projects\demo 或 /srv/demo）。',
 
-  'dockerInstances.create.actions.pull': '拉取 {image}',};
+  'dockerInstances.create.actions.pull': '拉取 {image}',
+  'dockerInstances.header.activeLabel': 'Docker：{name}',};

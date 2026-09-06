@@ -3355,4 +3355,5 @@ export const dict: Record<I18nKey, string> = {
   'dockerInstances.create.field.workspaceRequired': 'Introduce la ruta absoluta de la carpeta a montar.',
   'dockerInstances.create.field.workspaceInvalid': 'La ruta debe ser absoluta (por ejemplo C:\projects\demo o /srv/demo).',
 
-  'dockerInstances.create.actions.pull': 'Descargar {image}',};
+  'dockerInstances.create.actions.pull': 'Descargar {image}',
+  'dockerInstances.header.activeLabel': 'Docker: {name}',};

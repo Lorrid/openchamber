@@ -3355,4 +3355,5 @@ export const dict: Record<I18nKey, string> = {
   'dockerInstances.create.field.workspaceRequired': 'Вкажіть абсолютний шлях до папки для монтування.',
   'dockerInstances.create.field.workspaceInvalid': 'Шлях має бути абсолютним (наприклад C:\projects\demo або /srv/demo).',
 
-  'dockerInstances.create.actions.pull': 'Завантажити {image}',};
+  'dockerInstances.create.actions.pull': 'Завантажити {image}',
+  'dockerInstances.header.activeLabel': 'Docker: {name}',};

@@ -222,3 +222,34 @@ export const setActivePathMapping = (mapping) => {
 export const setActiveInstancePathMapping = (mapping) => {
   instancePathMapping = mapping ?? null;
 };
+
+/**
+ * Mapping for an active Docker-backed instance: identical to
+ * `createPathMapping` for paths under the declared rules, but unmapped values
+ * no longer pass through to the container. A managed container only
+ * meaningfully contains its workspace, so POSIX-absolute values (already
+ * remote) pass through and everything else — typically OpenChamber's default
+ * host project directory — lands at the workspace root. Without this, an
+ * unmapped host path reaches the Linux container as a relative filename and
+ * OpenCode fails with `realPath(/workspace/C:\...)`.
+ *
+ * `toHost` keeps the base contract: values under the workspace prefix map
+ * back to the host spelling; everything else passes through.
+ */
+export const createInstancePathMapping = ({ rules, fallbackRemote, platform }) => {
+  const base = createPathMapping({ rules, platform });
+  const workspaceRoot = fallbackRemote ?? '/workspace';
+  return {
+    ...base,
+    toRemote(value) {
+      const mapped = base.toRemote(value);
+      if (mapped !== value) {
+        return mapped;
+      }
+      if (String(value ?? '').startsWith('/')) {
+        return value;
+      }
+      return workspaceRoot;
+    },
+  };
+};

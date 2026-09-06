@@ -3354,4 +3354,5 @@ export const dict: Record<I18nKey, string> = {
   'dockerInstances.create.field.workspaceRequired': '請輸入要掛載資料夾的絕對路徑。',
   'dockerInstances.create.field.workspaceInvalid': '路徑必須是絕對路徑（例如 C:\projects\demo 或 /srv/demo）。',
 
-  'dockerInstances.create.actions.pull': '拉取 {image}',};
+  'dockerInstances.create.actions.pull': '拉取 {image}',
+  'dockerInstances.header.activeLabel': 'Docker：{name}',};

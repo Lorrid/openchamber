@@ -157,7 +157,7 @@ export const pullDockerInstanceImage = async (imageName?: string): Promise<void>
 };
 
 /** Fired after the active upstream changed so listeners can refresh state. */
-const DOCKER_UPSTREAM_CHANGED_EVENT = 'openchamber:docker-upstream-changed';
+export const DOCKER_UPSTREAM_CHANGED_EVENT = 'openchamber:docker-upstream-changed';
 
 export const notifyUpstreamChanged = () => {
   globalThis.dispatchEvent?.(new CustomEvent(DOCKER_UPSTREAM_CHANGED_EVENT));

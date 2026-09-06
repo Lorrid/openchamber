@@ -3352,4 +3352,5 @@ export const dict = {
   'dockerInstances.create.field.workspaceRequired': 'Gib den absoluten Pfad des Ordners ein, der eingebunden werden soll.',
   'dockerInstances.create.field.workspaceInvalid': 'Der Pfad muss absolut sein (zum Beispiel C:\projects\demo oder /srv/demo).',
 
-  'dockerInstances.create.actions.pull': '{image} herunterladen',};
+  'dockerInstances.create.actions.pull': '{image} herunterladen',
+  'dockerInstances.header.activeLabel': 'Docker: {name}',};

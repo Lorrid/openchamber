@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it } from 'vitest';
 
-import { createPathMapping, getPathMapping, setActiveInstancePathMapping } from './path-mapping.js';
+import { createInstancePathMapping, createPathMapping, getPathMapping, setActiveInstancePathMapping } from './path-mapping.js';
 
 afterEach(() => {
   setActiveInstancePathMapping(null);
@@ -55,12 +55,52 @@ describe('instance-aware path mapping resolution', () => {
     }
   });
 
-  it('parent-directory hints still fail closed through the instance mapping', () => {
+  it('parent-directory hints under a mapped prefix still fail closed through the instance mapping', () => {
     setActiveInstancePathMapping(createPathMapping({
       rules: [{ hostPrefix: 'C:\\proj\\foo', remotePrefix: '/workspace' }],
     }));
     const mapping = getPathMapping();
     expect(mapping.toRemote('C:\\proj\\foo\\..\\secret')).toBe('C:\\proj\\foo\\..\\secret');
     expect(mapping.toHost('/workspace/../secret')).toBe('/workspace/../secret');
+  });
+
+  describe('workspace fallback (active docker instance)', () => {
+    const install = () => setActiveInstancePathMapping(createInstancePathMapping({
+      rules: [{ hostPrefix: 'C:\\proj\\foo', remotePrefix: '/workspace' }],
+      fallbackRemote: '/workspace',
+    }));
+
+    it('maps the declared workspace prefix normally', () => {
+      install();
+      const mapping = getPathMapping();
+      expect(mapping.toRemote('C:\\proj\\foo\\src')).toBe('/workspace/src');
+      expect(mapping.toHost('/workspace/README.md')).toBe('C:\\proj\\foo\\README.md');
+    });
+
+    it('unmapped host paths land at the workspace root instead of reaching the container as garbage', () => {
+      install();
+      const mapping = getPathMapping();
+      expect(mapping.toRemote('C:\\Users\\ekmen')).toBe('/workspace');
+      expect(mapping.toRemote('D:\\somewhere\\else')).toBe('/workspace');
+    });
+
+    it('posix-absolute values pass through as already-remote', () => {
+      install();
+      const mapping = getPathMapping();
+      expect(mapping.toRemote('/workspace/x')).toBe('/workspace/x');
+      expect(mapping.toRemote('/etc/hostname')).toBe('/etc/hostname');
+    });
+
+    it('parent-directory hints cannot escape the workspace either', () => {
+      install();
+      const mapping = getPathMapping();
+      expect(mapping.toRemote('C:\\proj\\foo\\..\\secret')).toBe('/workspace');
+    });
+
+    it('toHost keeps the base contract for values outside the workspace', () => {
+      install();
+      const mapping = getPathMapping();
+      expect(mapping.toHost('/etc/hostname')).toBe('/etc/hostname');
+    });
   });
 });

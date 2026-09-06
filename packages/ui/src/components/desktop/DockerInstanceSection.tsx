@@ -15,6 +15,7 @@ import { useI18n, type I18nKey } from '@/lib/i18n';
 import {
   activateDockerInstance,
   deactivateDockerInstance,
+  DOCKER_UPSTREAM_CHANGED_EVENT,
   fetchDockerInstances,
   notifyUpstreamChanged,
   runDockerInstanceAction,
@@ -292,6 +293,39 @@ export function DockerInstanceSection({ onChanged, className }: DockerInstanceSe
       />
     </div>
   );
+}
+
+export { DOCKER_UPSTREAM_CHANGED_EVENT };
+
+/**
+ * Label of the currently active Docker instance (null when Local/external is
+ * active or the feature is off). Refreshes on upstream-change events and on a
+ * slow poll so header surfaces stay truthful without user interaction.
+ */
+export function useActiveDockerInstanceLabel(): string | null {
+  const [label, setLabel] = React.useState<string | null>(null);
+  const refresh = React.useCallback(async () => {
+    try {
+      const snapshot = await fetchDockerInstances();
+      const active = snapshot.enabled && snapshot.activeInstanceId
+        ? snapshot.instances.find((instance) => instance.id === snapshot.activeInstanceId) ?? null
+        : null;
+      setLabel(active?.label ?? null);
+    } catch {
+      setLabel(null);
+    }
+  }, []);
+  React.useEffect(() => {
+    void refresh();
+    const onChanged = () => void refresh();
+    window.addEventListener(DOCKER_UPSTREAM_CHANGED_EVENT, onChanged);
+    const interval = window.setInterval(() => void refresh(), 15_000);
+    return () => {
+      window.removeEventListener(DOCKER_UPSTREAM_CHANGED_EVENT, onChanged);
+      window.clearInterval(interval);
+    };
+  }, [refresh]);
+  return label;
 }
 
 /**

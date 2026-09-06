@@ -3354,4 +3354,5 @@ export const dict: Record<I18nKey, string> = {
   'dockerInstances.create.field.workspaceRequired': 'マウントするフォルダの絶対パスを入力してください。',
   'dockerInstances.create.field.workspaceInvalid': 'パスは絶対パスである必要があります（例: C:\projects\demo または /srv/demo）。',
 
-  'dockerInstances.create.actions.pull': '{image} を取得',};
+  'dockerInstances.create.actions.pull': '{image} を取得',
+  'dockerInstances.header.activeLabel': 'Docker: {name}',};

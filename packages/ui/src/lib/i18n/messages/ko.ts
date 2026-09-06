@@ -3354,4 +3354,5 @@ export const dict: Record<I18nKey, string> = {
   'dockerInstances.create.field.workspaceRequired': '마운트할 폴더의 절대 경로를 입력하세요.',
   'dockerInstances.create.field.workspaceInvalid': '경로는 절대 경로여야 합니다(예: C:\projects\demo 또는 /srv/demo).',
 
-  'dockerInstances.create.actions.pull': '{image} 가져오기',};
+  'dockerInstances.create.actions.pull': '{image} 가져오기',
+  'dockerInstances.header.activeLabel': 'Docker: {name}',};

@@ -3355,4 +3355,5 @@ export const dict: Record<I18nKey, string> = {
   'dockerInstances.create.field.workspaceRequired': 'Informe o caminho absoluto da pasta a ser montada.',
   'dockerInstances.create.field.workspaceInvalid': 'O caminho deve ser absoluto (por exemplo C:\projects\demo ou /srv/demo).',
 
-  'dockerInstances.create.actions.pull': 'Baixar {image}',};
+  'dockerInstances.create.actions.pull': 'Baixar {image}',
+  'dockerInstances.header.activeLabel': 'Docker: {name}',};

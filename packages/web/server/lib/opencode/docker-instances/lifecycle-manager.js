@@ -23,7 +23,7 @@ import net from 'node:net';
 
 import { OPENCHAMBER_INSTANCE_LABEL } from '../../docker/runtime.js';
 import { buildInstanceMounts, CONTAINER_OPENCODE_PORT } from './mounts.js';
-import { createPathMapping, setActiveInstancePathMapping } from '../path-mapping.js';
+import { createInstancePathMapping, setActiveInstancePathMapping } from '../path-mapping.js';
 
 const DEFAULT_READINESS_TIMEOUT_MS = 120_000;
 const DEFAULT_READINESS_INTERVAL_MS = 500;
@@ -373,7 +373,14 @@ export const createDockerInstanceLifecycleManager = (options = {}) => {
       });
     }
 
-    const mapping = createPathMapping({ rules: record.mappingRules, platform });
+    // Workspace-fallback mapping: unmapped host directories (e.g. OpenChamber's
+    // default project dir) land at the container's workspace root instead of
+    // reaching the Linux container as meaningless relative paths.
+    const mapping = createInstancePathMapping({
+      rules: record.mappingRules,
+      fallbackRemote: record.workspaceContainerPath || '/workspace',
+      platform,
+    });
     activeUpstream = { instanceId: id, origin: instanceOrigin(record) };
     setActiveInstancePathMapping(mapping);
     await store.setActiveInstanceId(id);

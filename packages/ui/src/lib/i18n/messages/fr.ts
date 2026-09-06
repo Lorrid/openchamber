@@ -3352,4 +3352,5 @@ export const dict = {
   'dockerInstances.create.field.workspaceRequired': 'Saisis le chemin absolu du dossier à monter.',
   'dockerInstances.create.field.workspaceInvalid': 'Le chemin doit être absolu (par exemple C:\projects\demo ou /srv/demo).',
 
-  'dockerInstances.create.actions.pull': 'Télécharger {image}',} as const;
+  'dockerInstances.create.actions.pull': 'Télécharger {image}',
+  'dockerInstances.header.activeLabel': 'Docker: {name}',} as const;

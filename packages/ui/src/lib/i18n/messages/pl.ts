@@ -3371,4 +3371,5 @@ export const dict: Record<I18nKey, string> = {
   'dockerInstances.create.field.workspaceRequired': 'Podaj ścieżkę bezwzględną folderu do zamontowania.',
   'dockerInstances.create.field.workspaceInvalid': 'Ścieżka musi być bezwzględna (na przykład C:\projects\demo lub /srv/demo).',
 
-  'dockerInstances.create.actions.pull': 'Pobierz {image}',} as const;
+  'dockerInstances.create.actions.pull': 'Pobierz {image}',
+  'dockerInstances.header.activeLabel': 'Docker: {name}',} as const;

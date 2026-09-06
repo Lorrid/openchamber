@@ -3354,6 +3354,7 @@ export const dict = {
   'dockerInstances.create.field.workspaceRequired': 'Enter the absolute path of the folder to mount.',
   'dockerInstances.create.field.workspaceInvalid': 'The path must be absolute (for example C:\projects\demo or /srv/demo).',
 
-  'dockerInstances.create.actions.pull': 'Pull {image}',} as const;
+  'dockerInstances.create.actions.pull': 'Pull {image}',
+  'dockerInstances.header.activeLabel': 'Docker: {name}',} as const;
 
 export type I18nKey = keyof typeof dict;
