@@ -9,14 +9,13 @@
  * |-------------|--------------------------------------|-------------------------------------------|------|---------|
  * | workspace   | user-selected project directory      | `/workspace` (the mapping target)         | rw   | always  |
  * | skills      | shared skills dir (default: host SKILL_DIR) | `/home/opencode/.config/opencode/skills` | rw | opt-in |
- * | config      | host OpenCode config dir             | `/home/opencode/.config/opencode`         | ro   | opt-in  |
+ * | config      | host OpenCode config dir             | `/home/opencode/.config/opencode`         | rw   | opt-in  |
  * | credentials | host OpenCode auth.json              | `/home/opencode/.local/share/opencode/auth.json` | ro | separate opt-in, off |
  *
  * Nothing else is ever mounted: no Docker socket, no SSH keys, no git
- * credentials. The nested skills mount (child of the ro config mount) is
- * intentional — the more-specific bind shadows the read-only parent so the
- * shared skills directory stays writable in both directions while the rest of
- * the config tree stays read-only.
+ * credentials. The nested skills mount (child of the config mount) is
+ * intentional — the more-specific bind shadows the parent so both stay
+ * writable in both directions when the user opts into sharing.
  */
 
 const CONTAINER_HOME = '/home/opencode';
@@ -66,10 +65,12 @@ export const buildInstanceMounts = ({ instance, paths }) => {
   }
 
   if (instance.sharing?.config === true) {
+    // Two-way by explicit user choice (approved risk): config changes made
+    // inside the container propagate to the host and vice versa.
     mounts.push({
       host: paths.openCodeConfigDir,
       container: CONTAINER_CONFIG_DIR,
-      mode: 'ro',
+      mode: 'rw',
     });
   }
 

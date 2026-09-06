@@ -82,6 +82,20 @@ export const createDockerInstanceLifecycleManager = (options = {}) => {
   const instanceOrigin = (record) => `http://127.0.0.1:${record.port}`;
 
   /**
+   * Bounded container log tail for failure diagnostics. Captured BEFORE any
+   * rollback removes the container; an unavailable log tail is not an error —
+   * diagnosability is best-effort by design.
+   */
+  const captureContainerLogs = async (containerId) => {
+    if (!containerId) return '';
+    try {
+      return (await runtime.containerLogs(containerId, { tail: 200 }) ?? '').slice(-2000);
+    } catch {
+      return '';
+    }
+  };
+
+  /**
    * Removes every journaled container. Returns the entries that could not be
    * removed (already-gone containers count as removed, never as failures) so
    * callers decide between best-effort create rollback and authoritative
@@ -217,10 +231,13 @@ export const createDockerInstanceLifecycleManager = (options = {}) => {
 
       return store.update(id, (current) => ({ ...current, lifecycleState: 'running', lastError: null }));
     } catch (error) {
-      // Creation failed: remove exactly this operation's resources. When the
+      // Creation failed: capture the container's logs first (rollback removes
+      // it), then remove exactly this operation's resources. When the
       // rollback itself is clean the record is dropped, so the selector never
       // lists a broken instance; a partially-failed rollback parks the record
       // in `removal-failed` with its journal so cleanup can be retried.
+      const journaledContainer = journal.find((entry) => entry.type === 'container')?.ref ?? null;
+      error.containerLogTail = await captureContainerLogs(journaledContainer);
       const failures = await removeJournaledContainers(journal);
       if (failures.length === 0) {
         await store.remove(id);
@@ -257,12 +274,16 @@ export const createDockerInstanceLifecycleManager = (options = {}) => {
 
     await store.update(id, (current) => ({ ...current, lifecycleState: 'probing' }));
     if (!await waitForHealth(instanceOrigin(record))) {
+      const logTail = await captureContainerLogs(record.containerId);
+      const message = logTail
+        ? `OpenCode did not become ready after start. Container log tail: ${logTail}`
+        : 'OpenCode did not become ready after start';
       const parked = await store.update(id, (current) => ({
         ...current,
         lifecycleState: 'error',
-        lastError: 'OpenCode did not become ready after start',
+        lastError: message.slice(0, 500),
       }));
-      throw fail('READINESS_TIMEOUT', 'OpenCode did not become ready after start', { record: parked });
+      throw fail('READINESS_TIMEOUT', message, { record: parked, containerLogTail: logTail });
     }
     return store.update(id, (current) => ({ ...current, lifecycleState: 'running', lastError: null }));
   };

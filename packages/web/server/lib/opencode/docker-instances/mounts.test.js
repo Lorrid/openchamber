@@ -22,7 +22,7 @@ describe('buildInstanceMounts', () => {
     expect(CONTAINER_OPENCODE_PORT).toBe(4096);
   });
 
-  it('adds the shared skills mount read-write and the config mount read-only when opted in', () => {
+  it('adds the shared skills mount read-write and the config mount two-way when opted in', () => {
     const mounts = buildInstanceMounts({
       instance: instance({ sharing: { config: true, skills: true, credentials: false, skillsHostDir: null } }),
       paths: PATHS,
@@ -30,7 +30,7 @@ describe('buildInstanceMounts', () => {
     expect(mounts).toEqual([
       { host: 'C:\\proj\\foo', container: '/workspace', mode: 'rw' },
       { host: PATHS.skillDir, container: '/home/opencode/.config/opencode/skills', mode: 'rw' },
-      { host: PATHS.openCodeConfigDir, container: '/home/opencode/.config/opencode', mode: 'ro' },
+      { host: PATHS.openCodeConfigDir, container: '/home/opencode/.config/opencode', mode: 'rw' },
     ]);
   });
 

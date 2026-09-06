@@ -71,6 +71,7 @@ export const createFakeDockerRuntime = (options = {}) => {
         binds: (binds ?? []).map((bind) => ({ ...bind })),
         portBindings: { ...(portBindings ?? {}) },
         state: 'created',
+        logs: [`[${name}] fake boot log`, `[${name}] starting opencode serve`],
       });
       return containerId;
     },
@@ -132,6 +133,21 @@ export const createFakeDockerRuntime = (options = {}) => {
       await checkFailure('buildImage');
       existingImages.add(imageName);
       return { imageName, output: 'fake build ok' };
+    },
+
+    pullImage: async ({ imageName }) => {
+      record('pullImage', { imageName });
+      await checkFailure('pullImage');
+      existingImages.add(imageName);
+      return { imageName, output: 'fake pull ok' };
+    },
+
+    containerLogs: async (containerId) => {
+      record('containerLogs', { containerId });
+      await checkFailure('containerLogs');
+      const container = containers.get(containerId);
+      if (!container) return '';
+      return container.logs.join('\n');
     },
 
     // ---- Test-only surface -------------------------------------------------

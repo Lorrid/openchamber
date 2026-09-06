@@ -58,7 +58,7 @@ describe('docker instance lifecycle manager', () => {
     expect(container.binds).toEqual([
       { host: 'C:\\proj\\a', container: '/workspace', mode: 'rw' },
       { host: PATHS.skillDir, container: '/home/opencode/.config/opencode/skills', mode: 'rw' },
-      { host: PATHS.openCodeConfigDir, container: '/home/opencode/.config/opencode', mode: 'ro' },
+      { host: PATHS.openCodeConfigDir, container: '/home/opencode/.config/opencode', mode: 'rw' },
     ]);
   });
 
@@ -70,6 +70,15 @@ describe('docker instance lifecycle manager', () => {
     expect(runtime.calls.count('removeContainer')).toBe(1);
     expect(runtime.containers.size).toBe(0);
     expect(await store.list()).toEqual([]);
+  });
+
+  it('captures the container log tail before rollback when readiness fails', async () => {
+    const { manager, runtime, store } = await createHarness({ unhealthyUntil: 1000 });
+    const error = await manager.createInstance(createInput()).catch((caught) => caught);
+    expect(error.containerLogTail).toContain('fake boot log');
+    // The log was captured before the container was removed: still readable
+    // afterwards from the error, even though the container is gone.
+    expect(runtime.containers.size).toBe(0);
   });
 
   it('rolls back when the container start fails', async () => {

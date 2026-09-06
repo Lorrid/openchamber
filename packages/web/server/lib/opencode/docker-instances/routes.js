@@ -49,13 +49,15 @@ export const registerDockerInstanceRoutes = (app, dependencies) => {
     if (status === 500) {
       logger.error?.(`[docker-instances] ${fallbackMessage}:`, error);
     }
-    res.status(status).json({
+    const payload = {
       error: error instanceof Error ? error.message : fallbackMessage,
       code,
-      ...(error?.currentState ? { currentState: error.currentState } : {}),
-      ...(error?.canStart !== undefined ? { canStart: error.canStart } : {}),
-      ...(error?.cleanedUp !== undefined ? { cleanedUp: error.cleanedUp } : {}),
-    });
+    };
+    if (error?.currentState) payload.currentState = error.currentState;
+    if (error?.canStart !== undefined) payload.canStart = error.canStart;
+    if (error?.cleanedUp !== undefined) payload.cleanedUp = error.cleanedUp;
+    if (error?.containerLogTail) payload.containerLogTail = error.containerLogTail;
+    res.status(status).json(payload);
   };
 
   app.get('/api/docker-instances', async (_req, res) => {
@@ -96,8 +98,13 @@ export const registerDockerInstanceRoutes = (app, dependencies) => {
     try {
       if (!await guardEnabled(req, res)) return;
       const body = req.body && typeof req.body === 'object' ? req.body : {};
+      // Diagnostics without values: when a create is rejected we log which
+      // fields the request carried so field-name/payload mismatches surface
+      // instantly. Never log the values themselves.
+      const describeBody = () => `[docker-instances] create rejected (body keys: ${Object.keys(body).join(', ') || 'none'})`;
       const workspaceHostPath = asTrimmedString(body.workspaceHostPath);
       if (!workspaceHostPath) {
+        logger.warn?.(describeBody());
         res.status(400).json({ error: 'workspaceHostPath is required', code: 'INVALID_WORKSPACE' });
         return;
       }
@@ -105,10 +112,12 @@ export const registerDockerInstanceRoutes = (app, dependencies) => {
       try {
         stats = await fsPromises.stat(workspaceHostPath);
       } catch {
+        logger.warn?.(describeBody());
         res.status(400).json({ error: `Workspace path does not exist: ${workspaceHostPath}`, code: 'INVALID_WORKSPACE' });
         return;
       }
       if (!stats.isDirectory()) {
+        logger.warn?.(describeBody());
         res.status(400).json({ error: `Workspace path is not a directory: ${workspaceHostPath}`, code: 'INVALID_WORKSPACE' });
         return;
       }
@@ -165,6 +174,24 @@ export const registerDockerInstanceRoutes = (app, dependencies) => {
       res.json({ ok: true, ...result });
     } catch (error) {
       handleError(res, error, 'Failed to build the instance image');
+    }
+  });
+
+  // Explicit, user-initiated image pull — the fast first-run path when a
+  // prebuilt image exists in a registry. Never called automatically.
+  app.post('/api/docker-instances/image/pull', async (req, res) => {
+    try {
+      if (!await guardEnabled(req, res)) return;
+      const body = req.body && typeof req.body === 'object' ? req.body : {};
+      const imageName = asTrimmedString(body.imageName) || dependencies.defaultImageName;
+      if (!imageName || !dependencies.dockerRuntime) {
+        res.status(500).json({ error: 'Image pull is not available in this installation.', code: 'PULL_UNAVAILABLE' });
+        return;
+      }
+      const result = await dependencies.dockerRuntime.pullImage({ imageName });
+      res.json({ ok: true, ...result });
+    } catch (error) {
+      handleError(res, error, 'Failed to pull the instance image');
     }
   });
 

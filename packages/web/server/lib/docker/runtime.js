@@ -206,5 +206,46 @@ export const createDockerRuntime = (options = {}) => {
       const lastLine = stdout.trim().split('\n').filter(Boolean).pop() ?? '';
       return { imageName, output: lastLine };
     },
+
+    /**
+     * Pulls an image reference from its registry. Explicit user action only —
+     * the fast first-run path when a prebuilt image is published.
+     */
+    async pullImage({ imageName }) {
+      if (!imageName) {
+        throw buildError('imageName is required', { code: 'DOCKER_INVALID_ARG' });
+      }
+      const stdout = await runDocker(['pull', imageName], { timeoutMs: 600_000 });
+      return { imageName, output: stdout.trim().split('\n').filter(Boolean).pop() ?? '' };
+    },
+
+    /**
+     * Bounded stdout+stderr tail of a container's logs. Used to make
+     * readiness/start failures diagnosable before rollback removes the
+     * container.
+     */
+    async containerLogs(containerId, { tail = 200 } = {}) {
+      if (!containerId) {
+        throw buildError('containerId is required', { code: 'DOCKER_INVALID_ARG' });
+      }
+      try {
+        const { stdout, stderr } = await execFileImpl(dockerPath, ['logs', '--tail', String(tail), containerId], {
+          timeout: 15_000,
+          windowsHide: true,
+          maxBuffer: 2 * 1024 * 1024,
+        });
+        return `${stdout ?? ''}${stderr ?? ''}`.slice(-4000);
+      } catch (error) {
+        if (error && error.code === 'ENOENT') {
+          throw buildError('Docker CLI not found on PATH', { code: 'DOCKER_CLI_MISSING' });
+        }
+        // A stopped/vanished container may still yield logs; surface failures
+        // to the caller, which treats an empty tail as acceptable.
+        throw buildError(`Docker logs failed for ${containerId}`, {
+          code: error?.code,
+          stderr: error?.stderr,
+        });
+      }
+    },
   };
 };
