@@ -711,7 +711,8 @@ const handleDockerActiveUpstreamChanged = async (payload) => {
       dockerAddedWorkspaceProjectId = update.added ? update.activeProjectId : null;
       await persistSettings({ projects: update.projects, activeProjectId: update.activeProjectId });
       if (DOCKER_DIAG) {
-        console.log(`[docker-diag:projects] activated: added=${update.added} activeProjectId=${update.activeProjectId} previous=${dockerPreviousActiveProjectId} projects=[${update.projects.map((p) => p.path).join(' | ')}]`);
+        const projectList = update.projects.map((project) => project.path).join(' | ');
+        console.log(`[docker-diag:projects] activated: added=${update.added} activeProjectId=${update.activeProjectId} previous=${dockerPreviousActiveProjectId} projects=[${projectList}]`);
       }
     } else {
       // Deactivation: restore the previously active project and withdraw the
@@ -721,7 +722,10 @@ const handleDockerActiveUpstreamChanged = async (payload) => {
         ? settings.projects.filter((project) => project?.id !== dockerAddedWorkspaceProjectId)
         : settings.projects;
       if (DOCKER_DIAG) {
-        console.log(`[docker-diag:projects] deactivated: addedId=${dockerAddedWorkspaceProjectId} withdrawn=${dockerAddedWorkspaceProjectId && Array.isArray(settings.projects) ? 'yes' : 'no'} restore=${dockerPreviousActiveProjectId} before=[${Array.isArray(settings.projects) ? settings.projects.map((p) => p.path).join(' | ') : ''}] after=[${Array.isArray(nextProjects) ? nextProjects.map((p) => p.path).join(' | ')}]`);
+        const beforeList = Array.isArray(settings.projects) ? settings.projects.map((project) => project.path).join(' | ') : '';
+        const afterList = Array.isArray(nextProjects) ? nextProjects.map((project) => project.path).join(' | ') : '';
+        const withdrawn = dockerAddedWorkspaceProjectId && Array.isArray(settings.projects) ? 'yes' : 'no';
+        console.log(`[docker-diag:projects] deactivated: addedId=${dockerAddedWorkspaceProjectId} withdrawn=${withdrawn} restore=${dockerPreviousActiveProjectId} before=[${beforeList}] after=[${afterList}]`);
       }
       dockerAddedWorkspaceProjectId = null;
       if (dockerPreviousActiveProjectId !== null || Array.isArray(nextProjects)) {
