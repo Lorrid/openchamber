@@ -149,6 +149,13 @@ export const buildDockerInstanceImage = async (imageName?: string): Promise<void
   });
 };
 
+export const pullDockerInstanceImage = async (imageName?: string): Promise<void> => {
+  await requestJson('/api/docker-instances/image/pull', actionResultSchema, {
+    method: 'POST',
+    body: JSON.stringify(imageName ? { imageName } : {}),
+  });
+};
+
 /** Fired after the active upstream changed so listeners can refresh state. */
 const DOCKER_UPSTREAM_CHANGED_EVENT = 'openchamber:docker-upstream-changed';
 

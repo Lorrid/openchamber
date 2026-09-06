@@ -3329,7 +3329,7 @@ export const dict: Record<I18nKey, string> = {
   'dockerInstances.create.field.workspacePlaceholder': 'C:\projects\my-app',
   'dockerInstances.create.field.workspaceHint': '/workspaceとしてコンテナに読み書き可能でマウントされ、パスマッピングの対象になります。',
   'dockerInstances.create.sharing.configTitle': 'OpenCode設定を共有',
-  'dockerInstances.create.sharing.configHint': '読み取り専用。ホストのプロバイダー・モデル・MCP設定がコンテナ内で表示されます。',
+  'dockerInstances.create.sharing.configHint': '双方向。ホストのプロバイダー・モデル・MCP設定をコンテナ内で使用し、Docker内での変更はホストに同期されます。',
   'dockerInstances.create.sharing.skillsTitle': 'スキルを共有',
   'dockerInstances.create.sharing.skillsHint': '読み書き可。スキルは双方向で表示されます。',
   'dockerInstances.create.sharing.skillsWritablePath': 'コンテナはこのホストディレクトリに書き込めます: {path}',
@@ -3348,4 +3348,10 @@ export const dict: Record<I18nKey, string> = {
   'dockerInstances.toast.stopped': '{name} を停止しました。',
   'dockerInstances.toast.removed': '{name} を削除しました。',
   'dockerInstances.toast.actionFailed': '操作に失敗しました。',
-};
+
+  // Docker instance creation flow additions
+  'dockerInstances.create.actions.browse': '参照…',
+  'dockerInstances.create.field.workspaceRequired': 'マウントするフォルダの絶対パスを入力してください。',
+  'dockerInstances.create.field.workspaceInvalid': 'パスは絶対パスである必要があります（例: C:\projects\demo または /srv/demo）。',
+
+  'dockerInstances.create.actions.pull': '{image} を取得',};

@@ -11,6 +11,7 @@ import { Button } from '@/components/ui/button';
 import { Icon } from '@/components/icon/Icon';
 import { cn } from '@/lib/utils';
 import { toast } from '@/components/ui';
+import { isDesktopShell, requestDirectoryAccess } from '@/lib/desktop';
 import { useI18n } from '@/lib/i18n';
 import { Switch } from '@/components/ui/switch';
 import {
@@ -18,6 +19,7 @@ import {
   createDockerInstance,
   DockerApiError,
   notifyUpstreamChanged,
+  pullDockerInstanceImage,
   type DockerInstancesSnapshot,
 } from '@/lib/dockerInstances';
 
@@ -46,8 +48,12 @@ export function DockerInstanceCreateDialog({ open, onOpenChange, snapshot, onCre
   const [shareCredentials, setShareCredentials] = React.useState(false);
   const [isSubmitting, setIsSubmitting] = React.useState(false);
   const [isBuildingImage, setIsBuildingImage] = React.useState(false);
+  const [isPullingImage, setIsPullingImage] = React.useState(false);
   const [errorMessage, setErrorMessage] = React.useState('');
   const [errorCode, setErrorCode] = React.useState('');
+  const [workspaceError, setWorkspaceError] = React.useState<string | null>(null);
+  const [isBrowsing, setIsBrowsing] = React.useState(false);
+  const canBrowse = React.useState(() => isDesktopShell())[0];
 
   const reset = React.useCallback(() => {
     setLabel('');
@@ -60,7 +66,38 @@ export function DockerInstanceCreateDialog({ open, onOpenChange, snapshot, onCre
     setIsBuildingImage(false);
     setErrorMessage('');
     setErrorCode('');
+    setWorkspaceError(null);
   }, []);
+
+  const validateWorkspace = React.useCallback((value: string): string | null => {
+    const trimmed = value.trim();
+    if (!trimmed) {
+      return t('dockerInstances.create.field.workspaceRequired');
+    }
+    // Windows drive/UNC or POSIX absolute — the server re-validates
+    // authoritatively for its own platform.
+    const isAbsolute = /^[a-zA-Z]:[\\/]/.test(trimmed) || trimmed.startsWith('\\\\') || trimmed.startsWith('/');
+    if (!isAbsolute) {
+      return t('dockerInstances.create.field.workspaceInvalid');
+    }
+    return null;
+  }, [t]);
+
+  const browse = React.useCallback(async () => {
+    setIsBrowsing(true);
+    try {
+      const result = await requestDirectoryAccess(workspacePath);
+      if (result.success && result.path) {
+        setWorkspacePath(result.path);
+        setWorkspaceError(null);
+      }
+      // Cancelled: leave the field as-is, silently.
+    } catch {
+      // Picker unavailable — the text input remains the way to enter a path.
+    } finally {
+      setIsBrowsing(false);
+    }
+  }, [workspacePath]);
 
   const close = React.useCallback((nextOpen: boolean) => {
     if (!nextOpen && isSubmitting) return;
@@ -87,11 +124,33 @@ export function DockerInstanceCreateDialog({ open, onOpenChange, snapshot, onCre
     }
   }, [effectiveImage, t]);
 
+  const pullImage = React.useCallback(async () => {
+    setIsPullingImage(true);
+    setErrorMessage('');
+    setErrorCode('');
+    try {
+      await pullDockerInstanceImage(effectiveImage);
+      toast.success(t('dockerInstances.create.toast.imageBuilt', { image: effectiveImage }));
+      setErrorCode('');
+    } catch (error) {
+      setErrorMessage(error instanceof Error ? error.message : t('dockerInstances.create.error.generic'));
+      setErrorCode('PULL_FAILED');
+    } finally {
+      setIsPullingImage(false);
+    }
+  }, [effectiveImage, t]);
+
   const submit = React.useCallback(async () => {
-    if (!workspacePath.trim() || isSubmitting) return;
+    if (isSubmitting) return;
+    const workspaceProblem = validateWorkspace(workspacePath);
+    if (workspaceProblem) {
+      setWorkspaceError(workspaceProblem);
+      return;
+    }
     setIsSubmitting(true);
     setErrorMessage('');
     setErrorCode('');
+    setWorkspaceError(null);
     try {
       await createDockerInstance({
         label: label.trim() || undefined,
@@ -118,7 +177,7 @@ export function DockerInstanceCreateDialog({ open, onOpenChange, snapshot, onCre
     } finally {
       setIsSubmitting(false);
     }
-  }, [image, isSubmitting, label, onCreated, onOpenChange, reset, shareConfig, shareCredentials, shareSkills, t, workspacePath]);
+  }, [image, isSubmitting, label, onCreated, onOpenChange, reset, shareConfig, shareCredentials, shareSkills, t, validateWorkspace, workspacePath]);
 
   return (
     <Dialog open={open} onOpenChange={close}>
@@ -159,17 +218,37 @@ export function DockerInstanceCreateDialog({ open, onOpenChange, snapshot, onCre
 
           <div className="space-y-1">
             <label htmlFor="docker-instance-workspace" className="typography-ui-label text-foreground">{t('dockerInstances.create.field.workspace')}</label>
-            <Input
-              id="docker-instance-workspace"
-              value={workspacePath}
-              onChange={(event) => setWorkspacePath(event.target.value)}
-              onKeyDown={(event) => {
-                if (event.key === 'Enter') void submit();
-              }}
+            <div className="flex gap-2">
+              <Input
+                id="docker-instance-workspace"
+                value={workspacePath}
+                onChange={(event) => {
+                  setWorkspacePath(event.target.value);
+                  if (workspaceError) setWorkspaceError(null);
+                }}
+                onKeyDown={(event) => {
+                  if (event.key === 'Enter') void submit();
+                }}
               placeholder={t('dockerInstances.create.field.workspacePlaceholder')}
               disabled={isSubmitting}
-              className="font-mono"
+              className="font-mono flex-1"
             />
+              {canBrowse && (
+                <Button
+                  type="button"
+                  variant="outline"
+                  className="flex-shrink-0"
+                  disabled={isSubmitting || isBrowsing}
+                  onClick={() => void browse()}
+                >
+                  {isBrowsing ? <Icon name="loader-4" className="h-4 w-4 animate-spin" /> : <Icon name="folder-open" className="h-4 w-4" />}
+                  {t('dockerInstances.create.actions.browse')}
+                </Button>
+              )}
+            </div>
+            {workspaceError && (
+              <p className="typography-micro text-[var(--status-error)]">{workspaceError}</p>
+            )}
             <p className="typography-micro text-muted-foreground">
               {t('dockerInstances.create.field.workspaceHint')}
             </p>
@@ -210,18 +289,29 @@ export function DockerInstanceCreateDialog({ open, onOpenChange, snapshot, onCre
           {errorMessage && (
             <div className="rounded-md border border-[var(--status-error)]/40 bg-[var(--status-error)]/10 p-2.5">
               <div className="typography-meta text-[var(--status-error)] break-words">{errorMessage}</div>
-              {(errorCode === 'IMAGE_MISSING' || errorCode === 'BUILD_FAILED') && (
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  className="mt-2"
-                  disabled={isBuildingImage || isSubmitting}
-                  onClick={() => void buildImage()}
-                >
-                  {isBuildingImage ? <Icon name="loader-4" className="h-3.5 w-3.5 animate-spin" /> : <Icon name="server" className="h-3.5 w-3.5" />}
-                  {t('dockerInstances.create.actions.buildImage', { image: effectiveImage })}
-                </Button>
+              {(errorCode === 'IMAGE_MISSING' || errorCode === 'BUILD_FAILED' || errorCode === 'PULL_FAILED') && (
+                <div className="mt-2 flex flex-wrap gap-2">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    disabled={isBuildingImage || isPullingImage || isSubmitting}
+                    onClick={() => void buildImage()}
+                  >
+                    {isBuildingImage ? <Icon name="loader-4" className="h-3.5 w-3.5 animate-spin" /> : <Icon name="server" className="h-3.5 w-3.5" />}
+                    {t('dockerInstances.create.actions.buildImage', { image: effectiveImage })}
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    disabled={isBuildingImage || isPullingImage || isSubmitting}
+                    onClick={() => void pullImage()}
+                  >
+                    {isPullingImage ? <Icon name="loader-4" className="h-3.5 w-3.5 animate-spin" /> : <Icon name="download" className="h-3.5 w-3.5" />}
+                    {t('dockerInstances.create.actions.pull', { image: effectiveImage })}
+                  </Button>
+                </div>
               )}
             </div>
           )}
@@ -235,7 +325,7 @@ export function DockerInstanceCreateDialog({ open, onOpenChange, snapshot, onCre
             type="button"
             size="sm"
             onClick={() => void submit()}
-            disabled={isSubmitting || isBuildingImage || !workspacePath.trim()}
+            disabled={isSubmitting || isBuildingImage}
           >
             {isSubmitting ? <Icon name="loader-4" className={cn('h-4 w-4 animate-spin')} /> : <Icon name="add" className="h-4 w-4" />}
             {isSubmitting ? t('dockerInstances.create.actions.creating') : t('dockerInstances.create.actions.create')}

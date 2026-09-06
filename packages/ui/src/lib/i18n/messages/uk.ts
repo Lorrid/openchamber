@@ -3330,7 +3330,7 @@ export const dict: Record<I18nKey, string> = {
   'dockerInstances.create.field.workspacePlaceholder': 'C:\projects\my-app',
   'dockerInstances.create.field.workspaceHint': 'Монтується з правами читання/запису в контейнер як /workspace і є ціллю відображення шляхів.',
   'dockerInstances.create.sharing.configTitle': 'Спільний доступ до конфігурації OpenCode',
-  'dockerInstances.create.sharing.configHint': 'Тільки читання. Налаштування провайдерів, моделей і MCP хоста видимі в контейнері.',
+  'dockerInstances.create.sharing.configHint': 'Двонаправлений. Налаштування провайдерів, моделей і MCP хоста використовуються в контейнері; зміни в Docker синхронізуються з хостом.',
   'dockerInstances.create.sharing.skillsTitle': 'Спільні скіли',
   'dockerInstances.create.sharing.skillsHint': 'Читання і запис. Скіли видимі в обидва боки.',
   'dockerInstances.create.sharing.skillsWritablePath': 'Контейнер може писати в цей каталог хоста: {path}',
@@ -3349,4 +3349,10 @@ export const dict: Record<I18nKey, string> = {
   'dockerInstances.toast.stopped': '{name} зупинено.',
   'dockerInstances.toast.removed': '{name} видалено.',
   'dockerInstances.toast.actionFailed': 'Дію не вдалося виконати.',
-};
+
+  // Docker instance creation flow additions
+  'dockerInstances.create.actions.browse': 'Огляд…',
+  'dockerInstances.create.field.workspaceRequired': 'Вкажіть абсолютний шлях до папки для монтування.',
+  'dockerInstances.create.field.workspaceInvalid': 'Шлях має бути абсолютним (наприклад C:\projects\demo або /srv/demo).',
+
+  'dockerInstances.create.actions.pull': 'Завантажити {image}',};

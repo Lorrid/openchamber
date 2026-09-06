@@ -3330,7 +3330,7 @@ export const dict: Record<I18nKey, string> = {
   'dockerInstances.create.field.workspacePlaceholder': 'C:\projects\my-app',
   'dockerInstances.create.field.workspaceHint': 'Montado com leitura e escrita no contêiner em /workspace e usado como alvo do mapeamento de caminhos.',
   'dockerInstances.create.sharing.configTitle': 'Compartilhar configuração do OpenCode',
-  'dockerInstances.create.sharing.configHint': 'Somente leitura. As configurações de provedores, modelos e MCP do host ficam visíveis no contêiner.',
+  'dockerInstances.create.sharing.configHint': 'Bidirecional. As configurações de provedores, modelos e MCP do host são usadas no contêiner; alterações dentro do Docker sincronizam com o host.',
   'dockerInstances.create.sharing.skillsTitle': 'Compartilhar skills',
   'dockerInstances.create.sharing.skillsHint': 'Leitura e escrita. As skills ficam visíveis nos dois sentidos.',
   'dockerInstances.create.sharing.skillsWritablePath': 'O contêiner pode gravar neste diretório do host: {path}',
@@ -3349,4 +3349,10 @@ export const dict: Record<I18nKey, string> = {
   'dockerInstances.toast.stopped': '{name} parada.',
   'dockerInstances.toast.removed': '{name} removida.',
   'dockerInstances.toast.actionFailed': 'A ação falhou.',
-};
+
+  // Docker instance creation flow additions
+  'dockerInstances.create.actions.browse': 'Procurar…',
+  'dockerInstances.create.field.workspaceRequired': 'Informe o caminho absoluto da pasta a ser montada.',
+  'dockerInstances.create.field.workspaceInvalid': 'O caminho deve ser absoluto (por exemplo C:\projects\demo ou /srv/demo).',
+
+  'dockerInstances.create.actions.pull': 'Baixar {image}',};

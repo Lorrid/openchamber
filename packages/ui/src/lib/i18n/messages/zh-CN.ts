@@ -3330,7 +3330,7 @@ export const dict: Record<I18nKey, string> = {
   'dockerInstances.create.field.workspacePlaceholder': 'C:\projects\my-app',
   'dockerInstances.create.field.workspaceHint': '以读写方式挂载到容器的 /workspace，并作为路径映射的目标。',
   'dockerInstances.create.sharing.configTitle': '共享 OpenCode 配置',
-  'dockerInstances.create.sharing.configHint': '只读。宿主机的提供方、模型和 MCP 设置在容器内可见。',
+  'dockerInstances.create.sharing.configHint': '双向。宿主机的提供方、模型和 MCP 设置在容器内使用；Docker 内的更改会同步回宿主机。',
   'dockerInstances.create.sharing.skillsTitle': '共享技能',
   'dockerInstances.create.sharing.skillsHint': '读写。技能双向可见。',
   'dockerInstances.create.sharing.skillsWritablePath': '容器可以写入此宿主机目录：{path}',
@@ -3349,4 +3349,10 @@ export const dict: Record<I18nKey, string> = {
   'dockerInstances.toast.stopped': '{name} 已停止。',
   'dockerInstances.toast.removed': '{name} 已移除。',
   'dockerInstances.toast.actionFailed': '操作失败。',
-};
+
+  // Docker instance creation flow additions
+  'dockerInstances.create.actions.browse': '浏览…',
+  'dockerInstances.create.field.workspaceRequired': '请输入要挂载文件夹的绝对路径。',
+  'dockerInstances.create.field.workspaceInvalid': '路径必须是绝对路径（例如 C:\projects\demo 或 /srv/demo）。',
+
+  'dockerInstances.create.actions.pull': '拉取 {image}',};

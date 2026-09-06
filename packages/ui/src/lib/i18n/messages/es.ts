@@ -3330,7 +3330,7 @@ export const dict: Record<I18nKey, string> = {
   'dockerInstances.create.field.workspacePlaceholder': 'C:\projects\my-app',
   'dockerInstances.create.field.workspaceHint': 'Se monta con lectura y escritura en el contenedor en /workspace y sirve como destino del mapeo de rutas.',
   'dockerInstances.create.sharing.configTitle': 'Compartir configuración de OpenCode',
-  'dockerInstances.create.sharing.configHint': 'Solo lectura. La configuración de proveedores, modelos y MCP del host es visible dentro del contenedor.',
+  'dockerInstances.create.sharing.configHint': 'Bidireccional. La configuración de proveedores, modelos y MCP del host se usa en el contenedor; los cambios dentro de Docker se sincronizan con el host.',
   'dockerInstances.create.sharing.skillsTitle': 'Compartir skills',
   'dockerInstances.create.sharing.skillsHint': 'Lectura y escritura. Las skills son visibles en ambos sentidos.',
   'dockerInstances.create.sharing.skillsWritablePath': 'El contenedor puede escribir en este directorio del host: {path}',
@@ -3349,4 +3349,10 @@ export const dict: Record<I18nKey, string> = {
   'dockerInstances.toast.stopped': '{name} detenida.',
   'dockerInstances.toast.removed': '{name} eliminada.',
   'dockerInstances.toast.actionFailed': 'La acción falló.',
-};
+
+  // Docker instance creation flow additions
+  'dockerInstances.create.actions.browse': 'Examinar…',
+  'dockerInstances.create.field.workspaceRequired': 'Introduce la ruta absoluta de la carpeta a montar.',
+  'dockerInstances.create.field.workspaceInvalid': 'La ruta debe ser absoluta (por ejemplo C:\projects\demo o /srv/demo).',
+
+  'dockerInstances.create.actions.pull': 'Descargar {image}',};

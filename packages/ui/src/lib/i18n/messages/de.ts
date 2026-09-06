@@ -3327,7 +3327,7 @@ export const dict = {
   'dockerInstances.create.field.workspacePlaceholder': 'C:\projects\my-app',
   'dockerInstances.create.field.workspaceHint': 'Mit Lese- und Schreibzugriff unter /workspace in den Container eingebunden und Ziel der Pfadzuordnung.',
   'dockerInstances.create.sharing.configTitle': 'OpenCode-Konfiguration teilen',
-  'dockerInstances.create.sharing.configHint': 'Nur lesend. Provider-, Modell- und MCP-Einstellungen des Hosts sind im Container sichtbar.',
+  'dockerInstances.create.sharing.configHint': 'Beidseitig. Provider-, Modell- und MCP-Einstellungen des Hosts werden im Container genutzt; Änderungen im Container werden mit dem Host synchronisiert.',
   'dockerInstances.create.sharing.skillsTitle': 'Skills teilen',
   'dockerInstances.create.sharing.skillsHint': 'Lesend und schreibend. Skills sind in beide Richtungen sichtbar.',
   'dockerInstances.create.sharing.skillsWritablePath': 'Der Container darf in dieses Host-Verzeichnis schreiben: {path}',
@@ -3346,4 +3346,10 @@ export const dict = {
   'dockerInstances.toast.stopped': '{name} gestoppt.',
   'dockerInstances.toast.removed': '{name} entfernt.',
   'dockerInstances.toast.actionFailed': 'Die Aktion ist fehlgeschlagen.',
-};
+
+  // Docker instance creation flow additions
+  'dockerInstances.create.actions.browse': 'Durchsuchen…',
+  'dockerInstances.create.field.workspaceRequired': 'Gib den absoluten Pfad des Ordners ein, der eingebunden werden soll.',
+  'dockerInstances.create.field.workspaceInvalid': 'Der Pfad muss absolut sein (zum Beispiel C:\projects\demo oder /srv/demo).',
+
+  'dockerInstances.create.actions.pull': '{image} herunterladen',};

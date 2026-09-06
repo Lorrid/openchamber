@@ -3329,7 +3329,7 @@ export const dict: Record<I18nKey, string> = {
   'dockerInstances.create.field.workspacePlaceholder': 'C:\projects\my-app',
   'dockerInstances.create.field.workspaceHint': '/workspace로 컨테이너에 읽기·쓰기 마운트되며 경로 매핑 대상으로 사용됩니다.',
   'dockerInstances.create.sharing.configTitle': 'OpenCode 설정 공유',
-  'dockerInstances.create.sharing.configHint': '읽기 전용. 호스트의 공급자·모델·MCP 설정이 컨테이너 안에서 보입니다.',
+  'dockerInstances.create.sharing.configHint': '양방향. 호스트의 공급자·모델·MCP 설정을 컨테이너에서 사용하며 Docker 내 변경 사항은 호스트와 동기화됩니다.',
   'dockerInstances.create.sharing.skillsTitle': '스킬 공유',
   'dockerInstances.create.sharing.skillsHint': '읽기·쓰기 가능. 스킬은 양방향으로 보입니다.',
   'dockerInstances.create.sharing.skillsWritablePath': '컨테이너는 이 호스트 디렉터리에 쓸 수 있습니다: {path}',
@@ -3348,4 +3348,10 @@ export const dict: Record<I18nKey, string> = {
   'dockerInstances.toast.stopped': '{name}이(가) 중지되었습니다.',
   'dockerInstances.toast.removed': '{name}이(가) 제거되었습니다.',
   'dockerInstances.toast.actionFailed': '작업이 실패했습니다.',
-};
+
+  // Docker instance creation flow additions
+  'dockerInstances.create.actions.browse': '찾아보기…',
+  'dockerInstances.create.field.workspaceRequired': '마운트할 폴더의 절대 경로를 입력하세요.',
+  'dockerInstances.create.field.workspaceInvalid': '경로는 절대 경로여야 합니다(예: C:\projects\demo 또는 /srv/demo).',
+
+  'dockerInstances.create.actions.pull': '{image} 가져오기',};

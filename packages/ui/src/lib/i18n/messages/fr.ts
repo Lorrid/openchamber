@@ -3327,7 +3327,7 @@ export const dict = {
   'dockerInstances.create.field.workspacePlaceholder': 'C:\projects\my-app',
   'dockerInstances.create.field.workspaceHint': 'Monté en lecture-écriture dans le conteneur sous /workspace et utilisé comme cible du mappage de chemins.',
   'dockerInstances.create.sharing.configTitle': 'Partager la configuration OpenCode',
-  'dockerInstances.create.sharing.configHint': 'Lecture seule. Les réglages fournisseurs, modèles et MCP de l\'hôte sont visibles dans le conteneur.',
+  'dockerInstances.create.sharing.configHint': 'Bidirectionnel. Les réglages fournisseurs, modèles et MCP de l\'hôte sont utilisés dans le conteneur ; les modifications faites dans Docker sont synchronisées avec l\'hôte.',
   'dockerInstances.create.sharing.skillsTitle': 'Partager les skills',
   'dockerInstances.create.sharing.skillsHint': 'Lecture-écriture. Les skills sont visibles dans les deux sens.',
   'dockerInstances.create.sharing.skillsWritablePath': 'Le conteneur peut écrire dans ce répertoire de l\'hôte : {path}',
@@ -3346,4 +3346,10 @@ export const dict = {
   'dockerInstances.toast.stopped': '{name} arrêtée.',
   'dockerInstances.toast.removed': '{name} supprimée.',
   'dockerInstances.toast.actionFailed': 'L\'action a échoué.',
-} as const;
+
+  // Docker instance creation flow additions
+  'dockerInstances.create.actions.browse': 'Parcourir…',
+  'dockerInstances.create.field.workspaceRequired': 'Saisis le chemin absolu du dossier à monter.',
+  'dockerInstances.create.field.workspaceInvalid': 'Le chemin doit être absolu (par exemple C:\projects\demo ou /srv/demo).',
+
+  'dockerInstances.create.actions.pull': 'Télécharger {image}',} as const;

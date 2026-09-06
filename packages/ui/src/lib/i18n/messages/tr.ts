@@ -3327,7 +3327,7 @@ export const dict = {
   'dockerInstances.create.field.workspacePlaceholder': 'C:\projects\my-app',
   'dockerInstances.create.field.workspaceHint': '/workspace olarak konteynere okuma-yazma bağlanır ve yol eşlemesinin hedefi olarak kullanılır.',
   'dockerInstances.create.sharing.configTitle': 'OpenCode yapılandırmasını paylaş',
-  'dockerInstances.create.sharing.configHint': 'Salt okunur. Sağlayıcı, model ve MCP ayarları konteyner içinde görünür.',
+  'dockerInstances.create.sharing.configHint': 'İki yönlü. Sağlayıcı, model ve MCP ayarları konteynerde kullanılır; Docker içinde yapılan değişiklikler host\'a yansır.',
   'dockerInstances.create.sharing.skillsTitle': 'Skill\'leri paylaş',
   'dockerInstances.create.sharing.skillsHint': 'Okuma-yazma. Skill\'ler iki yönde de görünür.',
   'dockerInstances.create.sharing.skillsWritablePath': 'Konteyner şu host dizinine yazabilir: {path}',
@@ -3346,4 +3346,10 @@ export const dict = {
   'dockerInstances.toast.stopped': '{name} durduruldu.',
   'dockerInstances.toast.removed': '{name} kaldırıldı.',
   'dockerInstances.toast.actionFailed': 'İşlem başarısız oldu.',
-};
+
+  // Docker instance creation flow additions
+  'dockerInstances.create.actions.browse': 'Gözat…',
+  'dockerInstances.create.field.workspaceRequired': 'Bağlanacak klasörün mutlak yolunu yazın.',
+  'dockerInstances.create.field.workspaceInvalid': 'Yol mutlak olmalı (örneğin C:\projects\demo veya /srv/demo).',
+
+  'dockerInstances.create.actions.pull': '{image} indir',};

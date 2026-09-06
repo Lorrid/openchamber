@@ -3329,7 +3329,7 @@ export const dict = {
   'dockerInstances.create.field.workspacePlaceholder': 'C:\projects\my-app',
   'dockerInstances.create.field.workspaceHint': 'Mounted read-write into the container at /workspace and used as the path mapping target.',
   'dockerInstances.create.sharing.configTitle': 'Share OpenCode config',
-  'dockerInstances.create.sharing.configHint': 'Read-only. Host provider, model and MCP settings are visible inside the container.',
+  'dockerInstances.create.sharing.configHint': 'Two-way. Host provider, model and MCP settings are used inside the container; changes made inside Docker sync back to the host.',
   'dockerInstances.create.sharing.skillsTitle': 'Share skills',
   'dockerInstances.create.sharing.skillsHint': 'Read-write. Skills are visible in both directions.',
   'dockerInstances.create.sharing.skillsWritablePath': 'The container may write to this host directory: {path}',
@@ -3348,6 +3348,12 @@ export const dict = {
   'dockerInstances.toast.stopped': '{name} stopped.',
   'dockerInstances.toast.removed': '{name} removed.',
   'dockerInstances.toast.actionFailed': 'The action failed.',
-} as const;
+
+  // Docker instance creation flow additions
+  'dockerInstances.create.actions.browse': 'Browse…',
+  'dockerInstances.create.field.workspaceRequired': 'Enter the absolute path of the folder to mount.',
+  'dockerInstances.create.field.workspaceInvalid': 'The path must be absolute (for example C:\projects\demo or /srv/demo).',
+
+  'dockerInstances.create.actions.pull': 'Pull {image}',} as const;
 
 export type I18nKey = keyof typeof dict;

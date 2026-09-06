@@ -3346,7 +3346,7 @@ export const dict: Record<I18nKey, string> = {
   'dockerInstances.create.field.workspacePlaceholder': 'C:\projects\my-app',
   'dockerInstances.create.field.workspaceHint': 'Montowana z dostępem do odczytu i zapisu w kontenerze jako /workspace, będąca celem mapowania ścieżek.',
   'dockerInstances.create.sharing.configTitle': 'Udostępnij konfigurację OpenCode',
-  'dockerInstances.create.sharing.configHint': 'Tylko odczyt. Ustawienia dostawców, modeli i MCP hosta są widoczne w kontenerze.',
+  'dockerInstances.create.sharing.configHint': 'Dwukierunkowa. Ustawienia dostawców, modeli i MCP hosta są używane w kontenerze, a zmiany w Dockerze synchronizują się z hostem.',
   'dockerInstances.create.sharing.skillsTitle': 'Udostępnij skille',
   'dockerInstances.create.sharing.skillsHint': 'Odczyt i zapis. Skille są widoczne w obu kierunkach.',
   'dockerInstances.create.sharing.skillsWritablePath': 'Kontener może zapisywać w tym katalogu hosta: {path}',
@@ -3365,4 +3365,10 @@ export const dict: Record<I18nKey, string> = {
   'dockerInstances.toast.stopped': 'Zatrzymano {name}.',
   'dockerInstances.toast.removed': 'Usunięto {name}.',
   'dockerInstances.toast.actionFailed': 'Akcja nie powiodła się.',
-} as const;
+
+  // Docker instance creation flow additions
+  'dockerInstances.create.actions.browse': 'Przeglądaj…',
+  'dockerInstances.create.field.workspaceRequired': 'Podaj ścieżkę bezwzględną folderu do zamontowania.',
+  'dockerInstances.create.field.workspaceInvalid': 'Ścieżka musi być bezwzględna (na przykład C:\projects\demo lub /srv/demo).',
+
+  'dockerInstances.create.actions.pull': 'Pobierz {image}',} as const;

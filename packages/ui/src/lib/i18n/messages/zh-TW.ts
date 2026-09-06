@@ -3329,7 +3329,7 @@ export const dict: Record<I18nKey, string> = {
   'dockerInstances.create.field.workspacePlaceholder': 'C:\projects\my-app',
   'dockerInstances.create.field.workspaceHint': '以讀寫方式掛載到容器的 /workspace，並作為路徑映射的目標。',
   'dockerInstances.create.sharing.configTitle': '共享 OpenCode 設定',
-  'dockerInstances.create.sharing.configHint': '唯讀。主機的提供者、模型與 MCP 設定在容器內可見。',
+  'dockerInstances.create.sharing.configHint': '雙向。主機的提供者、模型與 MCP 設定在容器內使用；Docker 內的變更會同步回主機。',
   'dockerInstances.create.sharing.skillsTitle': '共享技能',
   'dockerInstances.create.sharing.skillsHint': '讀寫。技能雙向可見。',
   'dockerInstances.create.sharing.skillsWritablePath': '容器可以寫入此主機目錄：{path}',
@@ -3348,4 +3348,10 @@ export const dict: Record<I18nKey, string> = {
   'dockerInstances.toast.stopped': '{name} 已停止。',
   'dockerInstances.toast.removed': '{name} 已移除。',
   'dockerInstances.toast.actionFailed': '操作失敗。',
-};
+
+  // Docker instance creation flow additions
+  'dockerInstances.create.actions.browse': '瀏覽…',
+  'dockerInstances.create.field.workspaceRequired': '請輸入要掛載資料夾的絕對路徑。',
+  'dockerInstances.create.field.workspaceInvalid': '路徑必須是絕對路徑（例如 C:\projects\demo 或 /srv/demo）。',
+
+  'dockerInstances.create.actions.pull': '拉取 {image}',};
