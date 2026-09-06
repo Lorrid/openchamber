@@ -1,6 +1,10 @@
 import { createUpstreamSseReader } from './upstream-reader.js';
 import { getPathMapping } from '../opencode/path-mapping.js';
 
+// TEMPORARY diagnostics for docker instance event routing (removed after the
+// routing issue is confirmed fixed).
+const DOCKER_DIAG = process.env.OPENCHAMBER_DOCKER_DIAG === '1';
+
 // Raised from 512 → 2048 to improve recovery after brief disconnects during
 // long-running agent sessions where many events accumulate quickly.
 const MESSAGE_STREAM_GLOBAL_REPLAY_LIMIT = 2048;
@@ -42,6 +46,50 @@ export function createGlobalMessageStreamHub({
     }
   };
 
+  const toHostDirectory = (value) => {
+    if (typeof value !== 'string' || !value.startsWith('/')) {
+      return value;
+    }
+    return getPathMapping().toHost(value) || value;
+  };
+
+  // Session payloads carry the directory the UPSTREAM saw (e.g. /workspace in
+  // a docker container). The UI's sync layer routes session.created/updated
+  // and groups the sidebar by that directory, so it must be restored to the
+  // host spelling exactly like session list responses. Unmapped/POSIX-global
+  // values pass through untouched.
+  const mapPayloadSessionDirectories = (payload) => {
+    if (!payload || typeof payload !== 'object') {
+      return payload;
+    }
+    const properties = payload.properties && typeof payload.properties === 'object' ? payload.properties : null;
+    if (!properties) {
+      return payload;
+    }
+    let changed = false;
+    const nextProperties = { ...properties };
+    if (typeof nextProperties.directory === 'string' && nextProperties.directory.startsWith('/')) {
+      const mapped = toHostDirectory(nextProperties.directory);
+      if (mapped !== nextProperties.directory) {
+        nextProperties.directory = mapped;
+        changed = true;
+      }
+    }
+    const info = nextProperties.info && typeof nextProperties.info === 'object' ? { ...nextProperties.info } : null;
+    if (info && typeof info.directory === 'string' && info.directory.startsWith('/')) {
+      const mapped = toHostDirectory(info.directory);
+      if (mapped !== info.directory) {
+        info.directory = mapped;
+        nextProperties.info = info;
+        changed = true;
+      }
+    }
+    if (!changed) {
+      return payload;
+    }
+    return { ...payload, properties: nextProperties };
+  };
+
   const normalizeEvent = ({ envelope, payload }) => {
     const rawDirectory =
       typeof envelope?.directory === 'string' && envelope.directory.length > 0 ? envelope.directory : 'global';
@@ -50,11 +98,17 @@ export function createGlobalMessageStreamHub({
     // list responses). toHost restores the host prefix for mapped container
     // paths and passes everything else through untouched, so the Local
     // upstream's behavior is byte-identical.
-    const directory = getPathMapping().toHost(rawDirectory) || rawDirectory;
+    const directory = toHostDirectory(rawDirectory) || rawDirectory;
     const eventId = typeof envelope?.eventId === 'string' && envelope.eventId.length > 0 ? envelope.eventId : undefined;
+    const mappedPayload = mapPayloadSessionDirectories(payload);
+    if (DOCKER_DIAG && typeof mappedPayload?.type === 'string' && mappedPayload.type.startsWith('session.')) {
+      console.log(`[docker-diag:hub] ${mappedPayload.type} envelopeDir=${rawDirectory} finalDir=${directory} payloadInfoDir=${typeof mappedPayload?.properties?.info?.directory === 'string' ? mappedPayload.properties.info.directory : '(none)'}`);
+    }
     return {
-      envelope,
-      payload,
+      envelope: envelope?.directory && directory !== envelope.directory
+        ? { ...envelope, directory }
+        : envelope,
+      payload: mappedPayload,
       directory,
       eventId,
     };
