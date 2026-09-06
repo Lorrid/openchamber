@@ -57,6 +57,7 @@ import {
   desktopSshStatus,
   type DesktopSshInstanceStatus,
 } from '@/lib/desktopSsh';
+import { DockerInstanceSection } from './DockerInstanceSection';
 
 const SSH_CONNECT_TIMEOUT_MS = 90_000;
 const SSH_CONNECT_CANCELLED_ERROR = 'SSH connection cancelled';
@@ -984,6 +985,10 @@ export function DesktopHostSwitcherDialog({
               })
             )}
           </div>
+          {/* Server-backed Docker instances: render in the desktop shell AND
+              plain web mode; the section self-hides while the feature toggle
+              is off. Desktop host rows above are untouched. */}
+          <DockerInstanceSection onChanged={() => void refresh()} />
         </div>
 
         {desktopAvailable && editingId && editingId !== LOCAL_HOST_ID && (

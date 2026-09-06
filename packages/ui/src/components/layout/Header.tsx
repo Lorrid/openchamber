@@ -44,6 +44,7 @@ import {
 } from '@/components/ui/collapsible';
 import type { SessionContextUsage } from '@/stores/types/sessionTypes';
 import { DesktopHostSwitcherDialog } from '@/components/desktop/DesktopHostSwitcher';
+import { DockerInstancesWebEntry } from '@/components/desktop/DockerInstanceSection';
 import { OpenInAppButton } from '@/components/desktop/OpenInAppButton';
 import { ProjectActionsButton } from '@/components/layout/ProjectActionsButton';
 import { useProjectActionsContext } from '@/hooks/useProjectActionsContext';
@@ -1288,7 +1289,11 @@ export const Header: React.FC = () => {
         remoteUpdateError={remoteUpdateError}
         onOpenRemoteUpdate={openRemoteInstanceUpdate}
       />
-      ) : null}
+      ) : (
+      // Web runtimes have no desktop instance switcher; the docker-instances
+      // entry self-hides unless the server-side feature is enabled.
+      <DockerInstancesWebEntry variant="icon" />
+      )}
     </>
   );
 
