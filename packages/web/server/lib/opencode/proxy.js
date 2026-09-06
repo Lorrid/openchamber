@@ -316,7 +316,15 @@ export const registerOpenCodeProxy = (app, deps) => {
   const FALLBACK_PROXY_TARGET = 'http://127.0.0.1:3902';
   const canonicalizeDirectoryQuery = createDirectoryQueryCanonicalizer({
     realpath: fs?.promises?.realpath?.bind(fs.promises),
-    pathMapping: getPathMapping(),
+    // Live view: the path mapping is process-mutable (an active Docker-backed
+    // instance installs its own mapping after proxy setup), so the
+    // canonicalizer must resolve the CURRENT mapping per request instead of a
+    // setup-time snapshot.
+    pathMapping: {
+      get enabled() { return getPathMapping().enabled; },
+      toRemote: (value) => getPathMapping().toRemote(value),
+      toHost: (value) => getPathMapping().toHost(value),
+    },
   });
 
   const hasParsedBodyValue = (body) => {

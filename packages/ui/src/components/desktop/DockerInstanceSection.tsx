@@ -11,6 +11,7 @@ import { Icon } from '@/components/icon/Icon';
 import { cn } from '@/lib/utils';
 import { toast } from '@/components/ui';
 import { isDesktopShell } from '@/lib/desktop';
+import { setRuntimeIdentityOverride } from '@/lib/runtime-switch';
 import { useI18n, type I18nKey } from '@/lib/i18n';
 import {
   activateDockerInstance,
@@ -70,6 +71,14 @@ export function DockerInstanceSection({ onChanged, className }: DockerInstanceSe
       const next = await fetchDockerInstances();
       setSnapshot(next);
       setLoadFailed(false);
+      // The active upstream changes what the local server serves WITHOUT
+      // changing the client origin, so caches and stores keyed by the runtime
+      // identity must be re-scoped whenever the active instance moves.
+      setRuntimeIdentityOverride(
+        next.enabled && next.activeInstanceId
+          ? `local-docker-${next.activeInstanceId}`
+          : null,
+      );
       return next;
     } catch {
       // Authoritative failure stays visible (retry affordance below) instead

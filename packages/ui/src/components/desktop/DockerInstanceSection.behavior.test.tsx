@@ -25,6 +25,7 @@ afterEach(() => {
   runtimeFetchResponses = [];
   runtimeFetchCalls = [];
   desktopShell = false;
+  identityOverrideCalls.length = 0;
 });
 
 const resetGlobals = () => {
@@ -175,6 +176,13 @@ mock.module('@/lib/i18n', () => ({
 let desktopShell = false;
 mock.module('@/lib/desktop', () => ({
   isDesktopShell: mock(() => desktopShell),
+}));
+
+const identityOverrideCalls: Array<string | null> = [];
+mock.module('@/lib/runtime-switch', () => ({
+  setRuntimeIdentityOverride: (key: string | null) => {
+    identityOverrideCalls.push(key);
+  },
 }));
 
 let runtimeFetchResponses: Array<{ ok: boolean; payload: unknown }> = [];
@@ -344,6 +352,31 @@ describe('DockerInstanceSection behavior', () => {
     const strings = collectStrings(output);
     expect(strings).toContain('dockerInstances.state.loadFailed');
     expect(strings).not.toContain('Project A');
+  });
+
+  test('re-scopes the runtime identity to the active docker instance and back', async () => {
+    resetGlobals();
+    runtimeFetchResponses = [
+      { ok: true, payload: { ...enabledPayload, activeInstanceId: 'docker-running' } },
+      { ok: true, payload: { ...enabledPayload, activeInstanceId: null } },
+    ];
+    await registerPromise();
+    renderComponent(requireSection(), {});
+    runEffects();
+    await flushMicrotasks();
+    expect(identityOverrideCalls.at(-1)).toBe('local-docker-docker-running');
+
+    // Second refresh with no active instance restores the original identity.
+    const retry = findButtons(renderComponent(requireSection(), {}));
+    void retry;
+    // Trigger a refresh through the retry affordance path: force a new effect
+    // cycle by clearing hook state (fresh mount) and replaying the second
+    // queued response.
+    hookRecords.clear();
+    renderComponent(requireSection(), {});
+    runEffects();
+    await flushMicrotasks();
+    expect(identityOverrideCalls.at(-1)).toBeNull();
   });
 });
 
