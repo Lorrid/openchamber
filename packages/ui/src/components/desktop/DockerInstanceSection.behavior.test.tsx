@@ -1,5 +1,10 @@
 import { afterEach, describe, expect, mock, test } from 'bun:test';
 
+declare global {
+  // eslint-disable-next-line no-var
+  var __ocWindowListeners: Map<string, Set<() => void>> | undefined;
+}
+
 type ComponentFn<P extends Record<string, unknown> = Record<string, unknown>> = (props: P) => unknown;
 type JSXProps = Record<string, unknown> & { children?: unknown };
 // Mock JSX tree contracts produced by the local jsx() shim below: every
@@ -29,12 +34,24 @@ afterEach(() => {
 });
 
 const resetGlobals = () => {
+  const windowListeners = new Map<string, Set<() => void>>();
+  globalThis.__ocWindowListeners = windowListeners;
   Object.defineProperty(globalThis, 'window', {
     configurable: true,
     value: {
       setInterval: () => 0,
       clearInterval: () => undefined,
-      dispatchEvent: () => true,
+      addEventListener: (type: string, listener: () => void) => {
+        if (!windowListeners.has(type)) windowListeners.set(type, new Set());
+        windowListeners.get(type)?.add(listener);
+      },
+      removeEventListener: (type: string, listener: () => void) => {
+        windowListeners.get(type)?.delete(listener);
+      },
+      dispatchEvent: (event: { type: string }) => {
+        windowListeners.get(event.type)?.forEach((listener) => listener());
+        return true;
+      },
       CustomEvent: class {
         readonly type: string;
         constructor(type: string) {
@@ -352,6 +369,23 @@ describe('DockerInstanceSection behavior', () => {
     const strings = collectStrings(output);
     expect(strings).toContain('dockerInstances.state.loadFailed');
     expect(strings).not.toContain('Project A');
+  });
+
+  test('re-scopes identity when the upstream-changed event fires from another surface', async () => {
+    resetGlobals();
+    runtimeFetchResponses = [
+      { ok: true, payload: { ...enabledPayload, activeInstanceId: null } },
+      { ok: true, payload: { ...enabledPayload, activeInstanceId: 'docker-running' } },
+    ];
+    await registerPromise();
+    renderComponent(requireSection(), {});
+    runEffects();
+    await flushMicrotasks();
+    expect(identityOverrideCalls.at(-1)).toBeNull();
+
+    globalThis.__ocWindowListeners?.get('openchamber:docker-upstream-changed')?.forEach((listener) => listener());
+    await flushMicrotasks();
+    expect(identityOverrideCalls.at(-1)).toBe('local-docker-docker-running');
   });
 
   test('re-scopes the runtime identity to the active docker instance and back', async () => {

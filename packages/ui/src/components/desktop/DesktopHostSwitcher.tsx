@@ -49,7 +49,7 @@ import {
 import { scheduleDesktopHostCandidateRefresh } from '@/lib/desktopRelayRestore';
 import { adoptRelayTunnel } from '@/lib/relay/runtime-tunnel';
 import { createRelayTunnelClient } from '@/lib/relay/tunnel-client';
-import { subscribeRuntimeEndpointChanged, switchRuntimeEndpoint } from '@/lib/runtime-switch';
+import { subscribeRuntimeEndpointChanged, switchRuntimeEndpoint, getRuntimeIdentityOverride } from '@/lib/runtime-switch';
 import {
   desktopSshConnect,
   desktopSshDisconnect,
@@ -57,6 +57,7 @@ import {
   desktopSshStatus,
   type DesktopSshInstanceStatus,
 } from '@/lib/desktopSsh';
+import { deactivateDockerInstance } from '@/lib/dockerInstances';
 import { DockerInstanceSection } from './DockerInstanceSection';
 
 const SSH_CONNECT_TIMEOUT_MS = 90_000;
@@ -416,6 +417,16 @@ export function DesktopHostSwitcherDialog({
   }, [open]);
 
   const handleSwitch = React.useCallback(async (host: DesktopHost) => {
+    // Switching back to Local must ALSO release the Docker-backed upstream on
+    // the server: the server still proxies to the active container otherwise,
+    // so the "Local" view would keep answering with the container's sessions.
+    if (host.id === LOCAL_HOST_ID && getRuntimeIdentityOverride()) {
+      try {
+        await deactivateDockerInstance();
+      } catch (error) {
+        toast.error(error instanceof Error ? error.message : 'Failed to deactivate the docker instance');
+      }
+    }
     // Relay legs ride the E2EE tunnel activated in-renderer via
     // switchRuntimeEndpoint({ relay }); the runtime fetch/socket layers route
     // through the tunnel from the singleton registry.

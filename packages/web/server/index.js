@@ -56,6 +56,7 @@ import { createOpenCodeNetworkRuntime } from './lib/opencode/network-runtime.js'
 import { createDockerRuntime } from './lib/docker/runtime.js';
 import { createDockerInstanceStore } from './lib/opencode/docker-instances/store.js';
 import { createDockerInstanceLifecycleManager } from './lib/opencode/docker-instances/lifecycle-manager.js';
+import { buildWorkspaceProjectUpdate } from './lib/opencode/docker-instances/workspace-project.js';
 import { registerDockerInstanceRoutes } from './lib/opencode/docker-instances/routes.js';
 import { OPENCODE_CONFIG_DIR, SKILL_DIR } from './lib/opencode/shared.js';
 import { AUTH_FILE } from './lib/opencode/auth.js';
@@ -684,6 +685,37 @@ const scheduleOpenCodeApiDetection = (...args) => openCodeNetworkRuntime.schedul
 // Docker-backed OpenCode instances: registry, lifecycle manager, and CLI
 // runtime. The feature stays dormant until the settings toggle is enabled;
 // creating the runtime here performs no Docker interaction at all.
+
+// When a Docker instance becomes the active upstream its workspace acts as
+// the default project (session sidebar groups by project), and deactivation
+// restores whatever project was active before the first activation.
+let dockerPreviousActiveProjectId = null;
+const handleDockerActiveUpstreamChanged = async (payload) => {
+  try {
+    if (payload?.instanceId) {
+      const instance = (await dockerInstanceManager.listInstances())
+        .find((entry) => entry.id === payload.instanceId) ?? null;
+      if (!instance?.workspaceHostPath) return;
+      const settings = await readSettingsFromDiskMigrated();
+      if (dockerPreviousActiveProjectId === null) {
+        dockerPreviousActiveProjectId = typeof settings.activeProjectId === 'string' && settings.activeProjectId
+          ? settings.activeProjectId
+          : null;
+      }
+      const update = buildWorkspaceProjectUpdate({
+        projects: settings.projects,
+        workspaceHostPath: instance.workspaceHostPath,
+      });
+      await persistSettings({ projects: update.projects, activeProjectId: update.activeProjectId });
+    } else if (dockerPreviousActiveProjectId !== null) {
+      await persistSettings({ activeProjectId: dockerPreviousActiveProjectId });
+      dockerPreviousActiveProjectId = null;
+    }
+  } catch (error) {
+    console.warn('[docker-instances] Default project switch failed:', error?.message ?? error);
+  }
+};
+
 dockerInstanceManager = createDockerInstanceLifecycleManager({
   runtime: createDockerRuntime(),
   store: createDockerInstanceStore({
@@ -691,7 +723,7 @@ dockerInstanceManager = createDockerInstanceLifecycleManager({
     fsPromises,
   }),
   defaultImage: process.env.OPENCHAMBER_DOCKER_IMAGE || 'opencode-instance:local',
-  onActiveUpstreamChanged: () => {
+  onActiveUpstreamChanged: (payload) => {
     // Same rebinding path as a managed OpenCode restart: long-lived upstream
     // readers must redial the new active endpoint.
     try {
@@ -699,6 +731,7 @@ dockerInstanceManager = createDockerInstanceLifecycleManager({
     } catch (error) {
       console.warn('Failed to rebind message stream after docker instance switch:', error?.message ?? error);
     }
+    void handleDockerActiveUpstreamChanged(payload);
   },
 });
 

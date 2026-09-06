@@ -99,9 +99,15 @@ export function DockerInstanceSection({ onChanged, className }: DockerInstanceSe
     };
     void poll();
     const interval = window.setInterval(() => void poll(), 5000);
+    // The active upstream can change from OTHER surfaces (desktop host
+    // switcher deactivating it, API calls) — re-sync identity from server
+    // truth whenever that happens.
+    const onChanged = () => void poll();
+    window.addEventListener(DOCKER_UPSTREAM_CHANGED_EVENT, onChanged);
     return () => {
       cancelled = true;
       window.clearInterval(interval);
+      window.removeEventListener(DOCKER_UPSTREAM_CHANGED_EVENT, onChanged);
     };
   }, [refresh]);
 
