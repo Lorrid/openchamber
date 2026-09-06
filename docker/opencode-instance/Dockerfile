@@ -22,6 +22,12 @@ RUN apt-get update \
   && rm -rf /var/lib/apt/lists/*
 
 RUN useradd --create-home --shell /bin/bash opencode
+# Pre-create OpenCode's data/config directories with correct ownership BEFORE
+# any bind mounts: Docker creates missing mount parents as root, which would
+# leave the opencode user unable to mkdir inside its own data dir (EACCES at
+# first serve — seen as a silent readiness timeout).
+RUN mkdir -p /home/opencode/.local/share/opencode /home/opencode/.config/opencode \
+  && chown -R opencode:opencode /home/opencode/.local /home/opencode/.config
 USER opencode
 WORKDIR /workspace
 
