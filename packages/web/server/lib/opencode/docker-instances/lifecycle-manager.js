@@ -357,7 +357,9 @@ export const createDockerInstanceLifecycleManager = (options = {}) => {
     activeUpstream = null;
     setActiveInstancePathMapping(null);
     await store.setActiveInstanceId(null);
-    onActiveUpstreamChanged?.(null);
+    // Awaited so side effects (settings persistence, project withdrawal)
+    // complete before the caller's API response reaches the UI.
+    await onActiveUpstreamChanged?.(null);
   };
 
   const setActiveInstance = async (id) => {
@@ -384,7 +386,7 @@ export const createDockerInstanceLifecycleManager = (options = {}) => {
     activeUpstream = { instanceId: id, origin: instanceOrigin(record) };
     setActiveInstancePathMapping(mapping);
     await store.setActiveInstanceId(id);
-    onActiveUpstreamChanged?.(activeUpstream);
+    await onActiveUpstreamChanged?.(activeUpstream);
     return activeUpstream;
   };
 

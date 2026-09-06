@@ -49,7 +49,7 @@ import {
 import { scheduleDesktopHostCandidateRefresh } from '@/lib/desktopRelayRestore';
 import { adoptRelayTunnel } from '@/lib/relay/runtime-tunnel';
 import { createRelayTunnelClient } from '@/lib/relay/tunnel-client';
-import { subscribeRuntimeEndpointChanged, switchRuntimeEndpoint, getRuntimeIdentityOverride } from '@/lib/runtime-switch';
+import { subscribeRuntimeEndpointChanged, switchRuntimeEndpoint, getRuntimeIdentityOverride, setRuntimeIdentityOverride } from '@/lib/runtime-switch';
 import {
   desktopSshConnect,
   desktopSshDisconnect,
@@ -417,15 +417,19 @@ export function DesktopHostSwitcherDialog({
   }, [open]);
 
   const handleSwitch = React.useCallback(async (host: DesktopHost) => {
-    // Switching back to Local must ALSO release the Docker-backed upstream on
-    // the server: the server still proxies to the active container otherwise,
-    // so the "Local" view would keep answering with the container's sessions.
+    // Switching back to Local while a Docker-backed instance is active is NOT
+    // a client origin change — the client never left the local server. Release
+    // the docker upstream server-side (restores the previous project) and
+    // re-scope the runtime identity. No probe, no full reset: the dropdown
+    // stays open and the label flips via the identity event.
     if (host.id === LOCAL_HOST_ID && getRuntimeIdentityOverride()) {
       try {
         await deactivateDockerInstance();
+        setRuntimeIdentityOverride(null);
       } catch (error) {
         toast.error(error instanceof Error ? error.message : 'Failed to deactivate the docker instance');
       }
+      return;
     }
     // Relay legs ride the E2EE tunnel activated in-renderer via
     // switchRuntimeEndpoint({ relay }); the runtime fetch/socket layers route

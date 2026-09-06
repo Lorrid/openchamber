@@ -1,4 +1,5 @@
 import { createUpstreamSseReader } from './upstream-reader.js';
+import { getPathMapping } from '../opencode/path-mapping.js';
 
 // Raised from 512 → 2048 to improve recovery after brief disconnects during
 // long-running agent sessions where many events accumulate quickly.
@@ -42,8 +43,14 @@ export function createGlobalMessageStreamHub({
   };
 
   const normalizeEvent = ({ envelope, payload }) => {
-    const directory =
+    const rawDirectory =
       typeof envelope?.directory === 'string' && envelope.directory.length > 0 ? envelope.directory : 'global';
+    // Docker-backed upstreams emit container paths (e.g. /workspace); the UI
+    // routes and groups global events by the HOST spelling (same as session
+    // list responses). toHost restores the host prefix for mapped container
+    // paths and passes everything else through untouched, so the Local
+    // upstream's behavior is byte-identical.
+    const directory = getPathMapping().toHost(rawDirectory) || rawDirectory;
     const eventId = typeof envelope?.eventId === 'string' && envelope.eventId.length > 0 ? envelope.eventId : undefined;
     return {
       envelope,
