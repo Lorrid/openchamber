@@ -1904,11 +1904,11 @@ export const invalidateSettingsCache = (): void => {
   _settingsCache = null;
 };
 
-export const syncDesktopSettings = async (options?: { bootstrap?: boolean; adoptTheme?: boolean }): Promise<void> => {
+export const syncDesktopSettings = async (options?: { bootstrap?: boolean; adoptTheme?: boolean }): Promise<DesktopSettings | null> => {
   const bootstrap = options?.bootstrap !== false;
   const adoptTheme = options?.adoptTheme ?? bootstrap;
   if (typeof window === 'undefined') {
-    return;
+    return null;
   }
   ensureSettingsRuntimeLifecycle();
   const context = captureSettingsRuntimeContext();
@@ -1959,12 +1959,13 @@ export const syncDesktopSettings = async (options?: { bootstrap?: boolean; adopt
     return { ...settings, ..._pendingSettingsChanges };
   };
 
-  const applySettings = async (loadedSettings: DesktopSettings) => {
-    if (!isSettingsRuntimeContextCurrent(context)) return;
+  const applySettings = async (loadedSettings: DesktopSettings): Promise<DesktopSettings | null> => {
+    if (!isSettingsRuntimeContextCurrent(context)) return null;
     let settings = overlayPendingChanges(_settingsMutationTracker.reconcile(loadedSettings, operation));
     await waitForHydration();
-    if (!isSettingsRuntimeContextCurrent(context)) return;
+    if (!isSettingsRuntimeContextCurrent(context)) return null;
     settings = overlayPendingChanges(_settingsMutationTracker.reconcile(loadedSettings, operation));
+    if (!isSettingsRuntimeContextCurrent(context)) return null;
     const shouldPersistCraftGoalMigration = settings.draftStartersCraftGoalAdded !== true
       || settings.draftStartersScheduleTaskAdded !== true;
     // `autoSaveEnabled` is new to the settings backend. Until the server has a
@@ -2032,22 +2033,24 @@ export const syncDesktopSettings = async (options?: { bootstrap?: boolean; adopt
     }
     if (Object.keys(migrationPatch).length > 0) {
       await updateDesktopSettings(migrationPatch);
-      if (!isSettingsRuntimeContextCurrent(context)) return;
+      if (!isSettingsRuntimeContextCurrent(context)) return null;
     }
 
     dispatchSettingsSynced(authoritativeSettings, bootstrap, adoptTheme);
+    return authoritativeSettings;
   };
 
   try {
     const webSettings = await fetchWebSettings(context);
     if (webSettings && isSettingsRuntimeContextCurrent(context)) {
-      await applySettings(webSettings);
+      return await applySettings(webSettings);
     }
   } catch (error) {
     console.warn('Failed to synchronise settings:', error);
   } finally {
     _settingsMutationTracker.finish(operation);
   }
+  return null;
 };
 
 // Coalesce rapid updateDesktopSettings calls into a single PUT

@@ -69,6 +69,9 @@ export const createDockerInstanceLifecycleManager = (options = {}) => {
 
   // In-memory active upstream; sync reads for the network runtime hot path.
   let activeUpstream = null;
+  // Workspace of the active instance, captured for deactivate-time side
+  // effects (project restore/withdrawal) after the pointer is cleared.
+  let activeWorkspaceHostPath = null;
 
   const fail = (code, message, extra = {}) => {
     const error = new Error(message);
@@ -354,12 +357,15 @@ export const createDockerInstanceLifecycleManager = (options = {}) => {
   };
 
   const deactivate = async () => {
+    const workspaceHostPath = activeWorkspaceHostPath;
+    const previousWasDocker = activeUpstream !== null;
     activeUpstream = null;
+    activeWorkspaceHostPath = null;
     setActiveInstancePathMapping(null);
     await store.setActiveInstanceId(null);
-    // Awaited so side effects (settings persistence, project withdrawal)
-    // complete before the caller's API response reaches the UI.
-    await onActiveUpstreamChanged?.(null);
+    // Awaited so side effects (settings persistence, project restore or
+    // withdrawal) complete before the caller's API response reaches the UI.
+    await onActiveUpstreamChanged?.(null, { workspaceHostPath, previousWasDocker });
   };
 
   const setActiveInstance = async (id) => {
@@ -383,10 +389,12 @@ export const createDockerInstanceLifecycleManager = (options = {}) => {
       fallbackRemote: record.workspaceContainerPath || '/workspace',
       platform,
     });
+    const previousWasDocker = activeUpstream !== null;
     activeUpstream = { instanceId: id, origin: instanceOrigin(record) };
+    activeWorkspaceHostPath = record.workspaceHostPath;
     setActiveInstancePathMapping(mapping);
     await store.setActiveInstanceId(id);
-    await onActiveUpstreamChanged?.(activeUpstream);
+    await onActiveUpstreamChanged?.(activeUpstream, { workspaceHostPath: record.workspaceHostPath, previousWasDocker });
     return activeUpstream;
   };
 

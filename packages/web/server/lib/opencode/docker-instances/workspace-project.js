@@ -50,3 +50,33 @@ export const buildWorkspaceProjectUpdate = ({ projects, workspaceHostPath, now =
     added: true,
   };
 };
+
+/**
+ * Builds the settings update that withdraws the workspace project entry on
+ * deactivation. Callers decide WHEN this is safe (the approved rule: only
+ * when the Local upstream has no sessions under that directory — otherwise
+ * the folder holds real local work and must stay).
+ *
+ * `activeProjectId` handling: callers pass the previously active project id;
+ * when it points at the withdrawn workspace itself they must omit it and let
+ * the settings runtime fall back to the first remaining project.
+ *
+ * @param {object} params
+ * @param {Array<object>} params.projects - current persisted projects.
+ * @param {string} params.workspaceHostPath - the deactivated instance's workspace.
+ * @returns {{ projects: Array<object>, withdrawnId: string, matched: boolean }}
+ */
+export const buildWorkspaceProjectWithdrawal = ({ projects, workspaceHostPath }) => {
+  const workspacePath = asPath(workspaceHostPath);
+  if (!workspacePath) {
+    throw new Error('workspaceHostPath is required');
+  }
+  const projectId = createProjectIdFromPath(workspacePath);
+  const current = Array.isArray(projects) ? projects : [];
+  const matched = current.some((project) => project?.id === projectId || asPath(project?.path) === workspacePath);
+  return {
+    projects: current.filter((project) => project?.id !== projectId && asPath(project?.path) !== workspacePath),
+    withdrawnId: projectId,
+    matched,
+  };
+};

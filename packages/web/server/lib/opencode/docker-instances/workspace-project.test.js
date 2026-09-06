@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { buildWorkspaceProjectUpdate } from './workspace-project.js';
+import { buildWorkspaceProjectUpdate, buildWorkspaceProjectWithdrawal } from './workspace-project.js';
 
 const EXISTING = { id: 'path_home', path: 'C:\\Users\\ekmen', addedAt: 1, lastOpenedAt: 1 };
 
@@ -39,5 +39,27 @@ describe('buildWorkspaceProjectUpdate', () => {
 
   it('requires a workspace path', () => {
     expect(() => buildWorkspaceProjectUpdate({ projects: [], workspaceHostPath: '  ' })).toThrow(/required/);
+  });
+});
+
+describe('buildWorkspaceProjectWithdrawal', () => {
+  it('withdraws the workspace project by id or path match and keeps siblings', () => {
+    const workspace = { id: 'path_ws', path: 'C:\\proj\\demo', addedAt: 1 };
+    const result = buildWorkspaceProjectWithdrawal({
+      projects: [EXISTING, workspace],
+      workspaceHostPath: 'C:\\proj\\demo',
+    });
+    expect(result.matched).toBe(true);
+    expect(result.projects).toEqual([EXISTING]);
+  });
+
+  it('reports unmatched when the project was already gone (idempotent)', () => {
+    const result = buildWorkspaceProjectWithdrawal({ projects: [EXISTING], workspaceHostPath: 'C:\\gone\\x' });
+    expect(result.matched).toBe(false);
+    expect(result.projects).toEqual([EXISTING]);
+  });
+
+  it('requires a workspace path', () => {
+    expect(() => buildWorkspaceProjectWithdrawal({ projects: [], workspaceHostPath: '' })).toThrow(/required/);
   });
 });
