@@ -6,6 +6,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
 import { createFakeDockerRuntime } from '../../docker/fake-runtime.js';
+import { registerCommonRequestMiddleware } from '../core-routes.js';
 import { createDockerInstanceLifecycleManager } from './lifecycle-manager.js';
 import { createDockerInstanceStore } from './store.js';
 import { registerDockerInstanceRoutes } from './routes.js';
@@ -98,6 +99,40 @@ describe('docker instance routes', () => {
     expect(response.body.code).toBe('INVALID_WORKSPACE');
   });
 
+  it('parses JSON bodies through the shared conditional request middleware', async () => {
+    // Regression: the shared middleware parses JSON only for allowlisted
+    // /api prefixes; a missing allowlist entry silently strips the body.
+    const runtime = createFakeDockerRuntime();
+    const dir = harness.dir;
+    const fsPromises = harness.fsPromises;
+    const store = createDockerInstanceStore({ filePath: join(dir, 'docker-instances-mw.json'), fsPromises });
+    const manager = createDockerInstanceLifecycleManager({
+      runtime,
+      store,
+      platform: 'win32',
+      getFreePort: async () => 4601,
+      readinessIntervalMs: 1,
+      readinessTimeoutMs: 250,
+      probeHealth: async () => true,
+    });
+    const app = express();
+    registerCommonRequestMiddleware(app, { express, verboseRequestLogs: false });
+    registerDockerInstanceRoutes(app, {
+      manager,
+      isFeatureEnabled: async () => true,
+      fsPromises,
+      paths: PATHS,
+    });
+    const workspace = join(dir, 'workspace-mw');
+    await fsPromises.mkdir(workspace, { recursive: true });
+    const response = await request(app)
+      .post('/api/docker-instances')
+      .set('Content-Type', 'application/json')
+      .send({ workspaceHostPath: workspace });
+    expect(response.status).toBe(201);
+    expect(response.body.lifecycleState).toBe('running');
+  });
+
   it('activate on a stopped instance returns 409 with canStart, then start enables activation', async () => {
     const workspace = join(harness.dir, 'workspace-b');
     await harness.fsPromises.mkdir(workspace, { recursive: true });
@@ -153,5 +188,14 @@ describe('docker instance routes', () => {
     expect(built.status).toBe(200);
     expect(built.body.ok).toBe(true);
     expect(harness.runtime.images.has('opencode-instance:local')).toBe(true);
+  });
+
+  it('image pull registers a pulled image explicitly', async () => {
+    const pulled = await request(harness.app)
+      .post('/api/docker-instances/image/pull')
+      .send({ imageName: 'ghcr.io/openchamber/opencode-instance:latest' });
+    expect(pulled.status).toBe(200);
+    expect(pulled.body.ok).toBe(true);
+    expect(harness.runtime.images.has('ghcr.io/openchamber/opencode-instance:latest')).toBe(true);
   });
 });
