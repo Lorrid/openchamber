@@ -690,6 +690,7 @@ const scheduleOpenCodeApiDetection = (...args) => openCodeNetworkRuntime.schedul
 // the default project (session sidebar groups by project), and deactivation
 // restores whatever project was active before the first activation.
 let dockerPreviousActiveProjectId = null;
+let dockerAddedWorkspaceProjectId = null;
 const handleDockerActiveUpstreamChanged = async (payload) => {
   try {
     if (payload?.instanceId) {
@@ -706,9 +707,22 @@ const handleDockerActiveUpstreamChanged = async (payload) => {
         projects: settings.projects,
         workspaceHostPath: instance.workspaceHostPath,
       });
+      dockerAddedWorkspaceProjectId = update.added ? update.activeProjectId : null;
       await persistSettings({ projects: update.projects, activeProjectId: update.activeProjectId });
-    } else if (dockerPreviousActiveProjectId !== null) {
-      await persistSettings({ activeProjectId: dockerPreviousActiveProjectId });
+    } else {
+      // Deactivation: restore the previously active project and withdraw the
+      // workspace project entry we auto-added (manually added folders stay).
+      const settings = await readSettingsFromDiskMigrated();
+      const nextProjects = dockerAddedWorkspaceProjectId && Array.isArray(settings.projects)
+        ? settings.projects.filter((project) => project?.id !== dockerAddedWorkspaceProjectId)
+        : settings.projects;
+      dockerAddedWorkspaceProjectId = null;
+      if (dockerPreviousActiveProjectId !== null || Array.isArray(nextProjects)) {
+        await persistSettings({
+          ...(dockerPreviousActiveProjectId !== null ? { activeProjectId: dockerPreviousActiveProjectId } : {}),
+          ...(Array.isArray(nextProjects) ? { projects: nextProjects } : {}),
+        });
+      }
       dockerPreviousActiveProjectId = null;
     }
   } catch (error) {

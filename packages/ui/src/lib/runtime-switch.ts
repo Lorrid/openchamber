@@ -11,6 +11,10 @@ export type RuntimeEndpointChangedDetail = {
   previousApiBaseUrl: string;
   runtimeKey: string;
   previousRuntimeKey: string;
+  /** True when only the upstream identity changed (docker switch) and the
+   * client origin is unchanged: consumers re-scope data caches but must not
+   * flip the connection phase (no reconnect splash, dropdowns stay open). */
+  identityOnly?: boolean;
 };
 
 const RUNTIME_ENDPOINT_CHANGED_EVENT = 'openchamber:runtime-endpoint-changed';
@@ -216,6 +220,7 @@ export const setRuntimeIdentityOverride = (key: string | null): void => {
     previousApiBaseUrl: apiBaseUrl,
     runtimeKey: key ?? identityOriginalKey ?? previousRuntimeKey,
     previousRuntimeKey,
+    identityOnly: true,
   };
   if (typeof window !== 'undefined') {
     window.dispatchEvent(new CustomEvent<RuntimeEndpointChangedDetail>(RUNTIME_ENDPOINT_WILL_CHANGE_EVENT, { detail }));
