@@ -178,6 +178,7 @@ export const createPathMapping = ({ rules, platform = process.platform } = {}) =
 // Explicitly injected mapping (tests) wins for the rest of the process; the
 // env-derived mapping is built once per environment value.
 let explicitPathMapping = null;
+let instancePathMapping = null;
 let envPathMapping = null;
 let envPathMappingSource;
 
@@ -187,14 +188,19 @@ const resolveMappingSource = () => {
 };
 
 /**
- * Process-wide mapping used by every OpenCode-bound directory hint. Built
- * lazily from `OPENCODE_PATH_MAP`; the environment is fixed for the lifetime
- * of the process, so it is resolved once and cached. Tests can inject an
- * instance with `setActivePathMapping()`.
+ * Process-wide mapping used by every OpenCode-bound directory hint. Resolution
+ * order: explicit test injection (`setActivePathMapping`) → active Docker
+ * instance mapping (`setActiveInstancePathMapping`, one per managed instance)
+ * → `OPENCODE_PATH_MAP` env mapping → identity. Docker instance mapping is
+ * additive: with no active instance the env/identity behavior is exactly the
+ * pre-existing contract.
  */
 export const getPathMapping = () => {
   if (explicitPathMapping) {
     return explicitPathMapping;
+  }
+  if (instancePathMapping) {
+    return instancePathMapping;
   }
   const source = resolveMappingSource();
   if (source !== envPathMappingSource || !envPathMapping) {
@@ -206,4 +212,13 @@ export const getPathMapping = () => {
 
 export const setActivePathMapping = (mapping) => {
   explicitPathMapping = mapping ?? null;
+};
+
+/**
+ * Installs the mapping of the active Docker-backed instance (built from the
+ * instance's own rules via `createPathMapping`). `null` deactivates and
+ * falls back to the env/identity behavior.
+ */
+export const setActiveInstancePathMapping = (mapping) => {
+  instancePathMapping = mapping ?? null;
 };
