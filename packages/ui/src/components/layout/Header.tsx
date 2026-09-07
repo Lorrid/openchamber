@@ -688,6 +688,7 @@ export const Header: React.FC = () => {
     if (!worktreeAttachment) return null;
     return formatSessionWorktreeBadge(worktreeAttachment, {
       pending: t('gitView.empty.worktreeSetupInProgress'),
+      missing: t('sessions.sidebar.group.worktreeMissing'),
     });
   }, [t, worktreeAttachment]);
 
