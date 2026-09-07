@@ -1,10 +1,6 @@
 import { createUpstreamSseReader } from './upstream-reader.js';
 import { getPathMapping } from '../opencode/path-mapping.js';
 
-// TEMPORARY diagnostics for docker instance event routing (removed after the
-// routing issue is confirmed fixed).
-const DOCKER_DIAG = process.env.OPENCHAMBER_DOCKER_DIAG === '1';
-
 // Raised from 512 → 2048 to improve recovery after brief disconnects during
 // long-running agent sessions where many events accumulate quickly.
 const MESSAGE_STREAM_GLOBAL_REPLAY_LIMIT = 2048;
@@ -101,9 +97,6 @@ export function createGlobalMessageStreamHub({
     const directory = toHostDirectory(rawDirectory) || rawDirectory;
     const eventId = typeof envelope?.eventId === 'string' && envelope.eventId.length > 0 ? envelope.eventId : undefined;
     const mappedPayload = mapPayloadSessionDirectories(payload);
-    if (DOCKER_DIAG && typeof mappedPayload?.type === 'string' && mappedPayload.type.startsWith('session.')) {
-      console.log(`[docker-diag:hub] ${mappedPayload.type} envelopeDir=${rawDirectory} finalDir=${directory} payloadInfoDir=${typeof mappedPayload?.properties?.info?.directory === 'string' ? mappedPayload.properties.info.directory : '(none)'}`);
-    }
     return {
       envelope: envelope?.directory && directory !== envelope.directory
         ? { ...envelope, directory }

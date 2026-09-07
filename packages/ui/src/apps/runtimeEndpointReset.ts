@@ -114,16 +114,5 @@ export const resetAppForRuntimeEndpointChange = (detail: RuntimeEndpointChangedD
     void useConfigStore.getState().loadProviders().catch(() => {});
     void useConfigStore.getState().loadAgents().catch(() => {});
   }
-  queueMicrotask(() => {
-    void syncDesktopSettings()
-      .then((settings) => {
-        // The sidebar project list is localStorage-backed; re-sync it from the
-        // server's settings after an upstream identity change so withdrawn
-        // docker workspaces drop and the restored local project is adopted.
-        if (detail.identityOnly && settings) {
-          useProjectsStore.getState().synchronizeFromSettings(settings, { adoptActiveProject: true });
-        }
-      })
-      .catch(() => {});
-  });
+  queueMicrotask(() => void syncDesktopSettings());
 };

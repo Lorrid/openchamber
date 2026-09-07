@@ -56,7 +56,6 @@ import { createOpenCodeNetworkRuntime } from './lib/opencode/network-runtime.js'
 import { createDockerRuntime } from './lib/docker/runtime.js';
 import { createDockerInstanceStore } from './lib/opencode/docker-instances/store.js';
 import { createDockerInstanceLifecycleManager } from './lib/opencode/docker-instances/lifecycle-manager.js';
-import { buildWorkspaceProjectUpdate } from './lib/opencode/docker-instances/workspace-project.js';
 import { registerDockerInstanceRoutes } from './lib/opencode/docker-instances/routes.js';
 import { OPENCODE_CONFIG_DIR, SKILL_DIR } from './lib/opencode/shared.js';
 import { AUTH_FILE } from './lib/opencode/auth.js';
@@ -686,123 +685,9 @@ const scheduleOpenCodeApiDetection = (...args) => openCodeNetworkRuntime.schedul
 // runtime. The feature stays dormant until the settings toggle is enabled;
 // creating the runtime here performs no Docker interaction at all.
 
-// When a Docker instance becomes the active upstream its workspace acts as
-// the default project (session sidebar groups by project). On deactivation
-// the previously active project is restored, and the workspace project entry
-// is withdrawn ONLY when the Local upstream has no sessions under it — a
-// folder that also holds real local work stays visible on Local.
-let dockerPreviousActiveProjectId = null;
-let dockerActiveWorkspacePath = null;
-const DOCKER_DIAG = process.env.OPENCHAMBER_DOCKER_DIAG === '1';
-
-const hasLocalSessionsUnderDirectory = async (directory) => {
-  const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), 5000);
-  try {
-    // Runs after the upstream reverted to Local, so this resolves against the
-    // Local OpenCode server — the source of truth for "real local work".
-    const url = `${buildOpenCodeUrl('/session', '')}?directory=${encodeURIComponent(directory)}`;
-    const response = await fetch(url, {
-      signal: controller.signal,
-      headers: { Accept: 'application/json', ...getOpenCodeAuthHeaders() },
-    });
-    if (!response.ok) return true; // fail-open: keep the project entry
-    const sessions = await response.json().catch(() => null);
-    return Array.isArray(sessions) ? sessions.length > 0 : true;
-  } catch {
-    return true; // fail-open: keep the project entry
-  } finally {
-    clearTimeout(timeout);
-  }
-};
-
-const handleDockerActiveUpstreamChanged = async (payload, meta = {}) => {
-  try {
-    if (payload?.instanceId) {
-      const instance = (await dockerInstanceManager.listInstances())
-        .find((entry) => entry.id === payload.instanceId) ?? null;
-      if (!instance?.workspaceHostPath) return;
-      dockerActiveWorkspacePath = instance.workspaceHostPath;
-      const settings = await readSettingsFromDiskMigrated();
-      if (!meta.previousWasDocker && dockerPreviousActiveProjectId === null) {
-        dockerPreviousActiveProjectId = typeof settings.activeProjectId === 'string' && settings.activeProjectId
-          ? settings.activeProjectId
-          : null;
-      }
-      const update = buildWorkspaceProjectUpdate({
-        projects: settings.projects,
-        workspaceHostPath: instance.workspaceHostPath,
-      });
-      await persistSettings({ projects: update.projects, activeProjectId: update.activeProjectId });
-      if (DOCKER_DIAG) {
-        const projectList = update.projects.map((project) => project.path).join(' | ');
-        console.log(`[docker-diag:projects] activated: added=${update.added} activeProjectId=${update.activeProjectId} previous=${dockerPreviousActiveProjectId} previousWasDocker=${meta.previousWasDocker === true} projects=[${projectList}]`);
-      }
-      return;
-    }
-
-    // Deactivation: restore the previously active project. EVERY registered
-    // docker workspace project entry is withdrawn unless the Local upstream
-    // still has sessions under it (fail-open keeps the entry when the check
-    // cannot be trusted).
-    const workspacePaths = new Set();
-    if (typeof meta?.workspaceHostPath === 'string' && meta.workspaceHostPath.trim()) {
-      workspacePaths.add(meta.workspaceHostPath.trim());
-    }
-    try {
-      for (const instance of await dockerInstanceManager.listInstances()) {
-        if (typeof instance.workspaceHostPath === 'string' && instance.workspaceHostPath.trim()) {
-          workspacePaths.add(instance.workspaceHostPath.trim());
-        }
-      }
-    } catch {
-      // Registry read failure: fall back to the deactivated instance's path.
-    }
-    dockerActiveWorkspacePath = null;
-    const previous = dockerPreviousActiveProjectId;
-    dockerPreviousActiveProjectId = null;
-    if (workspacePaths.size === 0) {
-      if (previous !== null) {
-        await persistSettings({ activeProjectId: previous });
-      }
-      return;
-    }
-    const settings = await readSettingsFromDiskMigrated();
-    let nextProjects = Array.isArray(settings.projects) ? settings.projects : [];
-    const withdrawnIds = new Set();
-    for (const workspacePath of workspacePaths) {
-      if (await hasLocalSessionsUnderDirectory(workspacePath)) {
-        continue; // fail-open: real local work lives here, keep the entry
-      }
-      const withdrawal = buildWorkspaceProjectWithdrawal({
-        projects: nextProjects,
-        workspaceHostPath: workspacePath,
-      });
-      if (withdrawal.matched) {
-        nextProjects = withdrawal.projects;
-        withdrawnIds.add(withdrawal.withdrawnId);
-      }
-    }
-    if (DOCKER_DIAG) {
-      const beforeList = Array.isArray(settings.projects) ? settings.projects.map((project) => project.path).join(' | ') : '';
-      const afterList = Array.isArray(nextProjects) ? nextProjects.map((project) => project.path).join(' | ') : '';
-      console.log(`[docker-diag:projects] deactivated: withdrawn=[${Array.from(withdrawnIds).join(', ')}] restore=${previous !== null ? previous : '(first project)'} before=[${beforeList}] after=[${afterList}]`);
-    }
-    if (previous !== null && !withdrawnIds.has(previous)) {
-      await persistSettings({ projects: nextProjects, activeProjectId: previous });
-      return;
-    }
-    if (withdrawnIds.size > 0 || previous !== null) {
-      // Either entries were withdrawn (previous may point at a withdrawn
-      // project) or there is nothing valid to restore: omit activeProjectId
-      // so the settings runtime falls back to the first remaining project.
-      await persistSettings({ projects: nextProjects });
-    }
-  } catch (error) {
-    console.warn('[docker-instances] Default project switch failed:', error?.message ?? error);
-  }
-};
-
+// Docker-backed OpenCode instances: registry, lifecycle manager, and CLI
+// runtime. The feature stays dormant until the settings toggle is enabled;
+// creating the runtime here performs no Docker interaction at all.
 dockerInstanceManager = createDockerInstanceLifecycleManager({
   runtime: createDockerRuntime(),
   store: createDockerInstanceStore({
@@ -810,7 +695,7 @@ dockerInstanceManager = createDockerInstanceLifecycleManager({
     fsPromises,
   }),
   defaultImage: process.env.OPENCHAMBER_DOCKER_IMAGE || 'opencode-instance:local',
-  onActiveUpstreamChanged: (payload) => {
+  onActiveUpstreamChanged: () => {
     // Same rebinding path as a managed OpenCode restart: long-lived upstream
     // readers must redial the new active endpoint.
     try {
@@ -818,7 +703,6 @@ dockerInstanceManager = createDockerInstanceLifecycleManager({
     } catch (error) {
       console.warn('Failed to rebind message stream after docker instance switch:', error?.message ?? error);
     }
-    void handleDockerActiveUpstreamChanged(payload);
   },
 });
 

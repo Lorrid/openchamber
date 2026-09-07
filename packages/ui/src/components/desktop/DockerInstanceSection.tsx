@@ -310,8 +310,6 @@ export function DockerInstanceSection({ onChanged, className }: DockerInstanceSe
   );
 }
 
-export { DOCKER_UPSTREAM_CHANGED_EVENT };
-
 /**
  * Label of the currently active Docker instance (null when Local/external is
  * active or the feature is off). Refreshes on upstream-change events and on a
