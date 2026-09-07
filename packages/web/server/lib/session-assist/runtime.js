@@ -13,6 +13,7 @@ import os from 'os';
 
 import { getPathMapping } from '../opencode/path-mapping.js';
 import path from 'path';
+import { readMergedSettingsSync } from '../opencode/settings-files.js';
 
 const OPENCHAMBER_SETTINGS_FILE = path.join(
   process.env.OPENCHAMBER_DATA_DIR
@@ -25,16 +26,11 @@ const OPENCHAMBER_SETTINGS_FILE = path.join(
 // off, no small-model calls and no metadata writes happen at all. Existing
 // payloads stay untouched — clients keep showing them and dismissal still works.
 const getSessionAssistTargets = () => {
-  try {
-    const raw = fs.readFileSync(OPENCHAMBER_SETTINGS_FILE, 'utf8');
-    const settings = JSON.parse(raw);
-    return {
-      recap: settings?.sessionRecapEnabled !== false,
-      suggestion: settings?.sessionSuggestionEnabled !== false,
-    };
-  } catch {
-    return { recap: true, suggestion: true };
-  }
+  const settings = readMergedSettingsSync({ fs, path, settingsFilePath: OPENCHAMBER_SETTINGS_FILE });
+  return {
+    recap: settings.sessionRecapEnabled !== false,
+    suggestion: settings.sessionSuggestionEnabled !== false,
+  };
 };
 
 const IDLE_QUIET_MS = 60_000;
