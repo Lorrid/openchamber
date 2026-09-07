@@ -317,25 +317,38 @@ export function DockerInstanceSection({ onChanged, className }: DockerInstanceSe
  */
 export function useActiveDockerInstanceLabel(): string | null {
   const [label, setLabel] = React.useState<string | null>(null);
-  const refresh = React.useCallback(async () => {
+  // Re-discovery cadence while the feature is known to be OFF: the identity
+  // event cannot fire (nothing is managing instances), so a slow poll is the
+  // only way the label learns the toggle was turned back on. Fast cadence is
+  // only needed while instances exist.
+  const refresh = React.useCallback(async (): Promise<boolean> => {
     try {
       const snapshot = await fetchDockerInstances();
       const active = snapshot.enabled && snapshot.activeInstanceId
         ? snapshot.instances.find((instance) => instance.id === snapshot.activeInstanceId) ?? null
         : null;
       setLabel(active?.label ?? null);
+      return snapshot.enabled;
     } catch {
       setLabel(null);
+      return false;
     }
   }, []);
   React.useEffect(() => {
-    void refresh();
+    let cancelled = false;
+    let timer: number | undefined;
     const onChanged = () => void refresh();
+    const tick = async () => {
+      const enabled = await refresh();
+      if (cancelled) return;
+      timer = window.setTimeout(() => void tick(), enabled ? 15_000 : 60_000);
+    };
     window.addEventListener(DOCKER_UPSTREAM_CHANGED_EVENT, onChanged);
-    const interval = window.setInterval(() => void refresh(), 15_000);
+    void tick();
     return () => {
+      cancelled = true;
+      if (timer !== undefined) window.clearTimeout(timer);
       window.removeEventListener(DOCKER_UPSTREAM_CHANGED_EVENT, onChanged);
-      window.clearInterval(interval);
     };
   }, [refresh]);
   return label;

@@ -1933,9 +1933,20 @@ async function main(options = {}) {
     dockerFilePath: path.resolve(__dirname, '../../../docker/opencode-instance/Dockerfile'),
     dockerContextPath: path.resolve(__dirname, '../../../docker/opencode-instance'),
   });
-  void dockerInstanceManager.restoreActiveInstance().catch((error) => {
-    console.warn('[docker-instances] Active instance restore skipped:', error?.message ?? error);
-  });
+  void dockerInstanceManager
+    .restoreActiveInstance({
+      isFeatureEnabled: async () => {
+        try {
+          const settings = await readSettingsFromDiskMigrated();
+          return settings.dockerInstancesEnabled === true;
+        } catch {
+          return false;
+        }
+      },
+    })
+    .catch((error) => {
+      console.warn('[docker-instances] Active instance restore skipped:', error?.message ?? error);
+    });
 
   // One scanner backs both discovery and the tunnel allowlist, so a port the
   // user can see is exactly a port the tunnel will dial.

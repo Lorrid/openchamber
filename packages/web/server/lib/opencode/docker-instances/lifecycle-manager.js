@@ -405,14 +405,21 @@ export const createDockerInstanceLifecycleManager = (options = {}) => {
    * stale pointer degrades to the default upstream instead of poisoning
    * every OpenCode-bound request.
    */
-  const restoreActiveInstance = async () => {
-    const activeId = await store.getActiveInstanceId();
-    if (!activeId) return null;
-    const record = await store.get(activeId);
-    if (!record || record.lifecycleState !== 'running' || !record.containerId || !record.port) {
-      await deactivate();
-      return null;
-    }
+const restoreActiveInstance = async ({ isFeatureEnabled = null } = {}) => {
+  const activeId = await store.getActiveInstanceId();
+  if (!activeId) return null;
+  // The feature toggle is authoritative: with it off, a persisted pointer
+  // must degrade to the default upstream (the routes would refuse to touch
+  // the instance, so the pointer could never be cleared otherwise).
+  if (typeof isFeatureEnabled === 'function' && !(await isFeatureEnabled())) {
+    await deactivate();
+    return null;
+  }
+  const record = await store.get(activeId);
+  if (!record || record.lifecycleState !== 'running' || !record.containerId || !record.port) {
+    await deactivate();
+    return null;
+  }
     let running = false;
     try {
       const inspected = await runtime.inspectContainer(record.containerId);
@@ -434,7 +441,7 @@ export const createDockerInstanceLifecycleManager = (options = {}) => {
   const getInstanceStatus = async (id) => {
     const record = await requireRecord(id);
     const healthy = record.lifecycleState === 'running' && record.port
-      ? await probeInstanceHealth(record)
+      ? await probeHealth(instanceOrigin(record))
       : false;
     return {
       ...record,

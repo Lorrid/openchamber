@@ -13,6 +13,28 @@ const PATHS = {
   authFile: 'C:\\Users\\me\\.local\\share\\opencode\\auth.json',
 };
 
+describe('getInstanceStatus', () => {
+  it('probes a running instance without throwing (regression: undefined probe symbol)', async () => {
+    const runtime = createFakeDockerRuntime();
+    const dir = await mkdtemp(join(tmpdir(), 'oc-docker-status-'));
+    const fsPromises = await import('node:fs/promises');
+    const store = createDockerInstanceStore({ filePath: join(dir, 'docker-instances.json'), fsPromises });
+    const manager = createDockerInstanceLifecycleManager({
+      runtime,
+      store,
+      platform: 'win32',
+      getFreePort: async () => 4610,
+      readinessIntervalMs: 1,
+      readinessTimeoutMs: 250,
+      probeHealth: async () => true,
+    });
+    const record = await manager.createInstance(createInput({ label: 'StatusProbe' }));
+    const status = await manager.getInstanceStatus(record.id);
+    expect(status.connectable).toBe(true);
+    expect(status.healthy).toBe(true);
+  });
+});
+
 const createHarness = async ({ unhealthyUntil = 0, freePort = 4567 } = {}) => {
   const runtime = createFakeDockerRuntime();
   const dir = await mkdtemp(join(tmpdir(), 'oc-docker-lm-'));
