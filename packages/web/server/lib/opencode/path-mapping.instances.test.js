@@ -80,7 +80,7 @@ describe('instance-aware path mapping resolution', () => {
     it('unmapped host paths land at the workspace root instead of reaching the container as garbage', () => {
       install();
       const mapping = getPathMapping();
-      expect(mapping.toRemote('C:\\Users\\ekmen')).toBe('/workspace');
+      expect(mapping.toRemote('C:\\Users\\someone')).toBe('/workspace');
       expect(mapping.toRemote('D:\\somewhere\\else')).toBe('/workspace');
     });
 
