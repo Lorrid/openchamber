@@ -62,6 +62,12 @@ describe('buildInstanceMounts', () => {
       { workspaceHostPath: 'C:\\Users\\me\\.ssh' },
       { workspaceHostPath: 'C:\\Users\\me\\.git-credentials' },
       { workspaceHostPath: 'C:\\proj\\id_rsa' },
+      // The user-suppliable skills override must pass the same guard — a
+      // request mounting the docker socket (or SSH material) through it would
+      // defeat the isolation model.
+      { sharing: { config: false, skills: true, credentials: false, skillsHostDir: '/var/run/docker.sock' } },
+      { sharing: { config: false, skills: true, credentials: false, skillsHostDir: 'C:\\Users\\me\\.ssh' } },
+      { sharing: { config: false, skills: true, credentials: false, skillsHostDir: 'C:\\Users\\me\\.git-credentials' } },
     ];
     for (const candidate of forbidden) {
       expect(() => buildInstanceMounts({ instance: instance(candidate), paths: PATHS }))

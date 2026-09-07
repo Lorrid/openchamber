@@ -44,8 +44,8 @@ export const buildInstanceMounts = ({ instance, paths }) => {
     throw new Error('Instance is missing a workspace host path');
   }
 
-  for (const candidate of [workspaceHostPath, paths.openCodeConfigDir, paths.skillDir, paths.authFile]) {
-    if (isForbiddenHostPath(candidate)) {
+  for (const candidate of [workspaceHostPath, instance.sharing?.skillsHostDir, paths.openCodeConfigDir, paths.skillDir, paths.authFile]) {
+    if (candidate && isForbiddenHostPath(candidate)) {
       throw new Error(`Refusing to mount forbidden host path: ${candidate}`);
     }
   }
