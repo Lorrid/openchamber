@@ -1,5 +1,7 @@
 import { linearIntegrationI18n } from './linear-integration.i18n';
 export const settingsDict = {
+  'settings.openchamber.visual.field.alwaysShowScrollbars': 'Bildlaufleisten immer anzeigen',
+  'settings.openchamber.visual.field.alwaysShowScrollbarsHint': 'Bildlaufleisten bleiben sichtbar, auch wenn sich der Mauszeiger außerhalb des scrollbaren Bereichs befindet. Gilt nur auf diesem Gerät.',
   'settings.providers.page.openCodeGo.title': 'OpenCode Go Nutzungsverfolgung',
   'settings.providers.page.openCodeGo.description': 'Verbinden Sie das OpenCode Go Dashboard, um rollierenden, wöchentlichen und monatlichen Verbrauch anzuzeigen.',
   'settings.providers.page.openCodeGo.workspaceId': 'Workspace-ID',
@@ -53,7 +55,6 @@ export const settingsDict = {
   'settings.view.pendingRestart.confirm.cancel': 'Abbrechen',
   'settings.view.actions.backToSettings': 'Zurück zu Einstellungen',
   'settings.view.actions.closeSettings': 'Einstellungen schließen',
-  'settings.view.actions.openSectionList': 'Abschnittsliste öffnen',
   'settings.view.actions.closeSettingsWithShortcut': 'Einstellungen schließen ({shortcut}+,)',
   'settings.view.actions.back': 'Zurück',
   'settings.view.actions.resizeNavigation': 'Einstellungsnavigation skalieren',
@@ -2042,8 +2043,10 @@ export const settingsDict = {
   'settings.openchamber.visual.field.enableSpellcheckInTextInputs': 'Rechtschreibprüfung in Texteingaben aktivieren',
   'settings.openchamber.visual.field.largeTextPaste': 'Großes Texteinfügen',
   'settings.openchamber.visual.field.largeTextPasteHint': 'Beim Einfügen von mehr als etwa 2.000 Zeichen oder 25 Zeilen wählen, ob der Text als Datei angehängt, direkt eingefügt oder jedes Mal nachgefragt werden soll.',
-  'settings.openchamber.visual.field.enterToSend': 'Enter sendet',
-  'settings.openchamber.visual.field.enterToSendHint': 'Nach der Änderung steuern Enter und Shift+Enter das Verhalten auf jeder Oberfläche. Bis dahin behält jede Oberfläche ihr bestehendes Verhalten bei.',
+  'settings.openchamber.visual.field.enterToSend': 'Tastenkürzel zum Senden',
+  'settings.openchamber.visual.field.enterToSendHint': 'Wählen Sie das Tastenkürzel zum Senden im Standard-Composer. Im erweiterten Composer fügt Enter immer eine neue Zeile ein, und Strg/Cmd+Enter sendet.',
+  'settings.openchamber.visual.option.enterToSend.enter.label': 'Mit Enter senden',
+  'settings.openchamber.visual.option.enterToSend.modifier.label': 'Mit Strg/Cmd+Enter senden',
   'settings.openchamber.visual.field.largeTextPasteAria': 'Verhalten bei großem Texteinfügen',
   'settings.openchamber.visual.field.largeTextPasteOptionAria': 'Großes Texteinfügen: {option}',
   'settings.openchamber.visual.option.largeTextPaste.ask.label': 'Jedes Mal fragen',

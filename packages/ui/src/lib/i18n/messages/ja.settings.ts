@@ -1,5 +1,7 @@
 import { linearIntegrationI18n } from './linear-integration.i18n';
 export const settingsDict = {
+  'settings.openchamber.visual.field.alwaysShowScrollbars': 'スクロールバーを常に表示',
+  'settings.openchamber.visual.field.alwaysShowScrollbarsHint': 'ポインターがスクロール領域の外にあるときも、スクロールバーを表示します。このデバイスにのみ適用されます。',
   'settings.providers.page.openCodeGo.title': 'OpenCode Go 使用量追跡',
   'settings.providers.page.openCodeGo.description': 'OpenCode Go ダッシュボードを接続して、ローリング、週間、月間のクォータを表示します。',
   'settings.providers.page.openCodeGo.workspaceId': 'ワークスペース ID',
@@ -59,7 +61,6 @@ export const settingsDict = {
   'settings.view.pendingRestart.confirm.dontShowAgain': '今後表示しない',
   'settings.view.pendingRestart.confirm.cancel': 'キャンセル',  'settings.view.actions.backToSettings': '設定に戻る',
   'settings.view.actions.closeSettings': '設定を閉じる',
-  'settings.view.actions.openSectionList': 'セクション一覧を開く',
   'settings.view.actions.closeSettingsWithShortcut': '設定を閉じる ({shortcut}+,)',
   'settings.view.actions.back': '戻る',
   'settings.view.actions.resizeNavigation': '設定ナビゲーションのサイズ変更',
@@ -2274,8 +2275,10 @@ export const settingsDict = {
   'settings.openchamber.visual.field.inputHistoryLimitDescription': 'この数を減らすと、履歴内の古いプロンプトはすぐに削除されます。',
   'settings.openchamber.visual.field.inputHistoryLimitAria': '記憶するプロンプト数',
   'settings.openchamber.visual.field.inputHistoryLimitUnit': '件',
-  'settings.openchamber.visual.field.enterToSend': 'Enterで送信',
-  'settings.openchamber.visual.field.enterToSendHint': '変更すると、すべての環境でEnterとShift+Enterの動作を制御します。変更するまでは、各環境の既存の動作が維持されます。',
+  'settings.openchamber.visual.field.enterToSend': '送信ショートカット',
+  'settings.openchamber.visual.field.enterToSendHint': '標準コンポーザーの送信ショートカットを選択します。拡張コンポーザーでは、Enter は常に改行し、Ctrl/Cmd+Enter で送信します。',
+  'settings.openchamber.visual.option.enterToSend.enter.label': 'Enter で送信',
+  'settings.openchamber.visual.option.enterToSend.modifier.label': 'Ctrl/Cmd+Enter で送信',
   ...linearIntegrationI18n.ja,
   'settings.page.integrations.title': '連携',
   'settings.page.integrations.description': 'GitHub と Linear を接続すると、OpenChamber が Issue やプルリクエストを扱えるようになります。',

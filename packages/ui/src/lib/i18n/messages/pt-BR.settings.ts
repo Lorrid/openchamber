@@ -1,5 +1,7 @@
 import { linearIntegrationI18n } from './linear-integration.i18n';
 export const settingsDict = {
+  'settings.openchamber.visual.field.alwaysShowScrollbars': 'Sempre mostrar barras de rolagem',
+  'settings.openchamber.visual.field.alwaysShowScrollbarsHint': 'Mantenha as barras de rolagem visíveis mesmo quando o ponteiro estiver fora da área de rolagem. Aplica-se apenas a este dispositivo.',
   'settings.providers.page.openCodeGo.title': 'Monitoramento de uso do OpenCode Go',
   'settings.providers.page.openCodeGo.description': 'Conecte o painel do OpenCode Go para exibir as cotas móvel, semanal e mensal.',
   'settings.providers.page.openCodeGo.workspaceId': 'ID do workspace',
@@ -59,7 +61,6 @@ export const settingsDict = {
   "settings.view.pendingRestart.confirm.dontShowAgain": "Não mostrar novamente",
   "settings.view.pendingRestart.confirm.cancel": "Cancelar",  "settings.view.actions.backToSettings": "Voltar às configurações",
   "settings.view.actions.closeSettings": "Fechar configurações",
-  "settings.view.actions.openSectionList": "Abrir lista de seções",
   "settings.view.actions.closeSettingsWithShortcut": "Fechar configurações ({shortcut}+,)",
   "settings.view.actions.back": "Voltar",
   "settings.view.actions.resizeNavigation": "Ajustar tamanho da navegação",
@@ -2274,8 +2275,10 @@ export const settingsDict = {
   "settings.openchamber.visual.field.inputHistoryLimitDescription": "Reduzir esse número remove na hora os prompts mais antigos do seu histórico.",
   "settings.openchamber.visual.field.inputHistoryLimitAria": "Prompts para lembrar",
   "settings.openchamber.visual.field.inputHistoryLimitUnit": "prompts",
-  "settings.openchamber.visual.field.enterToSend": "Enter envia",
-  "settings.openchamber.visual.field.enterToSendHint": "Depois de alterada, esta opção controla Enter e Shift+Enter em todas as superfícies. Até lá, cada superfície mantém seu comportamento atual.",
+  "settings.openchamber.visual.field.enterToSend": "Atalho de envio",
+  "settings.openchamber.visual.field.enterToSendHint": "Escolha o atalho de envio para o compositor padrão. No compositor expandido, Enter sempre cria uma nova linha e Ctrl/Cmd+Enter envia.",
+  "settings.openchamber.visual.option.enterToSend.enter.label": "Enviar com Enter",
+  "settings.openchamber.visual.option.enterToSend.modifier.label": "Enviar com Ctrl/Cmd+Enter",
   ...linearIntegrationI18n['pt-BR'],
   'settings.page.integrations.title': 'Integrações',
   'settings.page.integrations.description': 'Conecte o GitHub e o Linear para que o OpenChamber possa trabalhar com suas issues e pull requests.',

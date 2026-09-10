@@ -1,9 +1,11 @@
 import { createUpstreamSseReader } from './upstream-reader.js';
+import { serializeMessageStreamWsEvent } from './protocol.js';
 import { getPathMapping } from '../opencode/path-mapping.js';
 
 // Raised from 512 → 2048 to improve recovery after brief disconnects during
 // long-running agent sessions where many events accumulate quickly.
 const MESSAGE_STREAM_GLOBAL_REPLAY_LIMIT = 2048;
+const MESSAGE_STREAM_GLOBAL_REPLAY_BYTES = 8 * 1024 * 1024;
 
 export function createGlobalMessageStreamHub({
   buildOpenCodeUrl,
@@ -12,10 +14,16 @@ export function createGlobalMessageStreamHub({
   upstreamStallTimeoutMs,
   upstreamReconnectDelayMs,
   replayLimit = MESSAGE_STREAM_GLOBAL_REPLAY_LIMIT,
+  replayByteLimit = MESSAGE_STREAM_GLOBAL_REPLAY_BYTES,
 }) {
+  if (!Number.isSafeInteger(replayLimit) || replayLimit < 0 || !Number.isSafeInteger(replayByteLimit) || replayByteLimit < 0) {
+    throw new RangeError('Replay limits must be nonnegative safe integers');
+  }
   const eventSubscribers = new Set();
   const statusSubscribers = new Set();
   const replay = [];
+  let replayBytes = 0;
+  let latestEventId;
 
   let controller = null;
   let reader = null;
@@ -96,6 +104,7 @@ export function createGlobalMessageStreamHub({
     // upstream's behavior is byte-identical.
     const directory = toHostDirectory(rawDirectory) || rawDirectory;
     const eventId = typeof envelope?.eventId === 'string' && envelope.eventId.length > 0 ? envelope.eventId : undefined;
+    let serializedFrame;
     const mappedPayload = mapPayloadSessionDirectories(payload);
     return {
       envelope: envelope?.directory && directory !== envelope.directory
@@ -104,6 +113,10 @@ export function createGlobalMessageStreamHub({
       payload: mappedPayload,
       directory,
       eventId,
+      serialize() {
+        serializedFrame ??= serializeMessageStreamWsEvent(mappedPayload, { directory, eventId });
+        return serializedFrame;
+      },
     };
   };
 
@@ -141,9 +154,20 @@ export function createGlobalMessageStreamHub({
       onEvent(event) {
         const normalized = normalizeEvent(event);
         if (normalized.eventId) {
-          replay.push(normalized);
-          if (replay.length > replayLimit) {
-            replay.splice(0, replay.length - replayLimit);
+          latestEventId = normalized.eventId;
+          const serializedFrame = normalized.serialize();
+          const bytes = Buffer.byteLength(serializedFrame);
+          if (bytes > replayByteLimit) {
+            // An oversized live event creates a hole: retain only a contiguous
+            // suffix after it, never replay an older prefix across the gap.
+            replay.length = 0;
+            replayBytes = 0;
+          } else {
+            replay.push({ eventId: normalized.eventId, serializedFrame, bytes });
+            replayBytes += bytes;
+            while (replay.length > replayLimit || replayBytes > replayByteLimit) {
+              replayBytes -= replay.shift().bytes;
+            }
           }
         }
 
@@ -206,7 +230,8 @@ export function createGlobalMessageStreamHub({
       }
 
       const index = replay.findIndex((entry) => entry.eventId === eventId);
-      return index === -1 ? [] : replay.slice(index + 1);
+      if (eventId === latestEventId) return [];
+      return index === -1 ? null : replay.slice(index + 1);
     },
   };
 }

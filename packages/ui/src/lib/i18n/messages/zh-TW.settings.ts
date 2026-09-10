@@ -1,5 +1,7 @@
 import { linearIntegrationI18n } from './linear-integration.i18n';
 export const settingsDict = {
+  'settings.openchamber.visual.field.alwaysShowScrollbars': '一律顯示捲軸',
+  'settings.openchamber.visual.field.alwaysShowScrollbarsHint': '即使指標位於可捲動區域之外，也保持捲軸可見。僅在此裝置上生效。',
   'settings.providers.page.openCodeGo.title': 'OpenCode Go 用量追蹤',
   'settings.providers.page.openCodeGo.description': '連接 OpenCode Go 控制面板以顯示滾動、每週和每月配額。',
   'settings.providers.page.openCodeGo.workspaceId': '工作區 ID',
@@ -57,7 +59,6 @@ export const settingsDict = {
   'settings.view.pendingRestart.confirm.dontShowAgain': '不要再顯示',
   'settings.view.pendingRestart.confirm.cancel': '取消',  'settings.view.actions.backToSettings': '返回設定頁',
   'settings.view.actions.closeSettings': '關閉設定',
-  'settings.view.actions.openSectionList': '開啟群組清單',
   'settings.view.actions.closeSettingsWithShortcut': '關閉設定（{shortcut}+,）',
   'settings.view.actions.back': '返回',
   'settings.view.actions.resizeNavigation': '調整設定導覽寬度',
@@ -2274,8 +2275,10 @@ export const settingsDict = {
   'settings.openchamber.visual.field.inputHistoryLimitDescription': '調低這個數字會立刻從歷史記錄移除較早的提示詞。',
   'settings.openchamber.visual.field.inputHistoryLimitAria': '要記住的提示詞數量',
   'settings.openchamber.visual.field.inputHistoryLimitUnit': '則',
-  'settings.openchamber.visual.field.enterToSend': 'Enter 傳送',
-  'settings.openchamber.visual.field.enterToSendHint': '變更後，此設定會控制所有介面中的 Enter 與 Shift+Enter。變更前，各介面會維持現有行為。',
+  'settings.openchamber.visual.field.enterToSend': '傳送快捷鍵',
+  'settings.openchamber.visual.field.enterToSendHint': '請選擇標準輸入框的傳送快捷鍵。在展開的輸入框中，Enter 一律換行，Ctrl/Cmd+Enter 傳送。',
+  'settings.openchamber.visual.option.enterToSend.enter.label': '按 Enter 傳送',
+  'settings.openchamber.visual.option.enterToSend.modifier.label': '按 Ctrl/Cmd+Enter 傳送',
   ...linearIntegrationI18n['zh-TW'],
   'settings.page.integrations.title': '整合',
   'settings.page.integrations.description': '連接 GitHub 和 Linear，讓 OpenChamber 可以處理你的 issue 和 pull request。',
