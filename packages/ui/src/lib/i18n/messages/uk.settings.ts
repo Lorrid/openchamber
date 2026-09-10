@@ -1,5 +1,7 @@
 import { linearIntegrationI18n } from './linear-integration.i18n';
 export const settingsDict = {
+  'settings.openchamber.visual.field.alwaysShowScrollbars': 'Завжди показувати смуги прокручування',
+  'settings.openchamber.visual.field.alwaysShowScrollbarsHint': 'Залишати смуги прокручування видимими, навіть коли курсор поза областю прокручування. Лише на цьому пристрої.',
   'settings.providers.page.openCodeGo.title': 'Відстеження використання OpenCode Go',
   'settings.providers.page.openCodeGo.description': 'Підключіть панель OpenCode Go, щоб бачити ковзну, тижневу та місячну квоту.',
   'settings.providers.page.openCodeGo.workspaceId': 'ID робочого простору',
@@ -59,7 +61,6 @@ export const settingsDict = {
   "settings.view.pendingRestart.confirm.dontShowAgain": "Більше не показувати",
   "settings.view.pendingRestart.confirm.cancel": "Скасувати",  "settings.view.actions.backToSettings": "Назад до налаштувань",
   "settings.view.actions.closeSettings": "Закрити налаштування",
-  "settings.view.actions.openSectionList": "Відкрити список розділів",
   "settings.view.actions.closeSettingsWithShortcut": "Закрити налаштування ({shortcut}+,)",
   "settings.view.actions.back": "Назад",
   "settings.view.actions.resizeNavigation": "Змінити розмір навігації налаштувань",
@@ -2274,8 +2275,10 @@ export const settingsDict = {
   "settings.openchamber.visual.field.inputHistoryLimitDescription": "Якщо зменшити це число, старіші промпти одразу буде видалено з історії.",
   "settings.openchamber.visual.field.inputHistoryLimitAria": "Скільки промптів пам’ятати",
   "settings.openchamber.visual.field.inputHistoryLimitUnit": "промптів",
-  "settings.openchamber.visual.field.enterToSend": "Enter надсилає",
-  "settings.openchamber.visual.field.enterToSendHint": "Після зміни цей параметр керує поведінкою Enter і Shift+Enter на всіх поверхнях. До цього кожна поверхня зберігає свою поточну поведінку.",
+  "settings.openchamber.visual.field.enterToSend": "Комбінація для надсилання",
+  "settings.openchamber.visual.field.enterToSendHint": "Виберіть комбінацію для надсилання у стандартному композері. У розгорнутому композері Enter завжди додає новий рядок, а Ctrl/Cmd+Enter надсилає.",
+  "settings.openchamber.visual.option.enterToSend.enter.label": "Надсилати клавішею Enter",
+  "settings.openchamber.visual.option.enterToSend.modifier.label": "Надсилати за допомогою Ctrl/Cmd+Enter",
   ...linearIntegrationI18n.uk,
   'settings.page.integrations.title': 'Інтеграції',
   'settings.page.integrations.description': 'Підключіть GitHub і Linear, щоб OpenChamber міг працювати з вашими задачами та pull request-ами.',

@@ -1,5 +1,7 @@
 import { linearIntegrationI18n } from './linear-integration.i18n';
 export const settingsDict = {
+  'settings.openchamber.visual.field.alwaysShowScrollbars': 'Toujours afficher les barres de défilement',
+  'settings.openchamber.visual.field.alwaysShowScrollbarsHint': 'Gardez les barres de défilement visibles même lorsque le pointeur se trouve hors de la zone défilante. Uniquement sur cet appareil.',
   'settings.providers.page.openCodeGo.title': 'Suivi de l’utilisation d’OpenCode Go',
   'settings.providers.page.openCodeGo.description': 'Connectez le tableau de bord OpenCode Go pour afficher les quotas glissant, hebdomadaire et mensuel.',
   'settings.providers.page.openCodeGo.workspaceId': 'ID de l’espace de travail',
@@ -59,7 +61,6 @@ export const settingsDict = {
   'settings.view.pendingRestart.confirm.dontShowAgain': 'Ne plus afficher',
   'settings.view.pendingRestart.confirm.cancel': 'Annuler',  'settings.view.actions.backToSettings': 'Retour aux paramètres',
   'settings.view.actions.closeSettings': 'Fermer les paramètres',
-  'settings.view.actions.openSectionList': 'Ouvrir la liste des sections',
   'settings.view.actions.closeSettingsWithShortcut': 'Fermer les paramètres ({shortcut}+,)',
   'settings.view.actions.back': 'Retour',
   'settings.view.actions.resizeNavigation': 'Redimensionner la navigation dans les paramètres',
@@ -2274,8 +2275,10 @@ export const settingsDict = {
   'settings.openchamber.visual.field.inputHistoryLimitDescription': 'Réduire ce nombre supprime aussitôt les prompts les plus anciens de votre historique.',
   'settings.openchamber.visual.field.inputHistoryLimitAria': 'Prompts à mémoriser',
   'settings.openchamber.visual.field.inputHistoryLimitUnit': 'prompts',
-  'settings.openchamber.visual.field.enterToSend': 'Entrée envoie',
-  'settings.openchamber.visual.field.enterToSendHint': 'Après modification, ce réglage contrôle Entrée et Maj+Entrée sur toutes les surfaces. En attendant, chaque surface conserve son comportement actuel.',
+  'settings.openchamber.visual.field.enterToSend': 'Raccourci d\'envoi',
+  'settings.openchamber.visual.field.enterToSendHint': 'Choisissez le raccourci d\'envoi pour le composeur standard. Dans le composeur étendu, Entrée ajoute toujours une nouvelle ligne et Ctrl/Cmd+Entrée envoie.',
+  'settings.openchamber.visual.option.enterToSend.enter.label': 'Envoyer avec Entrée',
+  'settings.openchamber.visual.option.enterToSend.modifier.label': 'Envoyer avec Ctrl/Cmd+Entrée',
   ...linearIntegrationI18n.fr,
   'settings.page.integrations.title': 'Intégrations',
   'settings.page.integrations.description': 'Connectez GitHub et Linear pour qu’OpenChamber puisse travailler avec vos issues et pull requests.',

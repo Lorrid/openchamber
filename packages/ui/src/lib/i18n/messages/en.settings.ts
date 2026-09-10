@@ -1,5 +1,7 @@
 import { linearIntegrationI18n } from './linear-integration.i18n';
 export const settingsDict = {
+  'settings.openchamber.visual.field.alwaysShowScrollbars': 'Always show scrollbars',
+  'settings.openchamber.visual.field.alwaysShowScrollbarsHint': 'Keep scrollbars visible even when the pointer is outside the scrollable area. Applies on this device only.',
   'settings.providers.page.openCodeGo.title': 'OpenCode Go usage tracking',
   'settings.providers.page.openCodeGo.description': 'Connect the OpenCode Go dashboard to show rolling, weekly, and monthly quota.',
   'settings.providers.page.openCodeGo.workspaceId': 'Workspace ID',
@@ -58,7 +60,6 @@ export const settingsDict = {
   'settings.view.pendingRestart.confirm.cancel': 'Cancel',
   'settings.view.actions.backToSettings': 'Back to Settings',
   'settings.view.actions.closeSettings': 'Close settings',
-  'settings.view.actions.openSectionList': 'Open section list',
   'settings.view.actions.closeSettingsWithShortcut': 'Close Settings ({shortcut}+,)',
   'settings.view.actions.back': 'Back',
   'settings.view.actions.resizeNavigation': 'Resize settings navigation',
@@ -2125,8 +2126,10 @@ export const settingsDict = {
   'settings.openchamber.visual.field.enableSpellcheckInTextInputs': 'Enable Spellcheck in Text Inputs',
   'settings.openchamber.visual.field.largeTextPaste': 'Large text paste',
   'settings.openchamber.visual.field.largeTextPasteHint': 'When pasting more than about 2,000 characters or 25 lines, choose whether to attach the text as a file, paste it inline, or ask each time.',
-  'settings.openchamber.visual.field.enterToSend': 'Enter sends',
-  'settings.openchamber.visual.field.enterToSendHint': 'Once changed, this controls Enter and Shift+Enter on every surface. Until then, each surface keeps its existing behavior.',
+  'settings.openchamber.visual.field.enterToSend': 'Send shortcut',
+  'settings.openchamber.visual.field.enterToSendHint': 'Choose the send shortcut for the standard composer. In the expanded composer, Enter always adds a new line and Ctrl/Cmd+Enter sends.',
+  'settings.openchamber.visual.option.enterToSend.enter.label': 'Send with Enter',
+  'settings.openchamber.visual.option.enterToSend.modifier.label': 'Send with Ctrl/Cmd+Enter',
   'settings.openchamber.visual.field.largeTextPasteAria': 'Large text paste behavior',
   'settings.openchamber.visual.field.largeTextPasteOptionAria': 'Large text paste: {option}',
   'settings.openchamber.visual.option.largeTextPaste.ask.label': 'Ask each time',

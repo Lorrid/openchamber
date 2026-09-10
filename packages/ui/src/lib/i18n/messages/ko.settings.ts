@@ -1,5 +1,7 @@
 import { linearIntegrationI18n } from './linear-integration.i18n';
 export const settingsDict = {
+  'settings.openchamber.visual.field.alwaysShowScrollbars': '스크롤바 항상 표시',
+  'settings.openchamber.visual.field.alwaysShowScrollbarsHint': '포인터가 스크롤 영역 밖에 있어도 스크롤바를 표시합니다. 이 기기에만 적용됩니다.',
   'settings.providers.page.openCodeGo.title': 'OpenCode Go 사용량 추적',
   'settings.providers.page.openCodeGo.description': 'OpenCode Go 대시보드를 연결하여 롤링, 주간 및 월간 할당량을 표시합니다.',
   'settings.providers.page.openCodeGo.workspaceId': '워크스페이스 ID',
@@ -59,7 +61,6 @@ export const settingsDict = {
   'settings.view.pendingRestart.confirm.dontShowAgain': '다시 표시하지 않음',
   'settings.view.pendingRestart.confirm.cancel': '취소',  'settings.view.actions.backToSettings': '설정으로 돌아가기',
   'settings.view.actions.closeSettings': '설정 닫기',
-  'settings.view.actions.openSectionList': '섹션 목록 열기',
   'settings.view.actions.closeSettingsWithShortcut': '설정 닫기 ({shortcut}+,)',
   'settings.view.actions.back': '뒤로',
   'settings.view.actions.resizeNavigation': '설정 내비게이션 크기 조정',
@@ -2274,8 +2275,10 @@ export const settingsDict = {
   'settings.openchamber.visual.field.inputHistoryLimitDescription': '이 숫자를 낮추면 기록에서 오래된 프롬프트가 바로 삭제됩니다.',
   'settings.openchamber.visual.field.inputHistoryLimitAria': '기억할 프롬프트 수',
   'settings.openchamber.visual.field.inputHistoryLimitUnit': '개',
-  'settings.openchamber.visual.field.enterToSend': 'Enter로 전송',
-  'settings.openchamber.visual.field.enterToSendHint': '변경하면 모든 환경에서 Enter와 Shift+Enter의 동작을 제어합니다. 변경하기 전에는 각 환경의 기존 동작이 유지됩니다.',
+  'settings.openchamber.visual.field.enterToSend': '전송 단축키',
+  'settings.openchamber.visual.field.enterToSendHint': '일반 작성기의 전송 단축키를 선택하세요. 확장 작성기에서는 Enter가 항상 줄바꿈을 하고 Ctrl/Cmd+Enter로 전송합니다.',
+  'settings.openchamber.visual.option.enterToSend.enter.label': 'Enter로 전송',
+  'settings.openchamber.visual.option.enterToSend.modifier.label': 'Ctrl/Cmd+Enter로 전송',
   ...linearIntegrationI18n.ko,
   'settings.page.integrations.title': '통합',
   'settings.page.integrations.description': 'GitHub와 Linear를 연결하면 OpenChamber가 이슈와 풀 리퀘스트를 다룰 수 있습니다.',
